@@ -12,7 +12,11 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "prueba:datos": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js",
+    "prueba:datos:purga": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js --purge",
+    "prueba:gestion": "npm run build && node dist/modules/vuelos/pruebas/prueba-gestion.js",
+    "prueba:db": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js && node dist/modules/vuelos/pruebas/prueba-gestion.js"
   },
   "dependencies": {
     "@nestjs/axios": "^12.0.1",

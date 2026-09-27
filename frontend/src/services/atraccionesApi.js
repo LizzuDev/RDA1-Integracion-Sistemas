@@ -1,12 +1,12 @@
-import axios from 'axios';
+import { api } from './api';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-
-const api = axios.create({
-  baseURL: API_BASE,
-  timeout: 8000,
-});
-
+/**
+ * Servicio de Atracciones.
+ *
+ * Usa la instancia global de `services/api.ts` en lugar de crear una propia.
+ * Asi todas las peticiones heredan el interceptor de JWT y la politica de
+ * refresco ante 401, en lugar de quedar aisladas del esquema de autenticacion.
+ */
 export async function getAtracciones({ page = 1, limit = 10 } = {}) {
   const { data } = await api.get('/atracciones', { params: { page, limit } });
   return data;
