@@ -27,6 +27,46 @@ export function FormularioBusquedaVuelos({ onBuscar, cargando }) {
 
   const [pasajerosAbierto, setPasajerosAbierto] = useState(false);
   const pasajerosRef = useRef(null);
+  
+  const [errorPasajeros, setErrorPasajeros] = useState('');
+
+  const sumarPasajero = (tipo) => {
+    setErrorPasajeros('');
+    const totalAsientos = adultos + jovenes + ninos;
+
+    if (tipo === 'Adultos') {
+      if (totalAsientos >= 9) return setErrorPasajeros('Máximo 9 pasajeros por reserva.');
+      setAdultos(adultos + 1);
+    } else if (tipo === 'Jóvenes') {
+      if (totalAsientos >= 9) return setErrorPasajeros('Máximo 9 pasajeros por reserva.');
+      setJovenes(jovenes + 1);
+    } else if (tipo === 'Niños') {
+      if (totalAsientos >= 9) return setErrorPasajeros('Máximo 9 pasajeros por reserva.');
+      setNinos(ninos + 1);
+    } else if (tipo === 'Infantes') {
+      if (infantes >= adultos) return setErrorPasajeros('Solo se permite 1 infante por cada adulto.');
+      setInfantes(infantes + 1);
+    }
+  };
+
+  const restarPasajero = (tipo) => {
+    setErrorPasajeros('');
+    if (tipo === 'Adultos') {
+      if (adultos <= 1) return;
+      const nuevosAdultos = adultos - 1;
+      setAdultos(nuevosAdultos);
+      if (infantes > nuevosAdultos) {
+        setInfantes(nuevosAdultos);
+        setErrorPasajeros('Se redujeron infantes (máx 1 por adulto).');
+      }
+    } else if (tipo === 'Jóvenes') {
+      if (jovenes > 0) setJovenes(jovenes - 1);
+    } else if (tipo === 'Niños') {
+      if (ninos > 0) setNinos(ninos - 1);
+    } else if (tipo === 'Infantes') {
+      if (infantes > 0) setInfantes(infantes - 1);
+    }
+  };
 
   const [errores, setErrores] = useState({});
 
@@ -239,20 +279,25 @@ export function FormularioBusquedaVuelos({ onBuscar, cargando }) {
         {pasajerosAbierto && (
           <div className="busq-pasajeros-dropdown">
             {[
-              { label: 'Adultos', val: adultos, set: setAdultos, min: 1 },
-              { label: 'Jóvenes', val: jovenes, set: setJovenes, min: 0 },
-              { label: 'Niños', val: ninos, set: setNinos, min: 0 },
-              { label: 'Infantes', val: infantes, set: setInfantes, min: 0 },
+              { label: 'Adultos', val: adultos },
+              { label: 'Jóvenes', val: jovenes },
+              { label: 'Niños', val: ninos },
+              { label: 'Infantes', val: infantes },
             ].map((p) => (
               <div className="busq-pasajeros-item" key={p.label}>
                 <span>{p.label}</span>
                 <div className="busq-pasajeros-ctrls">
-                  <button type="button" onClick={() => p.set(Math.max(p.min, p.val - 1))}>-</button>
+                  <button type="button" onClick={() => restarPasajero(p.label)}>-</button>
                   <span>{p.val}</span>
-                  <button type="button" onClick={() => p.set(p.val + 1)}>+</button>
+                  <button type="button" onClick={() => sumarPasajero(p.label)}>+</button>
                 </div>
               </div>
             ))}
+            {errorPasajeros && (
+              <div style={{ color: '#d32f2f', fontSize: '0.8rem', marginTop: '10px', textAlign: 'center', backgroundColor: '#ffebee', padding: '6px', borderRadius: '4px' }}>
+                {errorPasajeros}
+              </div>
+            )}
           </div>
         )}
       </div>

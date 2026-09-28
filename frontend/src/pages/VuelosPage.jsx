@@ -273,6 +273,7 @@ export function VuelosPage() {
         <ResumenViaje 
           oferta={ofertaAbierta?.oferta} 
           tarifaSeleccionada={ofertaAbierta?.tarifa}
+          pasajeros={busquedaActiva?.passengers}
           onContinuar={(o) => confirmarResumen(o, ofertaAbierta.tarifa)} 
           onModificar={cerrarBloqueo} 
         />

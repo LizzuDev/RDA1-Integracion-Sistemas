@@ -107,12 +107,10 @@ function pasajeroVacio(tipo, indice, idsAdultos) {
     documentType: 'NATIONAL_ID',
     documentNumber: '',
     nationality: 'ECU',
-    maletasExtra: 0,
     birthDate: '',
     gender: '',
     email: '',
     phone: '',
-    maletasExtra: 0,
   };
 }
 
@@ -232,7 +230,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
       vistos.add(p.passengerId);
 
       for (const [campo, regla] of Object.entries(REGLAS)) {
-        const mensaje = regla(p[campo]);
+        const mensaje = regla(p[campo], p);
         if (mensaje) nuevos[`${prefijo}.${campo}`] = mensaje;
       }
 
@@ -264,7 +262,20 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
       evento.preventDefault();
       if (enviando) return;
 
-      
+      if (pasoActual === 1) {
+        const erroresValidacion = validar();
+        if (Object.keys(erroresValidacion).length > 0) {
+          setErrorGeneral('Por favor, revisa que todos los campos obligatorios esten llenos correctamente antes de enviar.');
+          return;
+        }
+        setPasoActual(2);
+        return;
+      }
+
+      if (pasoActual === 2) {
+        setPasoActual(3);
+        return;
+      }
 
       setEnviando(true);
       setErrorGeneral(null);
@@ -290,7 +301,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
           claveIdempotencia.current ?? uuidv4(),
           obtenerHuellaDispositivo(),
         );
-        onConfirmada?.(reserva);
+        onConfirmada?.(reserva, lista);
       } catch (fallo) {
         setErrorGeneral(
           fallo?.response?.data?.detail ??
@@ -300,7 +311,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         setEnviando(false);
       }
     },
-    [enviando, lista, hold, validar, onConfirmada],
+    [enviando, lista, hold, validar, onConfirmada, pasoActual],
   );
 
   if (!abierto || !hold) return null;
@@ -603,6 +614,91 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
             );
           })}
 
+          {pasoActual === 2 && (
+            <div className="paso-extras" style={{ marginTop: '20px' }}>
+              <h3 className="modal-title-secundario" style={{ fontSize: '1.25rem', marginBottom: '10px' }}>Selección de Asientos</h3>
+              <p className="modal-nota-bloque">Selecciona tu asiento para cada pasajero.</p>
+              
+              {lista.map((p, i) => (
+                <fieldset className="bloque-pasajero" key={p.passengerId}>
+                  <legend className="bloque-pasajero-legend">
+                    Pasajero {i + 1} · {p.firstName || ETIQUETA_TIPO[p.passengerType]}
+                  </legend>
+                  <div className="rejilla-campos">
+                    <div className="campo">
+                      <label className="modal-label" htmlFor={`${idBase}-p${i}-asiento`}>
+                        Selección de Asiento
+                      </label>
+                      
+                      <div className="mapa-asientos" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', maxWidth: '200px', marginTop: '10px' }}>
+                        {['1A', '1B', '1C', '2A', '2B', '2C', '3A', '3B', '3C'].map((asiento) => {
+                          const estaOcupado = false; // Aquí se podría conectar al backend
+                          const estaSeleccionado = p.asiento === asiento;
+                          
+                          // Evitar que el mismo asiento lo seleccione otro pasajero
+                          const loTieneOtro = lista.some((pas, idx) => pas.asiento === asiento && idx !== i);
+
+                          return (
+                            <button
+                              key={asiento}
+                              type="button"
+                              className="btn-asiento"
+                              disabled={estaOcupado || loTieneOtro}
+                              onClick={() => cambiar(i, 'asiento', estaSeleccionado ? '' : asiento)}
+                              style={{
+                                padding: '10px 5px',
+                                border: '2px solid',
+                                borderColor: estaSeleccionado ? '#0066cc' : '#ccc',
+                                borderRadius: '8px',
+                                background: estaSeleccionado ? '#e6f0fa' : (loTieneOtro ? '#f1f1f1' : 'white'),
+                                cursor: loTieneOtro ? 'not-allowed' : 'pointer',
+                                color: loTieneOtro ? '#999' : 'inherit',
+                                fontWeight: estaSeleccionado ? 'bold' : 'normal',
+                                transition: 'all 0.2s',
+                              }}
+                              title={loTieneOtro ? 'Seleccionado por otro pasajero' : `Seleccionar asiento ${asiento}`}
+                            >
+                              {asiento}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <small className="modal-nota-bloque" style={{ display: 'block', marginTop: '10px' }}>
+                        {p.asiento ? `Asiento seleccionado: ${p.asiento}` : 'Ningún asiento seleccionado (asignación aleatoria).'}
+                      </small>
+                    </div>
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+          )}
+
+          {pasoActual === 3 && (
+            <div className="paso-pago" style={{ marginTop: '20px' }}>
+              <h3 className="modal-title-secundario" style={{ fontSize: '1.25rem', marginBottom: '10px' }}>Pago Simulado</h3>
+              <p className="modal-nota-bloque">
+                El total a pagar es de <strong>{(Number(hold.lockedPrice?.total)).toFixed(2)} {hold.lockedPrice?.currency}</strong>.
+              </p>
+              
+              <div className="tarjeta-simulada" style={{ background: '#f5f7f9', padding: '20px', borderRadius: '12px', border: '1px solid #e1e4e8', marginTop: '20px' }}>
+                <div className="campo">
+                  <label className="modal-label">Número de tarjeta</label>
+                  <input className="modal-input" type="text" placeholder="4111 1111 1111 1111" defaultValue="4111 1111 1111 1111" readOnly style={{ background: 'white' }} />
+                </div>
+                <div className="rejilla-campos" style={{ marginTop: '16px' }}>
+                  <div className="campo">
+                    <label className="modal-label">Vencimiento</label>
+                    <input className="modal-input" type="text" placeholder="MM/AA" defaultValue="12/28" readOnly style={{ background: 'white' }} />
+                  </div>
+                  <div className="campo">
+                    <label className="modal-label">CVC</label>
+                    <input className="modal-input" type="text" placeholder="123" defaultValue="123" readOnly style={{ background: 'white' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {errorGeneral && (
             <p className="modal-error" role="alert">
               {errorGeneral}
@@ -614,7 +710,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
           <div className="modal-precio">
               <span className="modal-precio-etiqueta">Total a pagar</span>
               <span className="modal-precio-valor">
-                {(Number(hold.lockedPrice?.total) + lista.reduce((sum, p) => sum + (p.extraBaggage || 0)*35, 0)).toFixed(2)} {hold.lockedPrice?.currency}
+                {(Number(hold.lockedPrice?.total)).toFixed(2)} {hold.lockedPrice?.currency}
               </span>
             </div>
           <div className="modal-acciones">
@@ -646,3 +742,5 @@ function formatearRestante(expiresAt) {
   const m = Math.floor(seg / 60);
   return `${m}:${String(seg % 60).padStart(2, '0')}`;
 }
+
+

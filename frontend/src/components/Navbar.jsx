@@ -58,7 +58,7 @@ export function Navbar() {
             {menuVuelosAbierto && (
               <div className="navbar-dropdown-menu">
                 <Link to="/vuelos" className="navbar-dropdown-item">Buscar Vuelos</Link>
-                <Link to="/mis-reservas" className="navbar-dropdown-item">Mis Reservas</Link>
+                <Link to="/vuelos/reservas" className="navbar-dropdown-item">Mis Reservas</Link>
                 <Link to="/estado-vuelos" className="navbar-dropdown-item">Estado de Vuelos</Link>
               </div>
             )}

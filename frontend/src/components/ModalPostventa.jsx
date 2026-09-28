@@ -261,9 +261,9 @@ export function ModalPostventa({
                     return (
                       <option key={`${o.passengerId}-${o.itineraryId}`} value={i}>
                         {pax ? `${pax.firstName} ${pax.lastName}` : o.passengerId}{' '}
-                        — incluye {o.maxAllowed}
+                        — incluye base de {o.maxAllowed - (o.alreadyPurchased || 0)}
                         {o.alreadyPurchased > 0
-                          ? `, lleva ${o.alreadyPurchased}`
+                          ? `, ya extra compradas: ${o.alreadyPurchased}`
                           : ''}
                       </option>
                     );
@@ -273,14 +273,14 @@ export function ModalPostventa({
 
               <div className="campo">
                 <label className="modal-label" htmlFor="pv-cantidad">
-                  Maletas extra
+                  Equipaje de bodega extra
                 </label>
                 <input
                   className="modal-input"
                   id="pv-cantidad"
                   type="number"
                   min={1}
-                  max={10}
+                  max={Math.max(0, 3 - (elegida?.alreadyPurchased || 0))}
                   value={cantidad}
                   onChange={(e) => setCantidad(e.target.value)}
                 />

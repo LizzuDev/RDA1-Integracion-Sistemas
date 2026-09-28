@@ -43,36 +43,21 @@ export function MisReservasPage() {
   const [pnr, setPnr] = useState('');
   const [pcr, setPcr] = useState(10);
 
-  /**
-   * Hay una peticion en vuelo. Es un `ref` y no un `useState` a proposito: tiene
-   * que cambiar EN EL ACTO, antes de que React repinte, para que el siguiente clic
-   * lo vea. Con estado, el segundo clic se escaparia por la ventana de agrupado.
-   * Ver la nota dentro de `pedir`.
-   */
   const peticionEnCurso = useRef(false);
+  const fetchId = useRef(0);
 
   const pedir = useCallback(
     async ({ siguiente, acumular }) => {
-      // ── Guardia SINCRONO, no `disabled` ──────────────────────────────────
-      // `disabled={cargandoMas}` NO evita el doble clic. React agrupa las
-      // actualizaciones de estado: los clics 2..N se despachan ANTES de que
-      // `cargandoMas` llegue a ser `true` y el boton se repinte, asi que todos
-      // pasan el `disabled` y disparan su peticion.
-      //
-      // Medido en el navegador: 5 clics seguidos sobre "Cargar más" con 11
-      // reservas produjeron la fila `TEYPZH` repetida 5 veces, porque las 5
-      // peticiones llevan el MISMO cursor y la respuesta se concatena cinco
-      // veces: `[...prev, ...items, ...items, ...items, ...items, ...items]`.
-      //
-      // Un `ref` se escribe en el acto, sin pasar por el ciclo de render, asi
-      // que el segundo clic ve el guardia ya puesto. Es el mismo motivo por el que
-      // los modales guardan la `Idempotency-Key` en una ref.
-      if (peticionEnCurso.current) return;
-      peticionEnCurso.current = true;
+      // ── Guardia SINCRONO solo para "Cargar más" ──────────────────────────
+      if (acumular && peticionEnCurso.current) return;
+      if (acumular) peticionEnCurso.current = true;
+
+      const currentFetch = ++fetchId.current;
 
       if (acumular) setCargandoMas(true);
       else setCargando(true);
       setError(null);
+      
       try {
         const respuesta = await listarReservas({
           status: status || undefined,
@@ -80,17 +65,23 @@ export function MisReservasPage() {
           limit: pcr,
           cursor: siguiente || undefined,
         });
+        
+        if (currentFetch !== fetchId.current) return;
+
         setReservas((prev) => (acumular ? [...prev, ...respuesta.items] : respuesta.items));
         setCursor(respuesta.nextCursor);
       } catch (fallo) {
+        if (currentFetch !== fetchId.current) return;
         setError(
           fallo?.response?.data?.detail ??
             'No se pudieron cargar tus reservas.',
         );
       } finally {
-        peticionEnCurso.current = false;
-        setCargando(false);
-        setCargandoMas(false);
+        if (currentFetch === fetchId.current) {
+          setCargando(false);
+          setCargandoMas(false);
+          if (acumular) peticionEnCurso.current = false;
+        }
       }
     },
     [status, pnr, pcr],

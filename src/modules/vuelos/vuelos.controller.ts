@@ -760,25 +760,4 @@ export class VuelosController {
     await this.vuelosService.eliminarWebhook(id, propietarioDesde(deviceFingerprint));
   }
 
-  @Post()
-  @ApiOperation({ summary: 'Registrar un nuevo vuelo' })
-  @ApiResponse({ status: 201, description: 'Vuelo creado exitosamente', type: VueloResponseDto })
-  create(@Body() createVueloDto: CreateVueloDto): VueloResponseDto {
-    return null;
-  }
-
-  @Get()
-  @ApiOperation({ summary: 'Obtener todos los vuelos con paginación' })
-  @ApiResponse({ status: 200, description: 'Lista paginada de vuelos' })
-  findAll(@Query() paginationQuery: PaginationQueryDto) {
-    return null;
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Obtener un vuelo por ID' })
-  @ApiParam({ name: 'id', description: 'UUID del vuelo' })
-  @ApiResponse({ status: 200, description: 'Vuelo encontrado', type: VueloResponseDto })
-  findOne(@Param('id') id: string): VueloResponseDto {
-    return null;
-  }
 }

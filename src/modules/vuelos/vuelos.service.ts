@@ -7,8 +7,10 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { BUSINESS_RULES } from '../../config/tarifas';
+import { aFechaIso, aImporte, minutosEntre, redondear, sha256 } from '../../common/utils';
 import { InjectRepository } from '@nestjs/typeorm';
-import { createHash, randomInt, randomUUID } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
 import { DataSource, EntityManager, FindOptionsRelations, In, Not, Repository } from 'typeorm';
 
 import { Aerolinea } from './entities/aerolinea.entity';
@@ -113,6 +115,7 @@ import {
   conflicto,
   noProcesable,
 } from '../../core/errors/codigo-error';
+import { SupabaseOrquestadorService } from './supabase-orquestador.service';
 
 /** Minutos que un hold permanece vivo si el cliente no manda `ttlMinutes`. */
 const TTL_POR_DEFECTO = 15;
@@ -127,57 +130,13 @@ const TTL_POR_DEFECTO = 15;
  */
 const VERSION_EVENTO = '1.0';
 
-/**
- * Calcula la diferencia en minutos entre dos instantes.
- *
- * Se hace con `getTime()` sobre `Date` y no leyendo el DTO: los campos
- * `horaSalidaProgramada` y `horaLlegadaProgramada` son TIMESTAMPTZ, que
- * TypeORM mapea a `Date`, y por eso la resta es exacta en milisegundos. El
- * resultado se redondea a entero porque el contrato declara
- * `totalDurationMinutes` y `durationMinutes` como `integer`.
- */
-function minutosEntre(desde: Date, hasta: Date): number {
-  return Math.round((hasta.getTime() - desde.getTime()) / 60000);
-}
 
-/** Redondea un importe a 2 decimales y lo devuelve como STRING. */
-function aImporte(valor: number): string {
-  return valor.toFixed(2);
-}
 
-/**
- * Normaliza a `YYYY-MM-DD` un valor de columna `date`.
- *
- * El driver puede entregar un `date` de PostgreSQL como texto (`'2026-11-03'`)
- * o como `Date` de JavaScript, segun el parser de tipos con el que se cree el
- * pool. Un `String(fecha).slice(0, 10)` solo funciona en el primer caso: sobre
- * un `Date` devuelve `'Tue Nov 03'`, que no es una fecha.
- *
- * Cuando llega como `Date` se usa `getFullYear/getMonth/getDate` en vez de
- * `toISOString()`, porque `toISOString()` convierte a UTC y en una zona horaria
- * detras de UTC (Ecuador es UTC-5) puede devolver el dia ANTERIOR: un vuelo que
- * sale el 3 se fecharia el 2.
- */
-function aFechaIso(valor: Date | string): string {
-  if (typeof valor === 'string') {
-    return valor.slice(0, 10);
-  }
-  const mes = String(valor.getMonth() + 1).padStart(2, '0');
-  const dia = String(valor.getDate()).padStart(2, '0');
-  return [valor.getFullYear(), mes, dia].join('-');
-}
 
-/**
- * Redondea a dos decimales evitando el error binario de `toFixed`.
- *
- * `(0.1 + 0.2).toFixed(2)` es `"0.30"`, pero `(1.005).toFixed(2)` es
- * `"1.00"` porque 1.005 no es representable y en realidad vale 1.0049999.
- * Multiplicar por 100, redondear y dividir corrige el caso, y la ultima division
- * se vuelve a dejar a dos decimales por si el redondeo ha dejado residuo.
- */
-function redondear(valor: number): number {
-  return Math.round((valor + Number.EPSILON) * 100) / 100;
-}
+
+
+
+
 
 /**
  * Codigo de barras del pase de abordar, en formato PDF417.
@@ -203,9 +162,7 @@ function paseDeAbordar(pnr: string, segmentId: string, passengerId: string): str
  * Se usa para `ofe_huellacatalogo` (`CHECK (~ '^[a-f0-9]{64}$')`) y para
  * `idm_cuerpohash`. `hex`, no `base64`: el CHECK del DDL solo admite `[a-f0-9]`.
  */
-function sha256(texto: string): string {
-  return createHash('sha256').update(texto).digest('hex');
-}
+
 
 /**
  * Serie decimal de N digitos derivada de un texto.
@@ -269,6 +226,18 @@ function cuponDeBoleto(numeroBoleto: string, segmentId: string): string {
 
 @Injectable()
 export class VuelosService {
+
+  private async _registrarEvento(repo: Repository<any>, tipoEvento: string, bookingId: string, datos: any) {
+    await repo.insert({
+      tipoEvento: tipoEvento,
+      ocurridoEn: new Date(),
+      versionApi: BUSINESS_RULES.VERSION_EVENTO,
+      datos: datos,
+      entidadOrigen: 'reserva',
+      entidadId: bookingId,
+    });
+  }
+
   private readonly logger = new Logger(VuelosService.name);
 
   constructor(
@@ -316,6 +285,7 @@ export class VuelosService {
     @InjectRepository(OfertaCambioSegmento)
     private readonly ofertaCambioSegmentoRepo: Repository<OfertaCambioSegmento>,
     private readonly dataSource: DataSource,
+    private readonly supabaseOrquestador: SupabaseOrquestadorService,
   ) {}
 
   // =========================================================================
@@ -361,7 +331,7 @@ export class VuelosService {
         order: { horaSalidaProgramada: 'ASC' },
       });
 
-      this.logger.log(
+      this.logger.debug(
         `Itinerario ${indice + 1}/${dto.itineraries.length} ` +
           `${itinerario.origin}->${itinerario.destination} ${itinerario.departureDate}: ` +
           `${vuelos.length} vuelo(s)`,
@@ -616,52 +586,52 @@ export class VuelosService {
    * Solo incluye cabinas con al menos un asiento libre: ofrecer una cabina
    * agotada seria misleading y el usuario no podria comprar.
    */
+  
+  private _calcularPrecioBase(cabina: string, tipoPasajero: string): number {
+    const baseUnit = BUSINESS_RULES.BASE_PRICE_BY_CABIN[cabina] ?? 100.00;
+    const f = BUSINESS_RULES.PASSENGER_FACTOR[tipoPasajero] ?? 1.0;
+    return baseUnit * f;
+  }
+
+  private _calcularPrecioAgrupado(cabina: string, p: { adults?: number; youths?: number; children?: number; infants?: number }): { base: number, tax: number, total: number } {
+    let totalBase = 0;
+    if (p?.adults) totalBase += this._calcularPrecioBase(cabina, 'ADULT') * p.adults;
+    if (p?.youths) totalBase += this._calcularPrecioBase(cabina, 'YOUTH') * p.youths;
+    if (p?.children) totalBase += this._calcularPrecioBase(cabina, 'CHILD') * p.children;
+    if (p?.infants) totalBase += this._calcularPrecioBase(cabina, 'INFANT') * p.infants;
+    if (!p?.adults && !p?.youths && !p?.children && !p?.infants) totalBase += this._calcularPrecioBase(cabina, 'ADULT');
+    
+    const tax = totalBase * BUSINESS_RULES.TASA_IMPUESTO;
+    return { base: totalBase, tax, total: totalBase + tax };
+  }
+
   private construirPricing(
     disponibilidad: Array<{ clase: string; libres: number }>,
     dto: SearchRequestDto,
   ): CabinPricingDto[] {
-    const FACTOR: Record<string, number> = { ADULT: 1.00, YOUTH: 0.82, CHILD: 0.68, INFANT: 0.12 };
-    const BASES: Record<string, number> = {
-      'ECONOMY': 68.00,
-      'PREMIUM_ECONOMY': 95.00,
-      'BUSINESS': 268.00,
-      'FIRST': 500.00
-    };
-    const MARCAS: Record<string, string> = {
-      'ECONOMY': 'BASIC',
-      'PREMIUM_ECONOMY': 'FLEX',
-      'BUSINESS': 'CORPORATE',
-      'FIRST': 'LUXURY'
-    };
-    const EQ: Record<string, number> = {
-      'ECONOMY': 35.00,
-      'PREMIUM_ECONOMY': 0.00,
-      'BUSINESS': 0.00,
-      'FIRST': 0.00
-    };
+    const BASES = BUSINESS_RULES.BASE_PRICE_BY_CABIN;
+    const MARCAS = BUSINESS_RULES.FARE_BRAND_BY_CABIN;
+    const EQ = BUSINESS_RULES.EXTRA_BAGGAGE_PRICE;
 
     return disponibilidad
       .filter((c) => c.libres > 0)
       .map((cabina) => {
-        const base = BASES[cabina.clase] ?? 100.00;
         return {
           cabinClass: cabina.clase,
           fareBrand: MARCAS[cabina.clase] ?? 'STANDARD',
           availableSeats: cabina.libres,
-          fareRules: { isRefundable: cabina.clase !== 'ECONOMY', isChangeable: true },
+          fareRules: BUSINESS_RULES.FARE_RULES[cabina.clase] ?? { isRefundable: false, isChangeable: false },
           baggageAllowance: {
             personalItemIncluded: true,
-            carryOnIncluded: cabina.clase === 'ECONOMY' ? 0 : 1,
-            checkedBaggageIncluded: cabina.clase === 'ECONOMY' ? 0 : 2,
+            ...(BUSINESS_RULES.BAGGAGE_ALLOWANCE[cabina.clase] ?? { carryOnIncluded: 0, checkedBaggageIncluded: 0 }),
           },
           extraCheckedBaggagePrice: {
             currency: 'USD',
             total: aImporte(EQ[cabina.clase] ?? 0.00),
           },
           pricePerPassengerType: this.tiposPasajeroSolicitados(dto).map((tipo) => {
-            const f = FACTOR[tipo] ?? 1.0;
-            const pb = base * f;
-            const pi = pb * 0.18;
+            const pb = this._calcularPrecioBase(cabina.clase, tipo);
+            const pi = pb * BUSINESS_RULES.TASA_IMPUESTO;
             return {
               passengerType: tipo,
               price: { currency: 'USD', baseFare: aImporte(pb), taxes: aImporte(pi), total: aImporte(pb + pi) },
@@ -684,11 +654,6 @@ export class VuelosService {
     return tipos.length > 0 ? tipos : ['ADULT'];
   }
 
-  /**
-   * `grandTotal` de la oferta. Siempre 0.00 mientras no exista tarifado real:
-   * se calcula sobre el mismo desglose que `construirPricing`, para que ambos
-   * numeros sean coherentes entre si.
-   */
   private construirTotal(
     dto: SearchRequestDto,
     disponibilidad: Array<{ clase: string; libres: number }>,
@@ -698,19 +663,27 @@ export class VuelosService {
     if (cabinasUsables.length === 0) {
       return { currency: 'USD', baseFare: aImporte(0), taxes: aImporte(0), total: aImporte(0) };
     }
-    const cheapestClass = cabinasUsables[0].clase;
-    const baseUnit = ({ 'ECONOMY': 68.00, 'PREMIUM_ECONOMY': 95.00, 'BUSINESS': 268.00, 'FIRST': 500.00 } as any)[cheapestClass] ?? 100.00;
     
-    let totalBase = 0;
-    const FACTOR: any = { ADULT: 1.00, YOUTH: 0.82, CHILD: 0.68, INFANT: 0.12 };
+    // Find the minimum total across all available cabins
+    let minTotal = Infinity;
+    let bestBase = 0;
+    let bestTax = 0;
     
-    if (p.adults) totalBase += baseUnit * FACTOR['ADULT'] * p.adults;
-    if (p.youths) totalBase += baseUnit * FACTOR['YOUTH'] * p.youths;
-    if (p.children) totalBase += baseUnit * FACTOR['CHILD'] * p.children;
-    if (p.infants) totalBase += baseUnit * FACTOR['INFANT'] * p.infants;
+    for (const c of cabinasUsables) {
+      const price = this._calcularPrecioAgrupado(c.clase, p ?? { adults: 1 });
+      if (price.total < minTotal) {
+        minTotal = price.total;
+        bestBase = price.base;
+        bestTax = price.tax;
+      }
+    }
     
-    const totalTaxes = totalBase * 0.18;
-    return { currency: 'USD', baseFare: aImporte(totalBase), taxes: aImporte(totalTaxes), total: aImporte(totalBase + totalTaxes) };
+    return { 
+      currency: 'USD', 
+      baseFare: aImporte(bestBase), 
+      taxes: aImporte(bestTax), 
+      total: aImporte(minTotal) 
+    };
   }
 
   // =========================================================================
@@ -796,23 +769,7 @@ export class VuelosService {
    * ni la oferta ni el hold a medias. `@VersionColumn` en `bloqueo_cupo` evita
    * ademas que dos peticiones concurrentes se sobrescriban.
    */
-  private calcularPrecioTotalCabina(
-    cabinaSeleccionada: string,
-    p: { adults?: number; youths?: number; children?: number; infants?: number }
-  ): { base: number, tax: number, total: number } {
-    const baseUnit = ({ 'ECONOMY': 68.00, 'PREMIUM_ECONOMY': 95.00, 'BUSINESS': 268.00, 'FIRST': 500.00 } as any)[cabinaSeleccionada] ?? 100.00;
-    let totalBase = 0;
-    const FACTOR: any = { ADULT: 1.00, YOUTH: 0.82, CHILD: 0.68, INFANT: 0.12 };
-    
-    if (p?.adults) totalBase += baseUnit * FACTOR['ADULT'] * p.adults;
-    if (p?.youths) totalBase += baseUnit * FACTOR['YOUTH'] * p.youths;
-    if (p?.children) totalBase += baseUnit * FACTOR['CHILD'] * p.children;
-    if (p?.infants) totalBase += baseUnit * FACTOR['INFANT'] * p.infants;
-    if (!p?.adults && !p?.youths && !p?.children && !p?.infants) totalBase += baseUnit * FACTOR['ADULT'];
-    
-    const totalTaxes = totalBase * 0.18;
-    return { base: totalBase, tax: totalTaxes, total: totalBase + totalTaxes };
-  }
+
 
   async createHold(
     dto: HoldRequestDto,
@@ -825,7 +782,7 @@ export class VuelosService {
       where: { clave: idempotencyKey },
     });
     if (previa && previa.estado === EstadoIdempotencia.COMPLETED && previa.respuesta) {
-      this.logger.log(`Idempotency-Key ${idempotencyKey} repetida: se devuelve la respuesta guardada.`);
+      this.logger.debug(`Idempotency-Key ${idempotencyKey} repetida: se devuelve la respuesta guardada.`);
       return previa.respuesta as unknown as HoldResponseDto;
     }
 
@@ -882,6 +839,18 @@ export class VuelosService {
           }
         }
 
+        // Calcular el precio real del bloqueo sumando cada itinerario seleccionado
+        let totalBaseHold = 0;
+        let totalTaxHold = 0;
+        let totalHold = 0;
+
+        for (const seleccion of dto.itinerarySelections) {
+          const precioIter = this._calcularPrecioAgrupado(seleccion.cabinClass, dto.passengersBreakdown ?? { adults: 1 });
+          totalBaseHold += precioIter.base;
+          totalTaxHold += precioIter.tax;
+          totalHold += precioIter.total;
+        }
+
         // `blo_fechaexpiracion` es NOT NULL y SIN default a proposito: se
         // calcula en SQL como `now() + make_interval(mins => $3)`, para que el
         // plazo se mida contra el reloj de PostgreSQL y no el de Node. Con un
@@ -904,7 +873,7 @@ export class VuelosService {
             ttlMinutos,
             EstadoHold.HELD,
             oferta.moneda,
-            oferta.total,
+            totalHold, // PRECIO CONGELADO REAL
             dto.passengersBreakdown.adults ?? 1,
             dto.passengersBreakdown.youths ?? 0,
             dto.passengersBreakdown.children ?? 0,
@@ -934,9 +903,9 @@ export class VuelosService {
           ttlMinutes: ttlMinutos,
           lockedPrice: {
             currency: oferta.moneda,
-            baseFare: aImporte(0),
-            taxes: aImporte(0),
-            total: aImporte(0),
+            baseFare: aImporte(totalBaseHold),
+            taxes: aImporte(totalTaxHold),
+            total: aImporte(totalHold),
           },
         };
       });
@@ -949,6 +918,20 @@ export class VuelosService {
           respuesta: respuesta as unknown as Record<string, unknown>,
         },
       );
+
+      // ── Sincronizar con el carrito del orquestador ─────────────────────────
+      // El fallo del carrito NO cancela el hold: el hold ya fue confirmado.
+      // El error se registra en logs pero no se propaga al cliente.
+      const primerItinerario = dto.itinerarySelections[0];
+      void this.supabaseOrquestador.agregarVueloAlCarrito({
+        usuarioId: propietarioId,
+        holdId: respuesta.holdId,
+        descripcion: `Vuelo ${primerItinerario?.itineraryId ?? dto.offerId} (${primerItinerario?.cabinClass ?? 'ECONOMY'})`,
+        precioTotal: parseFloat(respuesta.lockedPrice.total),
+        moneda: respuesta.lockedPrice.currency,
+        fechaSalida: new Date().toISOString().split('T')[0],
+        apiOrigenUrl: `${process.env.SUPABASE_URL ?? 'http://localhost:3000'}/vuelos/offers/hold/${respuesta.holdId}`,
+      });
 
       return respuesta;
     } catch (error) {
@@ -1014,7 +997,7 @@ export class VuelosService {
     }
 
     if (hold.estado !== EstadoHold.HELD) {
-      this.logger.log(
+      this.logger.debug(
         `DELETE /hold/${holdId}: estado ${hold.estado}, no hay nada que liberar.`,
       );
       return;
@@ -1071,7 +1054,7 @@ export class VuelosService {
       where: { clave: idempotencyKey },
     });
     if (previa && previa.estado === EstadoIdempotencia.COMPLETED && previa.respuesta) {
-      this.logger.log(
+      this.logger.debug(
         `Idempotency-Key ${idempotencyKey} repetida: se devuelve la reserva ya creada.`,
       );
       return previa.respuesta as unknown as BookingDetailResponseDto;
@@ -1296,6 +1279,16 @@ export class VuelosService {
         },
       );
 
+      // ── Generar factura en Supabase (fire-and-forget) ─────────────────────
+      // Si falla, la reserva ya está CONFIRMED en nuestra DB. Solo se loguea.
+      void this.supabaseOrquestador.confirmarCompraYGenerarFactura({
+        usuarioId: propietarioId,
+        holdId: dto.holdId,
+        reservaId: respuesta.bookingId,
+        montoTotal: 0,   // El monto real está en hold.precioCongelado (decimal)
+        moneda: respuesta.grandTotal.currency,
+      });
+
       return respuesta;
     } catch (error) {
       // Se marca FAILED para que la clave quede liberada. Y como todo lo anterior
@@ -1468,7 +1461,7 @@ export class VuelosService {
    * reintentar aqui convierte un 500 en un intento invisible para el usuario.
    */
   private generarPnr(): string {
-    const LETRAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const LETRAS = BUSINESS_RULES.PNR_LETRAS;
     let pnr = '';
     for (let i = 0; i < 6; i++) {
       pnr += LETRAS[randomInt(LETRAS.length)];
@@ -1719,19 +1712,7 @@ export class VuelosService {
     bookingId: string,
     propietarioId: string,
   ): Promise<BookingDetailResponseDto> {
-    const reserva = await this.reservaRepo.findOne({
-      where: { idReserva: bookingId },
-      relations: { pasajeros: true, itinerarios: { segmentos: { vuelo: true } } },
-    });
-
-    if (!reserva) {
-      throw new NotFoundException(`La reserva '${bookingId}' no existe.`);
-    }
-    if (reserva.propietarioId !== propietarioId) {
-      // 404 y no 403: confirmar que existe una reserva ajena ya es filtrar
-      // informacion sobre ella.
-      throw new NotFoundException(`La reserva '${bookingId}' no existe.`);
-    }
+    const reserva = await this.exigirReservaPropia(bookingId, propietarioId, { pasajeros: true, itinerarios: { segmentos: { vuelo: true } } });
 
     return {
       bookingId: reserva.idReserva,
@@ -2025,11 +2006,12 @@ export class VuelosService {
     bookingId: string,
     propietarioId: string,
     relaciones?: FindOptionsRelations<Reserva>,
+    repo: Repository<Reserva> | any = this.reservaRepo,
   ): Promise<Reserva> {
     // Devuelve la reserva en vez de `void`: el llamante la necesita para el
     // importe, el PNR o los pasajeros, y repetir la consulta seria tirar la
     // que ya esta hecha.
-    const reserva = await this.reservaRepo.findOne({
+    const reserva = await repo.findOne({
       where: { idReserva: bookingId },
       relations: relaciones,
     });
@@ -2095,12 +2077,7 @@ export class VuelosService {
    * de 24h), y el ultimo escalon absorbe cualquier anticipacion por debajo de
    * 24h, incluida la salida ya passada.
    */
-  private static readonly PENALIZACION = [
-    { horasMinimas: 72, porcentaje: 0 },
-    { horasMinimas: 48, porcentaje: 25 },
-    { horasMinimas: 24, porcentaje: 50 },
-    { horasMinimas: 0, porcentaje: 100 },
-  ];
+  private static readonly PENALIZACION = BUSINESS_RULES.PENALIZACION;
 
   /**
    * `POST /bookings/{id}/cancellation-quote`
@@ -2291,7 +2268,7 @@ export class VuelosService {
       where: { clave: idempotencyKey },
     });
     if (previa && previa.estado === EstadoIdempotencia.COMPLETED && previa.respuesta) {
-      this.logger.log(
+      this.logger.debug(
         `Idempotency-Key ${idempotencyKey} repetida en cancel: se devuelve la respuesta guardada.`,
       );
       const guardado = previa.respuesta as unknown as CancelBookingResponseDto;
@@ -2324,14 +2301,7 @@ export class VuelosService {
         const eventoRepo = manager.getRepository(EventoWebhook);
         const auditoriaRepo = manager.getRepository(LogAuditoriaVuelos);
 
-        const reserva = await reservaRepo.findOne({
-          where: { idReserva: bookingId },
-        });
-        if (!reserva || reserva.propietarioId !== propietarioId) {
-          // 404 y no 403: confirmar que existe una reserva ajena ya es filtrar
-          // informacion sobre ella.
-          throw new NotFoundException(`La reserva '${bookingId}' no existe.`);
-        }
+        const reserva = await this.exigirReservaPropia(bookingId, propietarioId, undefined, reservaRepo);
 
         // Solo desde `CONFIRMED` o `CANCELLATION_PENDING` se puede cancelar,
         // que es justo lo que permite el trigger `tg_reserva_transicion`. Se
@@ -2464,11 +2434,7 @@ export class VuelosService {
         // y el reparto a cada suscriptor es trabajo de otro consumidor. Emitir
         // solo si hay alguien escuchando haria que al suscribirse tarde no
         // hubiera historial.
-        await eventoRepo.insert({
-          tipoEvento: 'booking.cancelled',
-          ocurridoEn: new Date(),
-          versionApi: VERSION_EVENTO,
-          datos: {
+        await this._registrarEvento(eventoRepo, 'booking.cancelled', bookingId, {
             bookingId: bookingId,
             pnr: reserva.pnr,
             estadoAnterior: reserva.estado,
@@ -2478,10 +2444,7 @@ export class VuelosService {
             currency: cotizacion.moneda,
             motivo: dto.reason ?? cotizacion.motivo,
             asientosLiberados: asientosLiberados,
-          },
-          entidadOrigen: 'reserva',
-          entidadId: bookingId,
-        });
+          });
 
         // --- Auditoria --------------------------------------------------------
         await auditoriaRepo.insert({
@@ -2799,18 +2762,11 @@ export class VuelosService {
         });
       }
 
-      await eventoRepo.insert({
-        tipoEvento: 'booking.checked_in',
-        ocurridoEn: new Date(),
-        versionApi: VERSION_EVENTO,
-        datos: {
+      await this._registrarEvento(eventoRepo, 'booking.checked_in', bookingId, {
           bookingId: bookingId,
           pnr: pnr,
           pasajeros: pasajerosRespuesta.length,
-        },
-        entidadOrigen: 'reserva',
-        entidadId: bookingId,
-      });
+        });
 
       return {
         bookingId: bookingId,
@@ -2849,7 +2805,7 @@ export class VuelosService {
       where: { clave: idempotencyKey },
     });
     if (previa && previa.estado === EstadoIdempotencia.COMPLETED && previa.respuesta) {
-      this.logger.log(
+      this.logger.debug(
         `Idempotency-Key ${idempotencyKey} repetida en baggage: se devuelve la respuesta guardada.`,
       );
       return previa.respuesta as unknown as BaggageAddedResponseDto;
@@ -2876,10 +2832,7 @@ export class VuelosService {
         const equipajeRepo = manager.getRepository(EquipajePasajero);
         const eventoRepo = manager.getRepository(EventoWebhook);
 
-        const reserva = await reservaRepo.findOne({ where: { idReserva: bookingId } });
-        if (!reserva || reserva.propietarioId !== propietarioId) {
-          throw new NotFoundException(`La reserva '${bookingId}' no existe.`);
-        }
+        const reserva = await this.exigirReservaPropia(bookingId, propietarioId, undefined, reservaRepo);
 
         if (reserva.estado === EstadoReserva.CANCELLED ||
             reserva.estado === EstadoReserva.CANCELLATION_PENDING) {
@@ -3014,21 +2967,14 @@ export class VuelosService {
           fechaCompra: new Date(),
         });
 
-        await eventoRepo.insert({
-          tipoEvento: 'booking.baggage_added',
-          ocurridoEn: new Date(),
-          versionApi: VERSION_EVENTO,
-          datos: {
+        await this._registrarEvento(eventoRepo, 'booking.baggage_added', bookingId, {
             bookingId: bookingId,
             passengerId: dto.passengerId,
             itineraryId: dto.itineraryId,
             quantity: dto.quantity,
             amount: aImporte(importe),
             currency: tarifa.moneda,
-          },
-          entidadOrigen: 'reserva',
-          entidadId: bookingId,
-        });
+          });
 
         return {
           passengerId: dto.passengerId,
@@ -3413,19 +3359,12 @@ export class VuelosService {
       }
 
       if (creados > 0) {
-        await eventoRepo.insert({
-          tipoEvento: 'booking.ticket_issued',
-          ocurridoEn: new Date(),
-          versionApi: VERSION_EVENTO,
-          datos: {
+        await this._registrarEvento(eventoRepo, 'booking.ticket_issued', bookingId, {
             bookingId: bookingId,
             pnr: pnr,
             boletosEmitidos: creados,
             estadoAnterior: reserva.estado,
-          },
-          entidadOrigen: 'reserva',
-          entidadId: bookingId,
-        });
+          });
       }
 
       return {
@@ -3976,10 +3915,7 @@ export class VuelosService {
         const segmentoRepo = manager.getRepository(ReservaSegmento);
         const eventoRepo = manager.getRepository(EventoWebhook);
 
-        const reserva = await reservaRepo.findOne({ where: { idReserva: bookingId } });
-        if (!reserva || reserva.propietarioId !== propietarioId) {
-          throw new NotFoundException(`La reserva '${bookingId}' no existe.`);
-        }
+        const reserva = await this.exigirReservaPropia(bookingId, propietarioId, undefined, reservaRepo);
 
         if (reserva.estado !== EstadoReserva.CONFIRMED) {
           throw conflicto(
@@ -4104,20 +4040,13 @@ export class VuelosService {
           { estado: EstadoReserva.CONFIRMED, version: reserva.version + 2 },
         );
 
-        await eventoRepo.insert({
-          tipoEvento: 'booking.changed',
-          ocurridoEn: new Date(),
-          versionApi: VERSION_EVENTO,
-          datos: {
+        await this._registrarEvento(eventoRepo, 'booking.changed', bookingId, {
             bookingId: bookingId,
             pnr: reserva.pnr,
             changeOfferId: dto.changeOfferId,
             totalToPay: oferta.cambioTotalAPagar,
             currency: oferta.moneda,
-          },
-          entidadOrigen: 'reserva',
-          entidadId: bookingId,
-        });
+          });
 
         return {
           cuerpo: await this.detalleDeReserva(manager, bookingId),

@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { VuelosService } from './vuelos.service';
 import { VuelosController } from './vuelos.controller';
 import { CommonModule } from '../../common/common.module';
+import { SupabaseOrquestadorService } from './supabase-orquestador.service';
 
 import {
   // ── Bloque 1 · Catálogo e Inventario (3) ──
@@ -128,6 +129,7 @@ const ENTIDADES = [
 @Module({
   imports: [CommonModule, TypeOrmModule.forFeature(ENTIDADES)],
   controllers: [VuelosController],
-  providers: [VuelosService],
+  providers: [VuelosService, SupabaseOrquestadorService],
+  exports: [SupabaseOrquestadorService],
 })
 export class VuelosModule {}
