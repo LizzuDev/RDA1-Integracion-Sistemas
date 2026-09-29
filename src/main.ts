@@ -98,11 +98,9 @@ async function bootstrap() {
   // por eso se mantiene la lista de origenes concreta en lugar de un comodin.
   app.enableCors({
     origin: [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://localhost:5174',
-      'http://localhost:4173',
-      'https://rda-1-integracion-sistemas.vercel.app'
+      /^http:\/\/localhost:\d+$/,
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+      /^https:\/\/.*\.vercel\.app$/
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
