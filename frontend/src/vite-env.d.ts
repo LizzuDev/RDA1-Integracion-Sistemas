@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 // Declaración de módulos para assets
 declare module '*.css';
 declare module '*.svg' {

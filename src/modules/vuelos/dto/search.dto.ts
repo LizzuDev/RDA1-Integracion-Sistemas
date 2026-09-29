@@ -1,6 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsString, IsArray, ValidateNested, IsInt, Min, IsDateString, IsOptional, Matches, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsArray,
+  ValidateNested,
+  IsInt,
+  Min,
+  IsDateString,
+  IsOptional,
+  Matches,
+  ArrayMinSize,
+  ArrayMaxSize,
+} from 'class-validator';
 
 export class ItinerarySearchDto {
   @ApiProperty({ example: 'UIO', pattern: '^[A-Z]{3}$' })
@@ -45,13 +56,23 @@ export class PassengerBreakdownDto {
 }
 
 export class SearchRequestDto {
-  @ApiProperty({ type: [ItinerarySearchDto] })
+  @ApiProperty({
+    type: [ItinerarySearchDto],
+    minItems: 1,
+    maxItems: 6,
+    description:
+      'Entre 1 y 6 itinerarios. "Ida y Vuelta" se representa con DOS itinerarios: la ida y el regreso con la ruta invertida, porque el contrato no define un campo tripType.',
+  })
   @IsArray()
+  // El contrato declara minItems: 1 y maxItems: 6. Sin esto, un array vacio
+  // pasaria la validacion y llegaria al servicio sin itinerarios que buscar.
+  @ArrayMinSize(1, { message: 'Debe incluir al menos un itinerario.' })
+  @ArrayMaxSize(6, { message: 'No puede incluir mas de 6 itinerarios.' })
   @ValidateNested({ each: true })
   @Type(() => ItinerarySearchDto)
   itineraries: ItinerarySearchDto[];
 
-  @ApiProperty()
+  @ApiProperty({ type: PassengerBreakdownDto })
   @ValidateNested()
   @Type(() => PassengerBreakdownDto)
   passengers: PassengerBreakdownDto;

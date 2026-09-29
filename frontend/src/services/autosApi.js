@@ -1,12 +1,11 @@
-import axios from 'axios';
+import { api } from './api';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-
-const api = axios.create({
-  baseURL: API_BASE,
-  timeout: 8000,
-});
-
+/**
+ * Servicio de Autos.
+ *
+ * Usa la instancia global de `services/api.ts` para heredar el interceptor de
+ * JWT y la politica de refresco ante 401.
+ */
 export async function searchAutos(searchParams) {
   const { data } = await api.post('/autos/search', searchParams);
   return data;
