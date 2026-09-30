@@ -1,34 +1,57 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getAtracciones } from '../services/atraccionesApi';
-import { AtraccionCard } from '../components/AtraccionCard';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
-const FILTERS = ['Todas', 'Museos', 'Parques', 'Tours', 'Aventura', 'Cultural'];
+// Datos Mock para Destinos Top en Ecuador
+const DESTINOS_TOP = [
+  { id: 1, nombre: 'Quito', cosas: '245 cosas que hacer', img: 'https://images.unsplash.com/photo-1583526569145-31a3194beeb6?q=80&w=800&auto=format&fit=crop' },
+  { id: 2, nombre: 'Guayaquil', cosas: '128 cosas que hacer', img: 'https://images.unsplash.com/photo-1620302302388-3481232eb1e4?q=80&w=800&auto=format&fit=crop' },
+  { id: 3, nombre: 'Cuenca', cosas: '184 cosas que hacer', img: 'https://images.unsplash.com/photo-1618331766620-30fc719e7280?q=80&w=800&auto=format&fit=crop' },
+  { id: 4, nombre: 'Baños', cosas: '312 cosas que hacer', img: 'https://images.unsplash.com/photo-1583526568856-11b0589fc0c4?q=80&w=800&auto=format&fit=crop' },
+  { id: 5, nombre: 'Galápagos', cosas: '89 cosas que hacer', img: 'https://images.unsplash.com/photo-1581404091630-f4b6fa754eb2?q=80&w=800&auto=format&fit=crop' }
+];
+
+const EXPLORA_TABS = ['Pichincha', 'Guayas', 'Azuay', 'Tungurahua', 'Manabí', 'Imbabura', 'Galápagos'];
+const EXPLORA_DESTINOS = [
+  { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://images.unsplash.com/photo-1596401057633-54a8fe8ef647?q=80&w=400&auto=format&fit=crop' },
+  { nombre: 'Mindo', cosas: '78 cosas que hacer', img: 'https://images.unsplash.com/photo-1621508215684-25e227092329?q=80&w=400&auto=format&fit=crop' },
+  { nombre: 'Sangolquí', cosas: '12 cosas que hacer', img: 'https://images.unsplash.com/photo-1596401057633-54a8fe8ef647?q=80&w=400&auto=format&fit=crop' },
+  { nombre: 'Machachi', cosas: '24 cosas que hacer', img: 'https://images.unsplash.com/photo-1621508215684-25e227092329?q=80&w=400&auto=format&fit=crop' },
+];
 
 export function AtraccionesPage() {
+  const navigate = useNavigate();
   const [atracciones, setAtracciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busqueda, setBusqueda] = useState('');
-  const [filtroActivo, setFiltroActivo] = useState('Todas');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(3);
+  const [tabActivo, setTabActivo] = useState('Pichincha');
+  const [dateRange, setDateRange] = useState([null, null]);
+  const [startDate, endDate] = dateRange;
+
+  const handleSearch = () => {
+    if (busqueda.trim()) {
+      navigate(`/search?destino=${encodeURIComponent(busqueda)}`);
+    } else {
+      navigate(`/search`);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getAtracciones({ page, limit: 9 });
+      const result = await getAtracciones({ page: 1, limit: 10 });
       const items = result.data || result;
       setAtracciones(Array.isArray(items) ? items : []);
-      if (result.meta?.total) {
-        setTotalPages(Math.ceil(result.meta.total / 9));
-      }
     } catch (err) {
-      setError('No se pudo conectar con el servicio de Atracciones. Verifica que el backend esté corriendo.');
+      setError('No se pudo conectar con el servicio de Atracciones.');
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -41,104 +64,179 @@ export function AtraccionesPage() {
 
   return (
     <>
-      {/* HERO */}
+      {/* HERO SECTION */}
       <section className="hero">
-        <h1>Descubre las mejores Atracciones</h1>
-        <p>Museos, parques, tours y mucho más en un solo lugar</p>
+        <div className="hero-content">
+          <h1>Atracciones, actividades y experiencias</h1>
+          <p>Descubre nuevas atracciones y experiencias que coincidan con tus intereses y estilo de viaje en Ecuador</p>
+        </div>
+        
         <div className="search-box">
           <div className="search-input-group">
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
-            <input
-              type="text"
-              placeholder="¿Qué atracción buscas?"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-            />
+            <div className="input-text-wrapper">
+              <input
+                type="text"
+                placeholder="Destino o ¿A dónde vas?"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+            </div>
           </div>
-          <button className="search-btn" onClick={fetchData}>Buscar</button>
+          
+          <div className="search-input-group date-group">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <div className="input-text-wrapper date-picker-wrapper" style={{display: 'flex', flex: 1}}>
+              <DatePicker
+                selectsRange={true}
+                startDate={startDate}
+                endDate={endDate}
+                onChange={(update) => setDateRange(update)}
+                monthsShown={2}
+                placeholderText="Fechas"
+                dateFormat="dd/MM/yyyy"
+                className="custom-date-picker-input"
+              />
+            </div>
+          </div>
+          
+          <button className="search-btn" onClick={handleSearch}>Buscar</button>
         </div>
       </section>
 
-      {/* CONTENIDO */}
       <main className="main-content">
-        <h2 className="section-title">Atracciones disponibles</h2>
-        <p className="section-subtitle">
-          Información obtenida en tiempo real desde el servicio de Atracciones (Híbrido)
-        </p>
-
-        {/* FILTROS */}
-        <div className="filters-row">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              className={`filter-chip ${filtroActivo === f ? 'active' : ''}`}
-              onClick={() => setFiltroActivo(f)}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-
-        {/* LOADING */}
-        {loading && (
-          <div className="state-container">
-            <div className="spinner" />
-            <p className="state-title">Cargando atracciones...</p>
-            <p className="state-subtitle">Conectando con el servicio externo y local</p>
+        
+        {/* RECOMENDADO GENERADO POR IA */}
+        <section className="section-block">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Recomendado en Quito</h2>
+              <p className="section-subtitle">Nuestra selección de las mejores atracciones basada en IA para ti</p>
+            </div>
+            <a href="#" className="see-all-link">Verlas todas</a>
           </div>
-        )}
 
-        {/* ERROR */}
-        {!loading && error && (
-          <div className="state-container">
-            <div className="error-icon">⚠️</div>
-            <p className="state-title">Servicio no disponible</p>
-            <p className="state-subtitle">{error}</p>
-            <button className="retry-btn" onClick={fetchData}>Reintentar</button>
+          {loading && <div className="spinner"></div>}
+          {!loading && error && <p style={{color: 'red'}}>{error}</p>}
+          
+          <div className="atracciones-horizontal-scroll">
+            {atraccionesFiltradas.slice(0, 5).map((atraccion, idx) => (
+              <div key={atraccion.id} className="atraccion-scroll-card">
+                <div className="asc-img-wrapper">
+                  <span className="asc-badge">#{idx + 1} Más vendido</span>
+                  <img src={atraccion.image_url || `https://picsum.photos/seed/${atraccion.id}/400/500`} alt={atraccion.nombre} />
+                </div>
+                <div className="asc-info">
+                  <h3 className="asc-title">{atraccion.nombre || atraccion.name || atraccion.title}</h3>
+                  <div className="asc-rating">
+                    <span className="score">{(Math.random() * 2 + 8).toFixed(1)}</span>
+                    <span className="text">Excepcional ({Math.floor(Math.random() * 500) + 50})</span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+        </section>
 
-        {/* GRID */}
-        {!loading && !error && (
-          <>
-            {atraccionesFiltradas.length === 0 ? (
-              <div className="state-container">
-                <div className="error-icon">🔍</div>
-                <p className="state-title">Sin resultados</p>
-                <p className="state-subtitle">No se encontraron atracciones con ese nombre.</p>
+        {/* DESTINOS TOP ECUADOR */}
+        <section className="section-block">
+          <h2 className="section-title">Destinos top en Ecuador</h2>
+          <div className="destinos-top-grid">
+            {DESTINOS_TOP.map((destino, idx) => (
+              <div key={destino.id} className={`destino-top-card ${idx < 2 ? 'large' : ''}`}>
+                <img src={destino.img} alt={destino.nombre} />
+                <div className="dt-info">
+                  <h3>{destino.nombre}</h3>
+                  <p>{destino.cosas}</p>
+                </div>
               </div>
-            ) : (
-              <div className="atracciones-grid">
-                {atraccionesFiltradas.map((a, i) => (
-                  <AtraccionCard key={a.id || i} atraccion={a} />
-                ))}
-              </div>
-            )}
+            ))}
+          </div>
+        </section>
 
-            {/* PAGINACIÓN */}
-            {totalPages > 1 && (
-              <div className="pagination">
-                <button className="page-btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-                  ‹
-                </button>
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map((n) => (
-                  <button
-                    key={n}
-                    className={`page-btn ${page === n ? 'active' : ''}`}
-                    onClick={() => setPage(n)}
-                  >
-                    {n}
-                  </button>
-                ))}
-                <button className="page-btn" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                  ›
-                </button>
+        {/* TU CUENTA BANNER */}
+        <section className="section-block">
+          <h2 className="section-title">Tu cuenta, tus viajes</h2>
+          <div className="account-banner">
+            <div className="account-banner-content">
+              <h3>Todos los detalles de tus viajes en un mismo lugar</h3>
+              <p>Inicia sesión para reservar más rápido y administrar tus viajes fácilmente</p>
+              <div className="account-actions">
+                <button className="btn-iniciar-sesion">Iniciar sesión</button>
+                <button className="btn-registrate">Regístrate</button>
               </div>
-            )}
-          </>
-        )}
+            </div>
+            <div className="account-banner-img">
+              <span className="genius-icon">🎁 Genius</span>
+            </div>
+          </div>
+        </section>
+
+        {/* CUENTA CON NOSOTROS */}
+        <section className="section-block">
+          <h2 className="section-title">Cuenta con nosotros</h2>
+          <div className="features-grid">
+            <div className="feature-item">
+              <span className="feature-icon">🎡</span>
+              <div>
+                <h4>Descubre las principales atracciones</h4>
+                <p>Conoce lo mejor del destino con atracciones, tours, actividades y mucho más</p>
+              </div>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">⏱️</span>
+              <div>
+                <h4>Rápido y flexible</h4>
+                <p>Puedes reservar los boletos online en pocos minutos y hay cancelación gratis en muchas atracciones</p>
+              </div>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">🎧</span>
+              <div>
+                <h4>Asistencia cuando lo necesites</h4>
+                <p>El equipo de Atención al cliente está a tu disposición para ayudarte las 24 horas, todos los días</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* EXPLORA MAS DESTINOS */}
+        <section className="section-block">
+          <h2 className="section-title">Explora más destinos</h2>
+          <p className="section-subtitle">Encuentra cosas que hacer en ciudades de todo el Ecuador</p>
+          
+          <div className="explora-tabs">
+            {EXPLORA_TABS.map(tab => (
+              <button 
+                key={tab} 
+                className={`tab-btn ${tabActivo === tab ? 'active' : ''}`}
+                onClick={() => setTabActivo(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          
+          <div className="explora-grid">
+            {EXPLORA_DESTINOS.map((dest, idx) => (
+              <div key={idx} className="explora-card">
+                <img src={dest.img} alt={dest.nombre} />
+                <div className="ex-info">
+                  <h4>{dest.nombre}</h4>
+                  <p>{dest.cosas}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
       </main>
     </>
   );

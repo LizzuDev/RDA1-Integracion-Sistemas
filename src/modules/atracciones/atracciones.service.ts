@@ -9,9 +9,11 @@ import { UpdateAtraccionDto } from './dto/update-atraccion.dto';
 import { ReservationRequestDto, CancelReservationRequestDto, ReservationStatus } from './dto/reservation.dto';
 import { DetailsRequestDto } from './dto/details-request.dto';
 import { PagoService } from './pago.service';
+import { SoapWrapperService } from './soap-wrapper.service';
 import { catchError, firstValueFrom } from 'rxjs';
 import { Atraccion } from './entities/atraccion.entity';
 import { ReservaAtraccion } from './entities/reserva.entity';
+import { ResenaAtraccion } from './entities/resena.entity';
 
 @Injectable()
 export class AtraccionesService {
@@ -23,10 +25,13 @@ export class AtraccionesService {
   constructor(
     private readonly httpService: HttpService,
     private readonly pagoService: PagoService,
+    private readonly soapWrapper: SoapWrapperService,
     @InjectRepository(Atraccion)
     private readonly atraccionRepo: Repository<Atraccion>,
     @InjectRepository(ReservaAtraccion)
-    private readonly reservaRepo: Repository<ReservaAtraccion>
+    private readonly reservaRepo: Repository<ReservaAtraccion>,
+    @InjectRepository(ResenaAtraccion)
+    private readonly resenaRepo: Repository<ResenaAtraccion>
   ) {}
 
   async search(dto: SearchAtraccionesRequestDto): Promise<any> {
@@ -192,9 +197,10 @@ export class AtraccionesService {
     }
 
     // Buscar externo
+    let externalData;
     try {
       const { data } = await firstValueFrom(this.httpService.get(`${this.EXTERNAL_API_URL}/${id}`));
-      return {
+      externalData = {
         id: data.id.toString(),
         name: data.title,
         long_description: data.body,
@@ -221,6 +227,48 @@ export class AtraccionesService {
     } catch(err) {
       throw new HttpException('Atracción no encontrada', HttpStatus.NOT_FOUND);
     }
+
+    // --- ENRIQUECIMIENTO LOCAL (RESEÑAS) ---
+    let resenas = await this.resenaRepo.find({ where: { atraccionId: id } });
+    
+    // Seed automático si no hay reseñas (solo para prototipo)
+    if (resenas.length === 0) {
+      const mockResena1 = this.resenaRepo.create({
+        atraccionId: id,
+        usuarioId: 'usr-1',
+        usuarioNombre: 'Nicauris Seily',
+        usuarioPais: 'República Dominicana',
+        comentario: 'Excelente Guía, muy profesional y respetuoso. Recomiendo la experiencia al 100%.',
+        limpieza: 9.8,
+        servicio: 10.0,
+        calidad: 9.6
+      });
+      const mockResena2 = this.resenaRepo.create({
+        atraccionId: id,
+        usuarioId: 'usr-2',
+        usuarioNombre: 'Andres',
+        usuarioPais: 'Colombia',
+        comentario: 'Disfrute mucho del tour ya que el guía conocía a detalle los puntos de visita.',
+        limpieza: 9.5,
+        servicio: 9.8,
+        calidad: 9.7
+      });
+      resenas = await this.resenaRepo.save([mockResena1, mockResena2]);
+    }
+
+    externalData.local_reviews = resenas;
+    externalData.local_ratings_breakdown = {
+      limpieza: resenas.reduce((acc, curr) => acc + curr.limpieza, 0) / resenas.length,
+      servicio: resenas.reduce((acc, curr) => acc + curr.servicio, 0) / resenas.length,
+      calidad: resenas.reduce((acc, curr) => acc + curr.calidad, 0) / resenas.length,
+      general: (resenas.reduce((acc, curr) => acc + curr.limpieza + curr.servicio + curr.calidad, 0) / (resenas.length * 3))
+    };
+    
+    // Si la API externa no manda score, podemos reemplazarlo con el nuestro:
+    externalData.ratings.score = Number(externalData.local_ratings_breakdown.general.toFixed(1));
+    externalData.ratings.number_of_reviews = resenas.length;
+
+    return externalData;
   }
 
   async reservar(id: string, dto: ReservationRequestDto, idempotencyKey: string): Promise<any> {
@@ -254,6 +302,15 @@ export class AtraccionesService {
 
     // Pago Síncrono
     const pagoResult = await this.pagoService.procesarPago({ cantidadTickets: dto.ticket_count, metodoPago: 'TARJETA' });
+
+    // --- REQUISITO RDA1: PATRÓN WRAPPER REST a SOAP/CML ---
+    // Simulamos que enviamos la confirmación a un sistema de inventario legado en SOAP
+    const soapXml = await this.soapWrapper.translateToSoap({ reservationId: reserva.id, status: 'PAID' }, 'ConfirmInventory');
+    const legacyResponse = await this.soapWrapper.sendSimulatedSoapRequest(soapXml);
+    if (legacyResponse.status !== 'SUCCESS') {
+       throw new HttpException('Error en el sistema legado (SOAP) al confirmar inventario', HttpStatus.BAD_GATEWAY);
+    }
+    // ------------------------------------------------------
 
     // Confirmar
     reserva.status = ReservationStatus.CONFIRMED;

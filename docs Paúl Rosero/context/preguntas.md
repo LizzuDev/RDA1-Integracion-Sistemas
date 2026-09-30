@@ -5,8 +5,8 @@
 **1. ¿Qué es Axios y cómo funciona?**
 Investigar: librería HTTP para JavaScript/TypeScript que permite hacer peticiones `GET`, `POST`, etc. a APIs externas desde el navegador o Node.js. La usamos en el frontend para llamar a NestJS, y `@nestjs/axios` en el backend para llamar a las APIs de los compañeros.
 
-**2. ¿Qué es Docker y por qué lo usamos para la base de datos?**
-Investigar: Docker crea contenedores aislados. Usamos `docker-compose.yml` para levantar PostgreSQL sin instalarlo directamente. Ventaja: cualquier compañero puede correr `docker compose up -d` y tener la base de datos idéntica.
+**2. ¿Qué es Supabase y por qué lo usamos para la base de datos?**
+Investigar: Supabase es una plataforma de Backend-as-a-Service basada en PostgreSQL. La usamos en lugar de una base de datos local para tener un despliegue en la nube desde el día 1. Ventaja: cualquier compañero puede conectarse a la misma base de datos sin tener que instalar Docker o PostgreSQL localmente, solo configurando el `.env`.
 
 **3. ¿Qué es un BFF (Backend For Frontend)?**
 Investigar: patrón de arquitectura donde el backend actúa de intermediario entre el frontend y los microservicios. Nuestro NestJS es el BFF: recibe petición del React, la reenvía a la API del compañero, y devuelve el resultado formateado.
@@ -73,4 +73,5 @@ Investigar: React es la librería de UI para crear interfaces web reactivas. Vit
 - **Conclusión del Diseño en nuestro Microservicio:**
   - `GET /atracciones`: Se mantiene para listar el catálogo simple con paginación (`?page=1&limit=10`), aprovechando la memoria caché del navegador/CDN.
   - `POST /atracciones/search`: Se utiliza para búsquedas avanzadas y cálculo de disponibilidad dinámica con cuerpo JSON.
-
+
+**12. ¿Debemos implementar persitencia NoSQL o caché para poder tener la información de inventario actaulizada?**

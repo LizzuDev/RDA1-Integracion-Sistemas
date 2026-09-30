@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AtraccionesPage } from './pages/AtraccionesPage';
+import { AtraccionesSearchPage } from './pages/AtraccionesSearchPage';
 import { AtraccionDetail } from './pages/AtraccionDetail';
 import { AutosPage } from './pages/AutosPage';
 import { AutoDetail } from './pages/AutoDetail';
@@ -15,6 +16,7 @@ function App() {
         <Navbar />
         <Routes>
           <Route path="/" element={<AtraccionesPage />} />
+          <Route path="/search" element={<AtraccionesSearchPage />} />
           <Route path="/atracciones/:id" element={<AtraccionDetail />} />
           <Route path="/autos" element={<AutosPage />} />
           <Route path="/autos/:id" element={<AutoDetail />} />

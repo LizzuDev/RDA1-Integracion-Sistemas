@@ -13,11 +13,11 @@ export function AtraccionDetail() {
   const [isBooking, setIsBooking] = useState(false);
   
   const [form, setForm] = useState({
-    date: new Date().toISOString().split('T')[0],
-    time: '10:00',
+    date: '2026-09-28',
+    time: '12:00 p.m.',
     ticket_count: 1,
-    customer_name: '',
-    customer_email: ''
+    customer_name: 'Juan Perez',
+    customer_email: 'juan@test.com'
   });
 
   const [bookingResult, setBookingResult] = useState(null);
@@ -35,10 +35,6 @@ export function AtraccionDetail() {
     }
     fetchDetalle();
   }, [id]);
-
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
 
   const handleBooking = async (e) => {
     e.preventDefault();
@@ -67,90 +63,290 @@ export function AtraccionDetail() {
   if (error) return <div className="state-container"><div className="error-icon">⚠️</div><p className="state-subtitle">{error}</p><button className="retry-btn" onClick={() => navigate('/')}>Volver</button></div>;
   if (!atraccion) return null;
 
-  const precio = parseFloat(atraccion.precio_unitario || atraccion.price?.total || atraccion.precioTicket || 0);
+  const precio = parseFloat(atraccion.precio_unitario || atraccion.price?.total || atraccion.precioTicket || 55);
 
   return (
-    <main className="main-content">
-      <button
-        onClick={() => navigate('/')}
-        style={{ background: 'none', border: 'none', color: 'var(--booking-blue)', cursor: 'pointer', fontWeight: 700, fontSize: '1rem', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 }}
-      >
-        ← Volver a Atracciones
-      </button>
+    <div className="search-page-wrapper">
+      <div className="breadcrumb-nav" style={{ paddingTop: 24 }}>
+        <span onClick={() => navigate('/')}>Inicio</span> {'>'} <span>Atracciones</span> {'>'} <span>Cosas que hacer en Quito</span> {'>'} <span>La Ronda</span> {'>'} <strong>{atraccion.nombre || atraccion.name || 'Recorrido a pie de Quito Old Town con degustación...'}</strong>
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '32px', alignItems: 'start' }}>
-        {/* Lado Izquierdo: Detalle */}
-        <div style={{ background: '#fff', borderRadius: 12, padding: 32, boxShadow: 'var(--card-shadow)' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: 8 }}>
-            {atraccion.nombre || atraccion.name || 'Atracción'}
-          </h1>
-          <p style={{ color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>
-            {atraccion.descripcion || atraccion.long_description}
-          </p>
-          
-          {atraccion.includes && (
-            <div style={{ marginBottom: 24 }}>
-              <h3>Incluye:</h3>
-              <ul style={{ paddingLeft: 20, marginTop: 8 }}>
-                {atraccion.includes.map((inc, idx) => <li key={idx}>{inc}</li>)}
-              </ul>
-            </div>
-          )}
+      <main className="detail-layout">
+        
+        {/* COLUMNA IZQUIERDA: CONTENIDO */}
+        <div className="detail-content">
+          <div className="detail-header">
+            <h1 className="detail-title">{atraccion.nombre || atraccion.name || 'Recorrido a pie de Quito Old Town con degustación de cacao en grupos pequeños'}</h1>
+            <p className="detail-subtitle">Visita guiada de tres horas por el casco antiguo de Quito, destacando miles de años de historia, arquitectura, calles y costumbres.</p>
+          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 20 }}>
-            <div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--booking-blue)' }}>
-                ${precio.toFixed(2)}
+          <div className="gallery-grid">
+            <div className="gallery-main">
+              <img src={atraccion.photos?.[0]?.url || `https://picsum.photos/seed/${atraccion.id}/800/600`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}/800/600`; }} alt="Main" />
+              <div className="gallery-badge-overlay">
+                <div className="gb-score">10</div>
+                <div className="gb-text">
+                  <strong>Excepcional</strong><br/>
+                  <span>38 comentarios {'>'}</span>
+                </div>
               </div>
-              <div style={{ fontSize: '.85rem', color: 'var(--text-muted)' }}>por persona</div>
+            </div>
+            <div className="gallery-side">
+              <img src={atraccion.photos?.[1]?.url || `https://picsum.photos/seed/${atraccion.id}1/400/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}1/400/300`; }} alt="Gallery 1" />
+              <img src={atraccion.photos?.[2]?.url || `https://picsum.photos/seed/${atraccion.id}2/400/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}2/400/300`; }} alt="Gallery 2" />
+              <img src={atraccion.photos?.[3]?.url || `https://picsum.photos/seed/${atraccion.id}3/400/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}3/400/300`; }} alt="Gallery 3" />
+              <div className="gallery-more">
+                <img src={atraccion.photos?.[4]?.url || `https://picsum.photos/seed/${atraccion.id}4/400/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}4/400/300`; }} alt="Gallery 4" />
+                <div className="more-overlay">🖼️ Ver todas las imágenes</div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Lado Derecho: Checkout */}
-        <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: 'var(--card-shadow)' }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: 16 }}>Reserva ahora</h2>
-          
-          {bookingResult?.success ? (
-            <div style={{ background: '#e6f4ea', color: '#137333', padding: 16, borderRadius: 8 }}>
-              <h3 style={{ marginBottom: 8 }}>¡Reserva Confirmada! 🎉</h3>
-              <p>ID: {bookingResult.data.reservation_id}</p>
-              <p>Total pagado: ${bookingResult.data.total_price?.total}</p>
+          <div className="detail-highlights">
+            <div className="dh-item">
+              <span className="icon success">✔️</span>
+              <div>
+                <strong>Cancelación gratis</strong><br/>
+                <span className="muted">Hasta 24 horas antes de la hora de inicio</span>
+              </div>
             </div>
-          ) : (
-            <form onSubmit={handleBooking} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Fecha</label>
-                <input required type="date" name="date" value={form.date} onChange={handleChange} style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Hora</label>
-                <input required type="time" name="time" value={form.time} onChange={handleChange} style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Cantidad de tickets</label>
-                <input required type="number" min="1" max="20" name="ticket_count" value={form.ticket_count} onChange={handleChange} style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Nombre Completo</label>
-                <input required type="text" name="customer_name" value={form.customer_name} onChange={handleChange} placeholder="Ej. Juan Pérez" style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>Email</label>
-                <input required type="email" name="customer_email" value={form.customer_email} onChange={handleChange} placeholder="juan@ejemplo.com" style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ccc' }} />
-              </div>
+            <div className="dh-item">
+              <span className="icon">⏱️</span>
+              <strong>Duración: 2 horas - 3 horas</strong>
+            </div>
+            {/* TODO (RDA2): Se admiten animales de servicio - Esperando actualización del contrato v1.3 */}
+            {/*
+            <div className="dh-item">
+              <span className="icon">🐾</span>
+              <strong>Se admiten animales de servicio</strong>
+            </div>
+            */}
+          </div>
 
-              {bookingResult?.error && (
-                <div style={{ color: 'red', fontSize: '0.9rem' }}>{bookingResult.error}</div>
+          <div className="detail-description">
+            <p>{atraccion.long_description || 'Descripción no disponible.'}</p>
+          </div>
+
+          {/* TODO (RDA2): Razones para ir - Esperando actualización del contrato v1.3 */}
+          {/*
+          <div className="detail-section">
+            <h2>Razones para ir</h2>
+            <ul className="check-list">
+              <li>Guía local con comentarios sobre historia, arquitectura y costumbres.</li>
+              <li>Introducción al casco antiguo de Quito: miles de años de historia y arquitectura.</li>
+            </ul>
+          </div>
+          */}
+
+          <div className="detail-section">
+            <h2>¿Qué incluye?</h2>
+            <ul className="check-list">
+              {atraccion.includes?.map((item, idx) => (
+                <li key={idx}>{item}</li>
+              )) || <li>No hay detalles disponibles</li>}
+            </ul>
+          </div>
+
+          {/* TODO (RDA2): Información adicional - Esperando actualización del contrato v1.3 */}
+          {/*
+          <div className="detail-section">
+            <h2>Información adicional</h2>
+            <ul className="bullet-list">
+              <li>Adecuado para todos los niveles de aptitud física</li>
+              <li>No se recomienda para personas que padecen enfermedades pulmonares.</li>
+              <li>No se recomienda para personas que tienden a verse fácilmente afectadas por el mal de altura.</li>
+            </ul>
+          </div>
+          */}
+
+          {/* TODO (RDA2): Itinerario del recorrido - Esperando esquema Itinerary en OpenAPI v1.3 */}
+          {/*
+          <div className="detail-section">
+            <h2>Itinerario del recorrido</h2>
+            <div className="itinerary-timeline">
+              <div className="timeline-item">
+                <div className="tl-dot"></div>
+                <div className="tl-content">
+                  <strong>Parada en: Basílica del Voto Nacional</strong>
+                  <span className="success-text">✔️ Entrada gratis</span>
+                  <p>La entrada al complejo de la iglesia es libre. La entrada al templo principal cuesta 2 USD...</p>
+                  <span className="tl-time">⏱️ 40 minutos</span>
+                </div>
+              </div>
+              <div className="timeline-item">
+                <div className="tl-dot"></div>
+                <div className="tl-content">
+                  <strong>Parada en: Palacio del Antiguo Círculo Militar</strong>
+                  <span className="success-text">✔️ Entrada gratis</span>
+                  <p>Aprenderemos sobre la historia de este palacio de las fuerzas militares que tiene una historia bastante interesante y también veremos algunos muebles lujosos del siglo XX.</p>
+                  <span className="tl-time">⏱️ 20 minutos</span>
+                </div>
+              </div>
+            </div>
+            <a href="#" className="link-action">Ver todas las 8 paradas</a>
+          </div>
+          */}
+          <div className="detail-section">
+            <h2>Ubicación</h2>
+            <div className="map-container">
+              <img src="https://maps.googleapis.com/maps/api/staticmap?center=-0.220164,-78.512327&zoom=15&size=800x300&maptype=roadmap&markers=color:blue%7Clabel:Q%7C-0.220164,-78.512327" alt="Mapa de la atracción" className="static-map" />
+            </div>
+          </div>
+
+          <div className="detail-section">
+            <h2>Valoraciones de usuarios</h2>
+            <div className="reviews-summary">
+              <div className="rs-badge">
+                <span className="score">{atraccion.ratings?.score?.toFixed(1) || 'N/A'}</span>
+                <div>
+                  <strong>{atraccion.ratings?.score >= 9 ? 'Excepcional' : 'Muy bueno'}</strong> <a href="#">{atraccion.ratings?.number_of_reviews || 0} comentarios {'>'}</a><br/>
+                  <span className="muted">Basado en opiniones reales</span>
+                </div>
+              </div>
+              {atraccion.local_ratings_breakdown && (
+                <div className="rs-bars">
+                  <div className="bar-row"><span>Limpieza</span> <strong>{atraccion.local_ratings_breakdown.limpieza?.toFixed(1)}</strong></div>
+                  <div className="bar-row"><span>Servicio y Atención</span> <strong>{atraccion.local_ratings_breakdown.servicio?.toFixed(1)}</strong></div>
+                  <div className="bar-row"><span>Calidad General</span> <strong>{atraccion.local_ratings_breakdown.calidad?.toFixed(1)}</strong></div>
+                </div>
               )}
+            </div>
 
-              <button type="submit" disabled={isBooking} className="card-btn" style={{ padding: '12px', fontSize: '1.1rem', marginTop: 8 }}>
-                {isBooking ? 'Procesando pago...' : `Pagar $${(precio * form.ticket_count).toFixed(2)}`}
-              </button>
-            </form>
-          )}
+            {atraccion.local_reviews && atraccion.local_reviews.length > 0 && (
+              <>
+                <h3 style={{marginTop: 24, marginBottom: 16}}>Lo que más gustó a los clientes</h3>
+                <div className="customer-likes-carousel">
+                  {atraccion.local_reviews.map((rev) => (
+                    <div className="like-card" key={rev.id}>
+                      <div className="user-info">
+                        <div className="avatar">{rev.usuarioNombre?.charAt(0) || 'U'}</div>
+                        <div><strong>{rev.usuarioNombre}</strong><br/><span>{rev.usuarioPais}</span></div>
+                      </div>
+                      <p>"{rev.comentario}"</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            </div>
+
+          <div className="detail-section faq-section">
+            <h2>Preguntas frecuentes de la plataforma</h2>
+            <details><summary>¿Cómo reservo un producto en Booking Prototipo?</summary><p>Selecciona tu fecha en el panel derecho, verifica la disponibilidad y haz clic en "Confirmar".</p></details>
+            <details><summary>¿Cuándo se realiza el cobro?</summary><p>El pago se procesa síncronamente al momento de hacer la reserva. Utilizamos conexiones seguras.</p></details>
+            <details><summary>¿Qué pasa si la atracción cambia mi itinerario?</summary><p>La información del itinerario es administrada por nuestros socios. En caso de cambios mayores, serás notificado al correo registrado.</p></details>
+            <details><summary>¿Puedo cancelar mi reserva?</summary><p>{atraccion.free_cancellation ? 'Sí, esta atracción incluye cancelación gratuita hasta 24 horas antes.' : 'Esta atracción no admite cancelaciones gratuitas.'}</p></details>
+          </div>
+
         </div>
-      </div>
-    </main>
+
+        {/* COLUMNA DERECHA: RESERVA (STICKY) */}
+        <aside className="detail-sidebar">
+          <div className="booking-box">
+            <h2>Boletos y precios</h2>
+            <p><strong>Buscar disponibilidad de boletos por fecha</strong></p>
+            <a href="#" className="link-action">Ver más fechas</a>
+            
+            <div className="date-selector">
+              <div className="date-box active">
+                <span className="day-name">lun</span>
+                <span className="day-num">28</span>
+                <span className="month">sep</span>
+                <span className="badge-hoy">Hoy</span>
+              </div>
+              <div className="date-box">
+                <span className="day-name">mar</span>
+                <span className="day-num">29</span>
+                <span className="month">sep</span>
+              </div>
+              <div className="date-box">
+                <span className="day-name">mié</span>
+                <span className="day-num">30</span>
+                <span className="month">sep</span>
+              </div>
+            </div>
+            <p className="muted" style={{fontSize: '0.85rem', marginBottom: 20}}>La primera fecha en la que este precio más bajo <strong>(US${precio})</strong> está disponible es el 28 sep.</p>
+
+            <p><strong>Seleccionar hora</strong></p>
+            <div className="time-selector">
+              <button className={`time-btn ${form.time === '12:00 p.m.' ? 'active' : ''}`} onClick={() => setForm({...form, time: '12:00 p.m.'})}>12:00 p.m.</button>
+              <button className={`time-btn ${form.time === '03:00 p.m.' ? 'active' : ''}`} onClick={() => setForm({...form, time: '03:00 p.m.'})}>03:00 p.m.</button>
+              <button className={`time-btn ${form.time === '05:00 p.m.' ? 'active' : ''}`} onClick={() => setForm({...form, time: '05:00 p.m.'})}>05:00 p.m.</button>
+            </div>
+
+            <div className="ticket-configuration">
+              <div className="tc-header">Tour por el Casco Antiguo de Quito</div>
+              <div className="tc-body">
+                <div className="dh-item" style={{marginBottom: 16}}>
+                  <span className="icon">❌</span>
+                  <div>
+                    <strong>No reembolsable</strong><br/>
+                    <span className="muted" style={{fontSize: '0.8rem'}}>Si cancelas esta reservación, no recibirás ningún reembolso.</span>
+                  </div>
+                </div>
+
+                <label style={{fontWeight: 600, fontSize: '0.9rem'}}>Idioma</label>
+                <select className="full-width-input" style={{marginBottom: 16}}>
+                  <option>Inglés - Guía turístico</option>
+                  <option>Español - Guía turístico</option>
+                </select>
+
+                <label style={{fontWeight: 600, fontSize: '0.9rem'}}>Número de personas*</label>
+                <span className="muted" style={{fontSize: '0.8rem', display: 'block', marginBottom: 8}}>Puedes seleccionar hasta 10 personas en total</span>
+                <div className="counter-row">
+                  <span>Personas</span>
+                  <div className="counter-controls">
+                    <button type="button" onClick={() => setForm({...form, ticket_count: Math.max(1, form.ticket_count - 1)})}>-</button>
+                    <span>{form.ticket_count}</span>
+                    <button type="button" onClick={() => setForm({...form, ticket_count: Math.min(10, form.ticket_count + 1)})}>+</button>
+                  </div>
+                </div>
+
+                <label style={{fontWeight: 600, fontSize: '0.9rem', marginTop: 16, display: 'block'}}>Selecciona un boleto</label>
+                <div className="ticket-radio active">
+                  <input type="radio" checked readOnly />
+                  <div>
+                    <strong>Grupo (máx. 10 personas)</strong><br/>
+                    <span className="muted">US${precio}</span>
+                  </div>
+                </div>
+
+                <div className="total-price-box">
+                  <div className="total-text">Total <strong>US${precio * form.ticket_count}</strong><br/><span>Incluye impuestos y cargos</span></div>
+                  <button className="search-btn" style={{width: '100%', padding: '12px', fontSize: '1rem', marginTop: 16}} onClick={handleBooking} disabled={isBooking}>
+                    {isBooking ? 'Procesando...' : 'Continuar'}
+                  </button>
+                </div>
+                
+                {bookingResult?.success && (
+                  <div style={{ background: '#e6f4ea', color: '#137333', padding: 12, borderRadius: 4, marginTop: 16, fontSize: '0.9rem' }}>
+                    <strong>¡Reserva Confirmada! 🎉</strong><br/>
+                    ID: {bookingResult.data.reservation_id}
+                  </div>
+                )}
+                {bookingResult?.error && (
+                  <div style={{ color: 'red', fontSize: '0.9rem', marginTop: 16 }}>{bookingResult.error}</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="account-banner mini-banner">
+            <div className="account-banner-content">
+              <h3>Todos los detalles de tus viajes en un mismo lugar</h3>
+              <p>Inicia sesión para reservar más rápido y administrar tus viajes fácilmente</p>
+              <div className="account-actions">
+                <button className="btn-iniciar-sesion">Iniciar sesión</button>
+                <button className="btn-registrate">Regístrate</button>
+              </div>
+            </div>
+            <div className="account-banner-img">
+              <span className="genius-icon">🎁 Genius</span>
+            </div>
+          </div>
+        </aside>
+
+      </main>
+    </div>
   );
 }

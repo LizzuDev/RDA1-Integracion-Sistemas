@@ -19,7 +19,7 @@ En esta sesión se completó la construcción vertical completa del módulo de *
 - Mientras la API real no exista, se usa `https://jsonplaceholder.typicode.com/posts` como mock temporal.
 - **Variable de entorno:** `ATRACCIONES_API_URL` en `.env` para fácil configuración.
 
-### 2. Base de Datos Docker — Tablas Core
+### 2. Base de Datos en Supabase — Tablas Core
 Las 8 tablas del Booking Prototipo son exclusivamente de **administración y ventas**:
 - `usuarios`, `carritos`, `carrito_items`
 - `facturas`, `factura_items`
@@ -47,7 +47,7 @@ Las 8 tablas del Booking Prototipo son exclusivamente de **administración y ven
 | `src/modules/atracciones/atracciones.service.ts` | Cliente HTTP BFF |
 | `src/modules/atracciones/atracciones.controller.ts` | Endpoints documentados con Swagger |
 | `tsconfig.json` | Excluye `frontend/` de la compilación del backend |
-| `docker-compose.yml` | PostgreSQL 16 en contenedor `booking_db_container` |
+| `.env` | Credenciales de conexión a PostgreSQL en Supabase |
 | `.env` | `DATABASE_URL` y `ATRACCIONES_API_URL` |
 
 ### Frontend (React — carpeta `/frontend`)
@@ -69,13 +69,10 @@ Las 8 tablas del Booking Prototipo son exclusivamente de **administración y ven
 ## Cómo Levantar el Stack
 
 ```powershell
-# Terminal 1
-docker compose up -d
-
-# Terminal 2 (raíz del proyecto)
+# Terminal 1 (raíz del proyecto)
 npm run start:dev
 
-# Terminal 3
+# Terminal 2
 cd frontend
 npm run dev
 ```
@@ -92,11 +89,11 @@ npm run dev
 |---|---|---|
 | C03 - Marketplace Funcional | ✅ | UI de Atracciones en React consumiendo el backend |
 | C04 - APIs Documentadas | ✅ | Swagger activo en `/api/docs` |
-| C05 - Base de Datos Operativa | ✅ | 8 tablas core en PostgreSQL vía Docker |
+| C05 - Base de Datos Operativa | ✅ | 8 tablas core en PostgreSQL hosteadas en Supabase |
 
 ---
 
 ## Preguntas para la Defensa (registradas en `context/preguntas.md`)
 - ¿Qué es Axios y cómo funciona?
-- ¿Por qué usamos Docker en lugar de instalar PostgreSQL directamente?
+- ¿Por qué usamos Supabase en lugar de instalar PostgreSQL localmente?
 - ¿Qué es un BFF (Backend For Frontend) y cómo lo aplicamos?
