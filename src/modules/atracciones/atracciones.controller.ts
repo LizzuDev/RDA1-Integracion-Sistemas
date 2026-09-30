@@ -64,6 +64,42 @@ export class AtraccionesController {
     return this.atraccionesService.create(dto);
   }
 
+  @Post('reservations/:reservationId/cancel')
+  @UseGuards(SupabaseAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancelar una reserva existente (Requiere autenticación JWT e Idempotency-Key)' })
+  @ApiParam({ name: 'reservationId', description: 'ID de la reserva a cancelar', type: 'string' })
+  @ApiResponse({ status: 200, description: 'Reserva cancelada exitosamente.', type: ReservationResponseDto })
+  async cancelarReserva(
+    @Param('reservationId') reservationId: string,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Body() dto: CancelReservationRequestDto,
+    @Req() req: any
+  ) {
+    if (!idempotencyKey) {
+      throw new HttpException('Idempotency-Key header is required', HttpStatus.BAD_REQUEST);
+    }
+    return this.atraccionesService.cancelarReserva(reservationId, dto, idempotencyKey);
+  }
+
+  @Get('reservations')
+  @UseGuards(SupabaseAuthGuard)
+  @ApiOperation({ summary: 'Consultar el historial de reservas del usuario (Requiere autenticación JWT)' })
+  @ApiResponse({ status: 200, description: 'Listado de reservas.' })
+  async getReservas(@Req() req: any) {
+    return this.atraccionesService.getReservas();
+  }
+
+  @Get('reservations/:reservationId')
+  @UseGuards(SupabaseAuthGuard)
+  @ApiOperation({ summary: 'Obtener detalle de una reserva específica (Requiere autenticación JWT)' })
+  @ApiParam({ name: 'reservationId', description: 'ID de la reserva', type: 'string' })
+  @ApiResponse({ status: 200, description: 'Detalle de la reserva.', type: ReservationResponseDto })
+  @ApiResponse({ status: 404, description: 'Reserva no encontrada.' })
+  async getReservaById(@Param('reservationId') reservationId: string, @Req() req: any) {
+    return this.atraccionesService.getReservaById(reservationId);
+  }
+
   @Get(':id')
   @UseInterceptors(CacheInterceptor)
   @Header('X-API-Deprecation-Date', '2027-12-31')
@@ -132,39 +168,4 @@ export class AtraccionesController {
     return this.atraccionesService.reservar(id, dto, idempotencyKey);
   }
 
-  @Post('reservations/:reservationId/cancel')
-  @UseGuards(SupabaseAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancelar una reserva existente (Requiere autenticación JWT e Idempotency-Key)' })
-  @ApiParam({ name: 'reservationId', description: 'ID de la reserva a cancelar', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Reserva cancelada exitosamente.', type: ReservationResponseDto })
-  async cancelarReserva(
-    @Param('reservationId') reservationId: string,
-    @Headers('idempotency-key') idempotencyKey: string,
-    @Body() dto: CancelReservationRequestDto,
-    @Req() req: any
-  ) {
-    if (!idempotencyKey) {
-      throw new HttpException('Idempotency-Key header is required', HttpStatus.BAD_REQUEST);
-    }
-    return this.atraccionesService.cancelarReserva(reservationId, dto, idempotencyKey);
-  }
-
-  @Get('reservations')
-  @UseGuards(SupabaseAuthGuard)
-  @ApiOperation({ summary: 'Consultar el historial de reservas del usuario (Requiere autenticación JWT)' })
-  @ApiResponse({ status: 200, description: 'Listado de reservas.' })
-  async getReservas(@Req() req: any) {
-    return this.atraccionesService.getReservas();
-  }
-
-  @Get('reservations/:reservationId')
-  @UseGuards(SupabaseAuthGuard)
-  @ApiOperation({ summary: 'Obtener detalle de una reserva específica (Requiere autenticación JWT)' })
-  @ApiParam({ name: 'reservationId', description: 'ID de la reserva', type: 'string' })
-  @ApiResponse({ status: 200, description: 'Detalle de la reserva.', type: ReservationResponseDto })
-  @ApiResponse({ status: 404, description: 'Reserva no encontrada.' })
-  async getReservaById(@Param('reservationId') reservationId: string, @Req() req: any) {
-    return this.atraccionesService.getReservaById(reservationId);
-  }
 }

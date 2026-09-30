@@ -409,7 +409,7 @@ export class VuelosController {
   @ApiResponse({ status: 200, description: 'Detalle del boleto', type: TicketDetailDto })
   @ApiResponse({ status: 400, description: 'bookingId no es UUID o ticketId no tiene el formato admitido' })
   @ApiResponse({ status: 404, description: 'La reserva o el ticket no existen' })
-  async @UseGuards(SupabaseAuthGuard) obtenerTicket(
+  @UseGuards(SupabaseAuthGuard) async obtenerTicket(
     @Param() params: TicketRouteParamDto,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
   ): Promise<TicketDetailDto> {
@@ -510,7 +510,7 @@ export class VuelosController {
   @ApiResponse({ status: 409, description: 'Estado invalido, oferta ajena o ya consumida' })
   @ApiResponse({ status: 410, description: 'La oferta de cambio ha caducado' })
   @ApiResponse({ status: 422, description: 'Hay importe a pagar y falta la referencia de pago' })
-  async @UseGuards(SupabaseAuthGuard) confirmarCambioFecha(
+  @UseGuards(SupabaseAuthGuard) async confirmarCambioFecha(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Body() dto: DateChangeRequestDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
