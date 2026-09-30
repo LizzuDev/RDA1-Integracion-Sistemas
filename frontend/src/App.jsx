@@ -5,15 +5,24 @@ import { AtraccionDetail } from './pages/AtraccionDetail';
 import { AutosPage } from './pages/AutosPage';
 import { AutoDetail } from './pages/AutoDetail';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { MisReservasPage } from './pages/MisReservasPage';
+import { VuelosPage } from './pages/VuelosPage';
+import { EstadoVueloPage } from './pages/EstadoVueloPage';
+import { DetalleReservaPage } from './pages/DetalleReservaPage';
+import { AuthProvider } from './hooks/useAuth';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import './index.css';
+import './vuelos.css';
 
 function App() {
   return (
-    <BrowserRouter>
-      <div className="app-wrapper">
-        <Navbar />
+    <AuthProvider>
+      <BrowserRouter>
+        <div className="app-wrapper">
+          <Navbar />
         <Routes>
           <Route path="/" element={<AtraccionesPage />} />
           <Route path="/search" element={<AtraccionesSearchPage />} />
@@ -21,10 +30,17 @@ function App() {
           <Route path="/autos" element={<AutosPage />} />
           <Route path="/autos/:id" element={<AutoDetail />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/mis-reservas" element={<MisReservasPage />} />
+          <Route path="/vuelos" element={<VuelosPage />} />
+          <Route path="/vuelos/estado" element={<EstadoVueloPage />} />
+          <Route path="/vuelos/reservas/:id" element={<DetalleReservaPage />} />
         </Routes>
         <Footer />
       </div>
     </BrowserRouter>
+    </AuthProvider>
   );
 }
 

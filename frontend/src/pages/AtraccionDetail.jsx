@@ -2,19 +2,20 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getAtraccion, reservarAtraccion } from '../services/atraccionesApi';
 import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '../hooks/useAuth';
 
 export function AtraccionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isLoggedIn = !!user;
   
   const [atraccion, setAtraccion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isBooking, setIsBooking] = useState(false);
   
-  // Auth & UI States (Simulated Context)
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user] = useState({ name: 'Juan Pérez', email: 'juan.perez@ejemplo.com' });
+  // Auth & UI States
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('visa');
   
@@ -43,7 +44,7 @@ export function AtraccionDetail() {
   const handleBooking = async (e) => {
     e.preventDefault();
     if (!isLoggedIn) {
-      alert("Debes iniciar sesión para comprar.");
+      navigate('/login');
       return;
     }
 
@@ -54,7 +55,7 @@ export function AtraccionDetail() {
     try {
       const result = await reservarAtraccion(id, {
         ...form,
-        customer_name: user.name,
+        customer_name: user.user_metadata?.full_name || user.email.split('@')[0],
         customer_email: user.email,
         ticket_count: parseInt(form.ticket_count)
       }, idempotencyKey);
@@ -342,8 +343,8 @@ export function AtraccionDetail() {
                 ) : (
                   <div style={{ marginTop: 24, textAlign: 'center', padding: '16px', border: '1px solid #e0e0e0', borderRadius: 8, background: '#f5f5f5' }}>
                     <p style={{marginBottom: 12, fontSize: '0.95rem'}}>Inicia sesión con tu cuenta para continuar con la reserva de forma segura.</p>
-                    <button className="search-btn" style={{width: '100%', padding: '10px', fontSize: '1rem'}} onClick={() => setIsLoggedIn(true)}>
-                      Simular Inicio de Sesión
+                    <button className="search-btn" style={{width: '100%', padding: '10px', fontSize: '1rem'}} onClick={() => navigate('/login')}>
+                      Iniciar Sesión
                     </button>
                   </div>
                 )}
@@ -361,8 +362,8 @@ export function AtraccionDetail() {
                 <h3>Todos los detalles de tus viajes en un mismo lugar</h3>
                 <p>Inicia sesión para reservar más rápido y administrar tus viajes fácilmente</p>
                 <div className="account-actions">
-                  <button className="btn-iniciar-sesion" onClick={() => setIsLoggedIn(true)}>Iniciar sesión</button>
-                  <button className="btn-registrate">Regístrate</button>
+                  <button className="btn-iniciar-sesion" onClick={() => navigate('/login')}>Iniciar sesión</button>
+                  <button className="btn-registrate" onClick={() => navigate('/register')}>Regístrate</button>
                 </div>
               </div>
               <div className="account-banner-img">

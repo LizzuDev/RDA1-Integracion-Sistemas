@@ -7,7 +7,7 @@ import { CoreModule } from './core/core.module';
 // import { AlojamientosModule } from './modules/alojamientos/alojamientos.module';
 // import { AutosModule } from './modules/autos/autos.module';
 import { AtraccionesModule } from './modules/atracciones/atracciones.module';
-// import { VuelosModule } from './modules/vuelos/vuelos.module';
+import { VuelosModule } from './modules/vuelos/vuelos.module';
 
 @Module({
   imports: [
@@ -25,7 +25,7 @@ import { AtraccionesModule } from './modules/atracciones/atracciones.module';
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'),
         autoLoadEntities: true,
-        synchronize: configService.get<string>('NODE_ENV') !== 'production', // Precaución en producción
+        synchronize: false, // Desactivado para evitar conflictos con vuelos_schema.sql y PgBouncer
       }),
     }),
 
@@ -41,6 +41,7 @@ import { AtraccionesModule } from './modules/atracciones/atracciones.module';
     // Módulos de Integración (Tus endpoints BFF)
     // =========================================================================
     AtraccionesModule,
+    VuelosModule,
   ],
   controllers: [],
   providers: [],
