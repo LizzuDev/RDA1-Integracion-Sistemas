@@ -12,12 +12,16 @@ export function AtraccionDetail() {
   const [error, setError] = useState(null);
   const [isBooking, setIsBooking] = useState(false);
   
+  // Auth & UI States (Simulated Context)
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user] = useState({ name: 'Juan Pérez', email: 'juan.perez@ejemplo.com' });
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('visa');
+  
   const [form, setForm] = useState({
     date: '2026-09-28',
     time: '12:00 p.m.',
     ticket_count: 1,
-    customer_name: 'Juan Perez',
-    customer_email: 'juan@test.com'
   });
 
   const [bookingResult, setBookingResult] = useState(null);
@@ -38,6 +42,11 @@ export function AtraccionDetail() {
 
   const handleBooking = async (e) => {
     e.preventDefault();
+    if (!isLoggedIn) {
+      alert("Debes iniciar sesión para comprar.");
+      return;
+    }
+
     setIsBooking(true);
     setBookingResult(null);
 
@@ -45,14 +54,17 @@ export function AtraccionDetail() {
     try {
       const result = await reservarAtraccion(id, {
         ...form,
+        customer_name: user.name,
+        customer_email: user.email,
         ticket_count: parseInt(form.ticket_count)
       }, idempotencyKey);
       
       setBookingResult({ success: true, data: result });
+      setShowSuccessModal(true);
     } catch (err) {
       setBookingResult({ 
         success: false, 
-        error: err.response?.data?.detail || err.message 
+        error: err.response?.data?.detail || err.response?.data?.message || err.message 
       });
     } finally {
       setIsBooking(false);
@@ -311,42 +323,102 @@ export function AtraccionDetail() {
                   </div>
                 </div>
 
-                <div className="total-price-box">
-                  <div className="total-text">Total <strong>US${precio * form.ticket_count}</strong><br/><span>Incluye impuestos y cargos</span></div>
-                  <button className="search-btn" style={{width: '100%', padding: '12px', fontSize: '1rem', marginTop: 16}} onClick={handleBooking} disabled={isBooking}>
-                    {isBooking ? 'Procesando...' : 'Continuar'}
-                  </button>
-                </div>
-                
-                {bookingResult?.success && (
-                  <div style={{ background: '#e6f4ea', color: '#137333', padding: 12, borderRadius: 4, marginTop: 16, fontSize: '0.9rem' }}>
-                    <strong>¡Reserva Confirmada! 🎉</strong><br/>
-                    ID: {bookingResult.data.reservation_id}
+                {isLoggedIn ? (
+                  <>
+                    <label style={{fontWeight: 600, fontSize: '0.9rem', marginTop: 16, display: 'block'}}>Método de pago (Guardado)</label>
+                    <select className="full-width-input" style={{marginBottom: 16}} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                      <option value="visa">Visa terminada en ****1234</option>
+                      <option value="paypal">PayPal ({user.email})</option>
+                      <option value="mastercard">Mastercard terminada en ****9876</option>
+                    </select>
+
+                    <div className="total-price-box">
+                      <div className="total-text">Total <strong>US${precio * form.ticket_count}</strong><br/><span>Incluye impuestos y cargos</span></div>
+                      <button className="search-btn" style={{width: '100%', padding: '12px', fontSize: '1rem', marginTop: 16}} onClick={handleBooking} disabled={isBooking}>
+                        {isBooking ? 'Procesando Pago Seguro...' : 'Pagar y Confirmar'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ marginTop: 24, textAlign: 'center', padding: '16px', border: '1px solid #e0e0e0', borderRadius: 8, background: '#f5f5f5' }}>
+                    <p style={{marginBottom: 12, fontSize: '0.95rem'}}>Inicia sesión con tu cuenta para continuar con la reserva de forma segura.</p>
+                    <button className="search-btn" style={{width: '100%', padding: '10px', fontSize: '1rem'}} onClick={() => setIsLoggedIn(true)}>
+                      Simular Inicio de Sesión
+                    </button>
                   </div>
                 )}
+                
                 {bookingResult?.error && (
                   <div style={{ color: 'red', fontSize: '0.9rem', marginTop: 16 }}>{bookingResult.error}</div>
                 )}
               </div>
             </div>
           </div>
-
-          <div className="account-banner mini-banner">
-            <div className="account-banner-content">
-              <h3>Todos los detalles de tus viajes en un mismo lugar</h3>
-              <p>Inicia sesión para reservar más rápido y administrar tus viajes fácilmente</p>
-              <div className="account-actions">
-                <button className="btn-iniciar-sesion">Iniciar sesión</button>
-                <button className="btn-registrate">Regístrate</button>
+          
+          {!isLoggedIn && (
+            <div className="account-banner mini-banner">
+              <div className="account-banner-content">
+                <h3>Todos los detalles de tus viajes en un mismo lugar</h3>
+                <p>Inicia sesión para reservar más rápido y administrar tus viajes fácilmente</p>
+                <div className="account-actions">
+                  <button className="btn-iniciar-sesion" onClick={() => setIsLoggedIn(true)}>Iniciar sesión</button>
+                  <button className="btn-registrate">Regístrate</button>
+                </div>
+              </div>
+              <div className="account-banner-img">
+                <span className="genius-icon">🎁 Genius</span>
               </div>
             </div>
-            <div className="account-banner-img">
-              <span className="genius-icon">🎁 Genius</span>
-            </div>
-          </div>
+          )}
         </aside>
-
       </main>
+
+      {/* MODAL DE ÉXITO PREMIUM */}
+      {showSuccessModal && bookingResult?.success && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
+          <div className="modal-content" style={{ background: 'white', padding: '40px', borderRadius: '12px', maxWidth: '450px', width: '90%', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', animation: 'slideUp 0.4s ease-out' }}>
+            <div className="modal-icon" style={{ width: 64, height: 64, borderRadius: '50%', background: '#e6f4ea', color: '#137333', fontSize: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px auto' }}>
+              ✓
+            </div>
+            <h2 style={{ marginBottom: '8px', color: '#1a1a1a' }}>¡Pago Exitoso!</h2>
+            <p style={{ color: '#595959', marginBottom: '24px' }}>Hemos enviado tu comprobante de pago electrónico al correo <strong>{user.email}</strong>.</p>
+            
+            <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', textAlign: 'left', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#595959' }}>Reserva ID:</span>
+                <strong style={{ fontSize: '0.85rem' }}>{bookingResult.data.reservation_id}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#595959' }}>Atracción:</span>
+                <strong>{atraccion?.name?.substring(0, 20)}...</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#595959' }}>Total Pagado:</span>
+                <strong>US${precio * form.ticket_count}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#595959' }}>Método:</span>
+                <strong style={{ textTransform: 'capitalize' }}>{paymentMethod}</strong>
+              </div>
+            </div>
+
+            <button 
+              className="search-btn" 
+              style={{ width: '100%', padding: '14px', fontSize: '1.05rem', borderRadius: '8px' }}
+              onClick={() => setShowSuccessModal(false)}
+            >
+              ¡Listo!
+            </button>
+          </div>
+        </div>
+      )}
+      
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

@@ -301,7 +301,11 @@ export class AtraccionesService {
     reserva = await this.reservaRepo.save(reserva);
 
     // Pago Síncrono
-    const pagoResult = await this.pagoService.procesarPago({ cantidadTickets: dto.ticket_count, metodoPago: 'TARJETA' });
+    const pagoResult = await this.pagoService.procesarPago({ 
+      cantidadTickets: dto.ticket_count, 
+      metodoPago: 'TARJETA',
+      userEmail: dto.customer_email || 'no-email@example.com'
+    });
 
     // --- REQUISITO RDA1: PATRÓN WRAPPER REST a SOAP/CML ---
     // Simulamos que enviamos la confirmación a un sistema de inventario legado en SOAP
@@ -311,6 +315,21 @@ export class AtraccionesService {
        throw new HttpException('Error en el sistema legado (SOAP) al confirmar inventario', HttpStatus.BAD_GATEWAY);
     }
     // ------------------------------------------------------
+
+    // --- ORQUESTACIÓN: NOTIFICAR AL SISTEMA EXTERNO (COMPAÑEROS) ---
+    try {
+      this.logger.log(`Notificando actualización de stock al proveedor externo (Atracciones Individuales) para ID ${id}`);
+      // Simulación de llamada real al endpoint del compañero:
+      // await firstValueFrom(this.httpService.put(`${this.EXTERNAL_API_URL}/${id}/stock`, {
+      //   ticketsSold: dto.ticket_count,
+      //   reservationId: reserva.id
+      // }));
+      this.logger.log(`¡Stock actualizado exitosamente en el sistema del proveedor externo!`);
+    } catch (error) {
+      this.logger.error(`Fallo al notificar descuento de stock al sistema externo: ${error.message}`);
+      // Aunque falle la notificación externa, el pago ya se hizo. Podríamos encolar en RabbitMQ/Kafka para RDA2.
+    }
+    // ---------------------------------------------------------------
 
     // Confirmar
     reserva.status = ReservationStatus.CONFIRMED;
