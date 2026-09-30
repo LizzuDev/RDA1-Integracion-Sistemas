@@ -95,7 +95,21 @@ function exigirIdempotencyKey(valor: string | undefined): string {
  * desde otra pestana, y el propio contrato no expone una forma de hacerlo sin
  * credenciales.
  */
-function propietarioDesde(huella: string | undefined): string {
+function propietarioDesde(huella: string | undefined, authHeader?: string): string {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1];
+      const payloadBase64 = token.split('.')[1];
+      const payloadString = Buffer.from(payloadBase64, 'base64').toString('utf8');
+      const payload = JSON.parse(payloadString);
+      if (payload.sub && REGEX_UUID.test(payload.sub)) {
+        return payload.sub;
+      }
+    } catch (e) {
+      // Ignorar error de decodificacion y caer a huella
+    }
+  }
+
   if (huella && REGEX_UUID.test(huella)) return huella;
   return randomUUID();
 }
@@ -176,11 +190,12 @@ export class VuelosController {
     @Body() body: HoldRequestDto,
     @Headers('idempotency-key') idempotencyKey: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<HoldResponseDto> {
     return this.vuelosService.createHold(
       body,
       exigirIdempotencyKey(idempotencyKey),
-      propietarioDesde(deviceFingerprint),
+      propietarioDesde(deviceFingerprint, authHeader),
     );
   }
 
@@ -247,11 +262,12 @@ export class VuelosController {
     @Body() body: BookingRequestDto,
     @Headers('idempotency-key') idempotencyKey: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<BookingDetailResponseDto> {
     return this.vuelosService.createBooking(
       body,
       exigirIdempotencyKey(idempotencyKey),
-      propietarioDesde(deviceFingerprint),
+      propietarioDesde(deviceFingerprint, authHeader),
     );
   }
 

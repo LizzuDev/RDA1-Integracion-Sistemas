@@ -163,10 +163,14 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
 
   useEffect(() => {
     if (!abierto || !hold?.expiresAt) return;
+    let intervalId;
     const updateTimer = () => {
       const remaining = new Date(hold.expiresAt).getTime() - Date.now();
       if (remaining <= 0) {
         setTiempoRestante('00:00');
+        clearInterval(intervalId); // Ensure we don't trigger multiple times
+        alert('El tiempo de reserva ha expirado. Por favor vuelve a seleccionar tu vuelo.');
+        onCerrar();
       } else {
         const min = Math.floor(remaining / 60000);
         const sec = Math.floor((remaining % 60000) / 1000);
@@ -174,9 +178,9 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
       }
     };
     updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [abierto, hold?.expiresAt]);
+    intervalId = setInterval(updateTimer, 1000);
+    return () => clearInterval(intervalId);
+  }, [abierto, hold?.expiresAt, onCerrar]);
 
   const [pasoActual, setPasoActual] = useState(1); // 1: Pasajeros, 2: Extras, 3: Pago
 
@@ -280,6 +284,9 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
       setEnviando(true);
       setErrorGeneral(null);
       try {
+        // Simulando pasarela de pagos
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         const reserva = await crearReserva(
           {
             holdId: hold.holdId,
@@ -726,7 +733,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
               <button type="submit" className="btn-primario" disabled={enviando}>
                 {pasoActual === 1 && 'Continuar a Extras'}
                 {pasoActual === 2 && 'Continuar al Pago'}
-                {pasoActual === 3 && (enviando ? 'Confirmando...' : 'Confirmar pago')}
+                {pasoActual === 3 && (enviando ? 'Procesando pago...' : 'Confirmar pago')}
               </button>
             </div>
         </div>

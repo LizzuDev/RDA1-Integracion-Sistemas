@@ -1,71 +1,81 @@
-/**
- * Pagina de Login (destino del logout forzado por 401).
- *
- * ── Alcance deliberadamente minimo ──────────────────────────────────────────
- * La autenticacion PERTENECE A OTRO DOMINIO: `vuelos-openapi.yaml` no define
- * ningun endpoint de login, refresh ni logout, y declara que la logica de
- * autenticacion y 3DS vive fuera de esta API. Por eso esta pagina NO implementa
- * autenticacion: es el marcador de posicion donde el IdP deberia insertar su
- * UI (OIDC / OAuth2 authorization code), y mientras tanto evita que el logout
- * forzado del interceptor de Axios aterrice en un 404.
- *
- * No se aceptan ni se envian credenciales aqui. Un formulario de usuario y
- * contrasena sin un endpoint real solo generaria la sensacion de que se ha
- * iniciado sesion cuando no es cierto.
- */
-import { useNavigate } from 'react-router-dom';
-import { estaAutenticado, limpiarSesion } from '../services/api';
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { supabase } from '../services/supabase';
+import { useAuth } from '../hooks/useAuth';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // Si ya hay un token en memoria, no tiene sentido quedarse en el login.
-  if (estaAutenticado()) {
+  // Si ya hay sesion, redirigir
+  if (user) {
     navigate('/', { replace: true });
+    return null;
   }
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      navigate('/', { replace: true });
+    }
+    setLoading(false);
+  };
 
   return (
     <main className="main-content" id="contenido-principal">
-      <div className="state-container">
-        <div className="error-icon" aria-hidden="true">
-          🔐
-        </div>
-        <h1 className="state-title">Sesion iniciada</h1>
-        <p className="state-subtitle">
-          Tu sesion expiro o no es valida. Vuelve a iniciar sesion para
-          continuar con tus reservas.
-        </p>
+      <div className="state-container" style={{ maxWidth: '400px', margin: '0 auto', textAlign: 'left' }}>
+        <h1 className="state-title" style={{ textAlign: 'center' }}>Iniciar sesión</h1>
+        
+        {error && <div style={{ color: 'red', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
 
-        <div className="login-acciones">
-          {/*
-            El punto de integracion con el IdP real. Cuando exista, este boton
-            iniciara el flujo OAuth2 authorization code contra
-            https://auth.booking-hub.com/oauth2/authorize.
-          */}
-          <button
-            className="retry-btn"
-            type="button"
-            onClick={() => navigate('/', { replace: true })}
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Correo electrónico</label>
+            <input 
+              type="email" 
+              required 
+              value={email} 
+              onChange={e => setEmail(e.target.value)}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', border: '1px solid #ccc' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Contraseña</label>
+            <input 
+              type="password" 
+              required 
+              value={password} 
+              onChange={e => setPassword(e.target.value)}
+              style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', border: '1px solid #ccc' }}
+            />
+          </div>
+          <button 
+            type="submit" 
+            className="retry-btn" 
+            disabled={loading}
+            style={{ width: '100%', marginTop: '1rem' }}
           >
-            Iniciar sesion
+            {loading ? 'Iniciando...' : 'Iniciar sesión'}
           </button>
+        </form>
 
-          <button
-            className="login-secundario"
-            type="button"
-            onClick={() => {
-              limpiarSesion();
-              navigate('/', { replace: true });
-            }}
-          >
-            Continuar sin sesion
-          </button>
-        </div>
-
-        <p className="login-nota">
-          La autenticacion es responsabilidad de otro dominio. Esta pantalla es
-          un marcador de posicion a la espera de integrar el proveedor de
-          identidad.
+        <p style={{ marginTop: '1rem', textAlign: 'center' }}>
+          ¿No tienes cuenta? <Link to="/register" style={{ color: '#006ce4' }}>Regístrate aquí</Link>
         </p>
       </div>
     </main>

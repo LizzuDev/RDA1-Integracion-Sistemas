@@ -13,6 +13,7 @@ import { MisReservasPage } from './pages/MisReservasPage';
 import { DetalleReservaPage } from './pages/DetalleReservaPage';
 import { EstadoVueloPage } from './pages/EstadoVueloPage';
 import { WebhooksPage } from './pages/WebhooksPage';
+import { FacturasPage } from './pages/FacturasPage';
 
 // --- Autenticacion: destino del logout forzado por 401 ---
 import { LoginPage } from './pages/LoginPage';
@@ -24,6 +25,9 @@ import { NotFoundPage } from './pages/NotFoundPage';
 
 // --- Banner global de consentimiento (Fase 2) ---
 import { BannerCookies } from './components/BannerCookies';
+
+import { AuthProvider } from './hooks/useAuth';
+import { RegisterPage } from './pages/RegisterPage';
 
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -61,6 +65,7 @@ function App() {
   const cerrarPreferencias = useCallback(() => setPreferenciasCookies(false), []);
 
   return (
+    <AuthProvider>
     <BrowserRouter>
       <a className="skip-link" href="#contenido-principal">
         Saltar al contenido
@@ -100,8 +105,10 @@ function App() {
             element={<DetalleReservaRoute />}
           />
 
-          {/* Autenticacion (otro dominio): destino del logout forzado */}
+          {/* Autenticacion */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/facturas" element={<FacturasPage />} />
 
           {/* Paginas legales */}
           <Route path="/privacidad" element={<PrivacidadPage />} />
@@ -119,6 +126,7 @@ function App() {
         onCerrarExterno={cerrarPreferencias}
       />
     </BrowserRouter>
+    </AuthProvider>
   );
 }
 

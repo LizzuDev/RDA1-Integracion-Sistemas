@@ -1,9 +1,13 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../services/supabase';
 
 export function Navbar() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const [menuVuelosAbierto, setMenuVuelosAbierto] = useState(false);
+  const { user } = useAuth();
 
   const esActivo = (prefijo) =>
     prefijo === '/' ? pathname === '/' : pathname.startsWith(prefijo);
@@ -73,9 +77,41 @@ export function Navbar() {
           </Link>
         </div>
 
-        <button className="navbar-btn" type="button">
-          Registrarse
-        </button>
+        <div className="navbar-auth" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          {user ? (
+            <>
+              <span style={{ fontSize: '0.9rem' }}>
+                {user.user_metadata?.nombre ? `¡Hola, ${user.user_metadata.nombre}!` : user.email}
+              </span>
+              <Link 
+                to="/facturas" 
+                className="navbar-btn" 
+                style={{ background: 'transparent', border: '1px solid #fff', color: '#fff', textDecoration: 'none' }}
+              >
+                Mis Facturas
+              </Link>
+              <button 
+                className="navbar-btn" 
+                style={{ background: 'transparent', border: '1px solid #fff' }}
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  navigate('/');
+                }}
+              >
+                Salir
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="navbar-btn" onClick={() => navigate('/register')} style={{ background: '#fff', color: '#003580' }}>
+                Registrarse
+              </button>
+              <button className="navbar-btn" onClick={() => navigate('/login')}>
+                Iniciar sesión
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </nav>
   );

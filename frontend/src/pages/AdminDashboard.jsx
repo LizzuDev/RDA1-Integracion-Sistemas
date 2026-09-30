@@ -3,9 +3,13 @@ import { getAtracciones, crearAtraccion, eliminarAtraccion, getReservas } from '
 import { searchAutos, createAutoLocal, deleteAutoLocal, getOrdersAuto } from '../services/autosApi';
 
 export function AdminDashboard() {
-  const [moduleSelected, setModuleSelected] = useState('atracciones'); // 'atracciones' | 'autos'
+  const [moduleSelected, setModuleSelected] = useState('observabilidad'); // 'atracciones' | 'autos' | 'observabilidad'
   const [tab, setTab] = useState('catalogo'); // 'catalogo' | 'reservas'
   const [loading, setLoading] = useState(true);
+
+  // Observabilidad State
+  const [usuariosDb, setUsuariosDb] = useState([]);
+  const [facturasDb, setFacturasDb] = useState([]);
 
   // Atracciones State
   const [atracciones, setAtracciones] = useState([]);
@@ -20,7 +24,17 @@ export function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (moduleSelected === 'atracciones') {
+      if (moduleSelected === 'observabilidad') {
+        // Obtenemos facturas usando el endpoint de facturas ya hecho en supabase, o simulado
+        const res = await fetch('http://localhost:3000/vuelos/bookings'); // Solo como ejemplo para el panel
+        // Realmente para observabilidad podriamos llamar a Supabase directo si tuvieramos la SDK aqui
+        // Por simplicidad en la demo frontend:
+        setUsuariosDb([
+          { id: '247b01bf-64eb-4d46-b8cf-f3f55ec36147', email: 'admin@booking.com', role: 'admin', created_at: new Date().toISOString() },
+          { id: 'e4c928aa-7831-469c-8b8b-2c1a62de17cb', email: 'prueba@booking.com', role: 'user', created_at: new Date().toISOString() }
+        ]);
+        setFacturasDb([]); // Se podrian cargar facturas globales si hay endpoint
+      } else if (moduleSelected === 'atracciones') {
         const [resAttr, resResv] = await Promise.all([
           getAtracciones({ limit: 50 }),
           getReservas()
@@ -111,6 +125,12 @@ export function AdminDashboard() {
       {/* Top Level Module Switcher */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, borderBottom: '2px solid #eee', paddingBottom: 16 }}>
         <button 
+          onClick={() => { setModuleSelected('observabilidad'); setTab('catalogo'); }} 
+          style={{ fontSize: '1.2rem', padding: '8px 16px', border: 'none', background: moduleSelected === 'observabilidad' ? '#003580' : '#eee', color: moduleSelected === 'observabilidad' ? 'white' : 'black', borderRadius: 8, cursor: 'pointer' }}
+        >
+          Módulo Observabilidad
+        </button>
+        <button 
           onClick={() => { setModuleSelected('atracciones'); setTab('catalogo'); }} 
           style={{ fontSize: '1.2rem', padding: '8px 16px', border: 'none', background: moduleSelected === 'atracciones' ? '#003580' : '#eee', color: moduleSelected === 'atracciones' ? 'white' : 'black', borderRadius: 8, cursor: 'pointer' }}
         >
@@ -134,6 +154,38 @@ export function AdminDashboard() {
       </div>
 
       {/* --- CONTENT AREA --- */}
+
+      {/* OBSERVABILIDAD */}
+      {moduleSelected === 'observabilidad' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
+            <h2>Panel de Observabilidad - Usuarios de la Plataforma</h2>
+            <p>Monitoreo de accesos y roles de administración.</p>
+            <table style={{ width: '100%', marginTop: 16, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
+                  <th style={{ padding: 8 }}>ID</th>
+                  <th style={{ padding: 8 }}>Email</th>
+                  <th style={{ padding: 8 }}>Rol</th>
+                  <th style={{ padding: 8 }}>Registro</th>
+                  <th style={{ padding: 8 }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usuariosDb.map(u => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: 8, fontSize: '0.8rem', color: '#666' }}>{u.id.substring(0,8)}...</td>
+                    <td style={{ padding: 8 }}>{u.email}</td>
+                    <td style={{ padding: 8 }}><span style={{ padding: '4px 8px', borderRadius: 4, background: u.role === 'admin' ? '#e6f4ea' : '#eee', color: u.role === 'admin' ? '#137333' : '#333' }}>{u.role}</span></td>
+                    <td style={{ padding: 8 }}>{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td style={{ padding: 8 }}><button style={{ color: '#0066cc', cursor: 'pointer', background: 'none', border: 'none' }}>Editar Rol</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* CATALOGO */}
       {tab === 'catalogo' && moduleSelected === 'atracciones' && (
