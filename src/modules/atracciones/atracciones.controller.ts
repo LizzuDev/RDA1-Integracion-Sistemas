@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseInterceptors, Header, Headers, Post, Put, Patch, Delete, Body, HttpCode, HttpStatus, HttpException } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseInterceptors, Header, Headers, Post, Put, Patch, Delete, Body, HttpCode, HttpStatus, HttpException, UseGuards, Req } from '@nestjs/common';
 import { CacheInterceptor } from '@nestjs/cache-manager';
 import { AtraccionesService } from './atracciones.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
@@ -11,6 +11,7 @@ import { AvailabilityResponseDto } from './dto/availability.dto';
 import { CreateAtraccionDto } from './dto/create-atraccion.dto';
 import { UpdateAtraccionDto } from './dto/update-atraccion.dto';
 import { ReservationRequestDto, CancelReservationRequestDto, ReservationResponseDto } from './dto/reservation.dto';
+import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
 
 @ApiTags('Atracciones (BFF Integrador)')
 @Controller('atracciones')
@@ -112,8 +113,9 @@ export class AtraccionesController {
   }
 
   @Post(':id/reservations')
+  @UseGuards(SupabaseAuthGuard)
   @Header('X-API-Deprecation-Date', '2027-12-31')
-  @ApiOperation({ summary: 'Reservar una atracción (Requiere Idempotency-Key)' })
+  @ApiOperation({ summary: 'Reservar una atracción (Requiere autenticación JWT e Idempotency-Key)' })
   @ApiParam({ name: 'id', description: 'ID de la atracción', type: 'string' })
   @ApiBody({ type: ReservationRequestDto })
   @ApiResponse({ status: 201, description: 'Reserva confirmada', type: ReservationResponseDto })
@@ -121,7 +123,8 @@ export class AtraccionesController {
   async reservar(
     @Param('id') id: string,
     @Headers('idempotency-key') idempotencyKey: string,
-    @Body() dto: ReservationRequestDto
+    @Body() dto: ReservationRequestDto,
+    @Req() req: any
   ) {
     if (!idempotencyKey) {
       throw new HttpException('Idempotency-Key header is required', HttpStatus.BAD_REQUEST);
@@ -130,14 +133,16 @@ export class AtraccionesController {
   }
 
   @Post('reservations/:reservationId/cancel')
+  @UseGuards(SupabaseAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancelar una reserva existente (Requiere Idempotency-Key)' })
+  @ApiOperation({ summary: 'Cancelar una reserva existente (Requiere autenticación JWT e Idempotency-Key)' })
   @ApiParam({ name: 'reservationId', description: 'ID de la reserva a cancelar', type: 'string' })
   @ApiResponse({ status: 200, description: 'Reserva cancelada exitosamente.', type: ReservationResponseDto })
   async cancelarReserva(
     @Param('reservationId') reservationId: string,
     @Headers('idempotency-key') idempotencyKey: string,
-    @Body() dto: CancelReservationRequestDto
+    @Body() dto: CancelReservationRequestDto,
+    @Req() req: any
   ) {
     if (!idempotencyKey) {
       throw new HttpException('Idempotency-Key header is required', HttpStatus.BAD_REQUEST);
@@ -146,18 +151,20 @@ export class AtraccionesController {
   }
 
   @Get('reservations')
-  @ApiOperation({ summary: 'Consultar el historial de reservas del usuario' })
+  @UseGuards(SupabaseAuthGuard)
+  @ApiOperation({ summary: 'Consultar el historial de reservas del usuario (Requiere autenticación JWT)' })
   @ApiResponse({ status: 200, description: 'Listado de reservas.' })
-  async getReservas() {
+  async getReservas(@Req() req: any) {
     return this.atraccionesService.getReservas();
   }
 
   @Get('reservations/:reservationId')
-  @ApiOperation({ summary: 'Obtener detalle de una reserva específica' })
+  @UseGuards(SupabaseAuthGuard)
+  @ApiOperation({ summary: 'Obtener detalle de una reserva específica (Requiere autenticación JWT)' })
   @ApiParam({ name: 'reservationId', description: 'ID de la reserva', type: 'string' })
   @ApiResponse({ status: 200, description: 'Detalle de la reserva.', type: ReservationResponseDto })
   @ApiResponse({ status: 404, description: 'Reserva no encontrada.' })
-  async getReservaById(@Param('reservationId') reservationId: string) {
+  async getReservaById(@Param('reservationId') reservationId: string, @Req() req: any) {
     return this.atraccionesService.getReservaById(reservationId);
   }
 }

@@ -11,6 +11,11 @@ import { MisReservasPage } from './pages/MisReservasPage';
 import { VuelosPage } from './pages/VuelosPage';
 import { EstadoVueloPage } from './pages/EstadoVueloPage';
 import { DetalleReservaPage } from './pages/DetalleReservaPage';
+import { FacturasPage } from './pages/FacturasPage';
+import { WebhooksPage } from './pages/WebhooksPage';
+import { PrivacidadPage } from './pages/PrivacidadPage';
+import { TerminosPage } from './pages/TerminosPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { AuthProvider } from './hooks/useAuth';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -36,6 +41,11 @@ function App() {
           <Route path="/vuelos" element={<VuelosPage />} />
           <Route path="/vuelos/estado" element={<EstadoVueloPage />} />
           <Route path="/vuelos/reservas/:id" element={<DetalleReservaPage />} />
+          <Route path="/facturas" element={<FacturasPage />} />
+          <Route path="/webhooks" element={<WebhooksPage />} />
+          <Route path="/legal/privacidad" element={<PrivacidadPage />} />
+          <Route path="/legal/terminos" element={<TerminosPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
         <Footer />
       </div>
