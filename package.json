@@ -20,7 +20,7 @@
     "prueba:db": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js && node dist/modules/vuelos/pruebas/prueba-gestion.js"
   },
   "dependencies": {
-    "@nestjs/axios": "^12.0.1",
+    "@nestjs/axios": "^3.0.0",
     "@nestjs/cache-manager": "^12.0.0",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.0.0",
@@ -29,7 +29,7 @@
     "@nestjs/swagger": "^7.0.0",
     "@nestjs/typeorm": "^10.0.0",
     "@supabase/supabase-js": "^2.117.2",
-    "axios": "^1.20.0",
+    "axios": "^1.6.0",
     "cache-manager": "^7.2.9",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
