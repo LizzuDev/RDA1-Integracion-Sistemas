@@ -42,7 +42,8 @@
  * conversion a flotante perderia precision en el redondeo. El formateo para
  * mostrar se hace con cadenas (ver `services/formato.js`).
  */
-import axios, { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosHeaders } from 'axios';
+import { supabase } from './supabase';
 
 // ===========================================================================
 // Configuracion
@@ -64,53 +65,22 @@ function esRutaPublica(url = ''): boolean {
 }
 
 // ===========================================================================
-// Estado de sesion (solo en memoria)
+// Estado de sesion ahora se maneja por Supabase.
+// Dejamos metodos vacios o proxies para no romper compatibilidad.
 // ===========================================================================
 
-let accessToken: string | null = null;
-
-type EscuchaSesion = (estado: { autenticado: boolean }) => void;
-
-const escuchas = new Set<EscuchaSesion>();
-
-function notificarSesion(): void {
-  const estado = { autenticado: Boolean(accessToken) };
-  escuchas.forEach((escucha) => {
-    try {
-      escucha(estado);
-    } catch (error) {
-      console.error('[api] un escuchante de sesion fallo', error);
-    }
-  });
-}
-
-/**
- * Permite a los componentes de React reaccionar a los cambios de sesion
- * (login, logout, expiracion) sin prop drilling.
- */
-export function suscribirSesion(escucha: EscuchaSesion): () => void {
-  escuchas.add(escucha);
-  return () => {
-    escuchas.delete(escucha);
-  };
-}
-
-export function guardarAccessToken(token: string): void {
-  accessToken = token;
-  notificarSesion();
-}
-
 export function limpiarSesion(): void {
-  accessToken = null;
-  notificarSesion();
+  supabase.auth.signOut();
 }
 
-export function obtenerAccessToken(): string | null {
-  return accessToken;
+export async function obtenerAccessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.access_token || null;
 }
 
-export function estaAutenticado(): boolean {
-  return Boolean(accessToken);
+export async function estaAutenticado(): Promise<boolean> {
+  const token = await obtenerAccessToken();
+  return Boolean(token);
 }
 
 // ===========================================================================
@@ -132,13 +102,12 @@ export const api = axios.create({
 // ---------------------------------------------------------------------------
 // INTERCEPTOR DE PETICION: inyecta el JWT y ajusta `withCredentials`
 // ---------------------------------------------------------------------------
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   const esPublica = esRutaPublica(config.url ?? '');
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data?.session?.access_token;
 
   if (accessToken && !esPublica) {
-    // Se usa `set()` sobre los AxiosHeaders reales: asignar
-    // `config.headers.Authorization` a veces se pierde segun como axios haya
-    // normalizado los headers en peticiones anteriores.
     (config.headers as AxiosHeaders).set('Authorization', `Bearer ${accessToken}`);
   }
 

@@ -14,7 +14,7 @@ The runtime is **Node.js (Backend)** y **Navegador Web (Frontend)**. The system 
 ```mermaid
 graph TD
     UI[Frontend React] --> |REST API| Gateway[NestJS API Gateway]
-    Gateway --> |Read/Write| DB[(PostgreSQL Docker)]
+    Gateway --> |Read/Write| DB[(Supabase PostgreSQL)]
     Gateway --> |HTTP GET/POST| ExtAPI1[API Atracciones]
     Gateway --> |HTTP GET/POST| ExtAPI2[API Vuelos]
     Gateway --> |HTTP GET/POST| ExtAPI3[API Alojamientos]
@@ -32,9 +32,9 @@ graph TD
 - Orquesta llamadas HTTP hacia las APIs de los compañeros (ej. `AtraccionesService` hace peticiones al exterior).
 - Gestiona la lógica transaccional de Carritos y Facturas.
 
-**Base de Datos (Docker PostgreSQL):**
+**Base de Datos (Supabase PostgreSQL):**
 - Almacena únicamente las 8 tablas core de administración y ventas (`usuarios`, `carritos`, `facturas`, `logs`, etc.).
-- Debe construirse vía TypeORM (`synchronize: true` en Reto 1) para facilitar el despliegue local de Alejo, Lizz y tú.
+- Debe construirse vía TypeORM (`synchronize: true` en Reto 1) conectado a la base de datos cloud de Supabase para facilitar la integración.
 
 ---
 
@@ -50,7 +50,6 @@ graph TD
 │   │   ├── modulos_core/    # Usuarios, Carritos, Facturas
 │   │   ├── integraciones/   # Atracciones, Vuelos, Alojamientos
 │   │   └── config/          # Base de datos, HTTP
-├── docker-compose.yml       # BD PostgreSQL
 └── docs Paúl Rosero/        # Documentación de Arquitectura y Memoria AI
 ```
 
@@ -58,7 +57,7 @@ graph TD
 
 ## Data and Persistence
 
-Se utiliza **PostgreSQL 15+** en un contenedor Docker.
+Se utiliza **PostgreSQL 15+** hosteado en **Supabase**.
 La persistencia está limitada a transacciones (facturas) y carritos. El estado de los productos (ej. "Cupos disponibles en atracción") no se persiste aquí, se lee en vivo de las APIs externas.
 
 ---
@@ -76,7 +75,7 @@ La persistencia está limitada a transacciones (facturas) y carritos. El estado 
 |---|---|
 | Backend | NestJS 10.x |
 | Frontend | React 18+ (Vite) |
-| Database | PostgreSQL 15 (Docker) |
+| Database | Supabase PostgreSQL |
 | ORM | TypeORM |
 | HTTP Client | Axios / @nestjs/axios |
 

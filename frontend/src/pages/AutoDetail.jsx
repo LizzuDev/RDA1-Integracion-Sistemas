@@ -38,7 +38,20 @@ export function AutoDetail() {
 
     try {
       const res = await createOrderAuto(payload, idempotencyKey);
-      setSuccess(`Reserva exitosa. Order ID: ${res.order_id}`);
+      setSuccess(`Reserva exitosa. Order ID: ${res.order_id || idempotencyKey}`);
+
+      const autoRes = {
+        id: res.order_id || idempotencyKey,
+        orderId: res.order_id || idempotencyKey,
+        tipo: 'auto',
+        titulo: `Renta de ${info.category || 'Auto'} ${info.type || 'Standard'} (${dias} días)`,
+        date: new Date().toISOString().split('T')[0],
+        dias: parseInt(dias, 10),
+        status: 'CONFIRMED',
+        totalPrice: { currency: 'USD', total: (precioDiario * dias).toFixed(2) }
+      };
+      const existing = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
+      localStorage.setItem('reservas_autos', JSON.stringify([autoRes, ...existing]));
     } catch (err) {
       if (err.response?.status === 409) {
         setError('Error: Hubo un conflicto de idempotencia. La reserva ya fue procesada.');

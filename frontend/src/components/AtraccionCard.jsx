@@ -1,40 +1,51 @@
 import { useNavigate } from 'react-router-dom';
 
-const EMOJIS = ['🏛️', '🎡', '🗺️', '🎭', '🏖️', '🌋', '🎠', '🏕️', '🎪', '🗽'];
-
 export function AtraccionCard({ atraccion }) {
   const navigate = useNavigate();
   const id = atraccion.id;
   
-  // Si es un string normal o numérico, intentamos un hash simple para el emoji
-  let hash = 0;
-  for (let i = 0; i < String(id).length; i++) hash += String(id).charCodeAt(i);
-  const emoji = EMOJIS[hash % EMOJIS.length] || '🎡';
-  
-  const precio = parseFloat(atraccion.precio_unitario || atraccion.price?.total || atraccion.precioTicket || 0);
+  // OpenAPI strict mapping
+  const name = atraccion.name || 'Atracción Turística';
+  const imageUrl = atraccion.photos && atraccion.photos.length > 0 ? atraccion.photos[0].url : `https://picsum.photos/seed/${id}/300/300`;
+  const score = atraccion.ratings?.score?.toFixed(1) || '8.5';
+  const reviewsCount = atraccion.ratings?.number_of_reviews || 120;
+  const price = atraccion.price?.total || 55;
 
   return (
-    <div className="card" onClick={() => navigate(`/atracciones/${id}`)}>
-      <div className="card-img-wrapper">
-        <div className="card-img">{emoji}</div>
-        <span className="card-badge">Atracción</span>
+    <div className="attraction-search-card" onClick={() => navigate(`/atracciones/${id}`)} style={{cursor: 'pointer'}}>
+      <div className="asc-image">
+        <img src={imageUrl} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${id}/300/300`; }} alt={name} />
+        <button className="favorite-btn" onClick={(e) => e.stopPropagation()}>♡</button>
       </div>
-      <div className="card-body">
-        <h3 className="card-title">{atraccion.nombre || atraccion.name || 'Sin nombre'}</h3>
-        <p className="card-desc">
-          {atraccion.descripcion || atraccion.long_description || 'Sin descripción disponible.'}
-        </p>
-        <div className="card-footer">
-          <div className="card-price">
-            ${precio.toFixed(2)}
-            <span> / persona</span>
+      <div className="asc-info">
+        <div className="asc-header">
+          <h3 className="asc-title">{name}</h3>
+          <div className="asc-rating">
+            <div className="score-badge">{score}</div>
+            <div className="score-text">
+              <strong>Excepcional</strong><br/>
+              <span>{reviewsCount} comentarios</span>
+            </div>
           </div>
-          <button
-            className="card-btn"
-            onClick={(e) => { e.stopPropagation(); navigate(`/atracciones/${id}`); }}
-          >
-            Ver Detalles
-          </button>
+        </div>
+
+        <div className="asc-details">
+          {atraccion.free_cancellation && (
+            <div className="asc-free-cancel">
+              <strong>✓ Cancelación gratis</strong>
+            </div>
+          )}
+          <p className="asc-desc">
+            {atraccion.long_description?.substring(0, 120) || 'Descubre esta increíble atracción...'}...
+          </p>
+        </div>
+
+        <div className="asc-footer">
+          <div className="asc-price-box">
+            <span className="price-label">Precio total</span>
+            <strong className="price-amount">US${price}</strong>
+            <button className="search-btn" onClick={(e) => { e.stopPropagation(); navigate(`/atracciones/${id}`); }}>Ver disponibilidad</button>
+          </div>
         </div>
       </div>
     </div>

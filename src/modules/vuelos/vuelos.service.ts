@@ -1140,7 +1140,7 @@ export class VuelosService {
             // en los pasos 6 para respetar la maquina de estados del trigger.
             bloqueoCupo: { idBloqueoCupo: hold.idBloqueoCupo },
             moneda: hold.moneda,
-            tarifaBase: aImporte(0),
+            tarifaBase: hold.precioCongelado,
             impuestos: aImporte(0),
             total: hold.precioCongelado,
             referenciaPago: dto.payment.paymentReference,
