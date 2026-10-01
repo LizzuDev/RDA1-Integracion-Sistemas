@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module';
 import {
   BadRequestException,
@@ -46,7 +47,7 @@ function factoryDeValidacion(errores: ValidationError[]): BadRequestException {
 async function bootstrap(): Promise<INestApplication> {
   if (cachedApp) return cachedApp;
 
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(), {
     logger: ['error', 'warn', 'log'],
   });
 
