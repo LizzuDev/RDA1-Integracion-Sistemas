@@ -103,13 +103,7 @@ async function bootstrap() {
       /^https:\/\/.*\.vercel\.app$/
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Device-Fingerprint',
-      'Idempotency-Key',
-    ],
-    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
   });
 
   app.setGlobalPrefix('api/v1');
