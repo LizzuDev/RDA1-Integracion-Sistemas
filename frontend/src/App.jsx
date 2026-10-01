@@ -10,12 +10,10 @@ import { AdminDashboard } from './pages/AdminDashboard';
 // --- Modulo de Vuelos (Fase 4: busqueda implementada) ---
 import { VuelosPage } from './pages/VuelosPage';
 import { MisReservasPage } from './pages/MisReservasPage';
-import { VuelosPage } from './pages/VuelosPage';
 import { EstadoVueloPage } from './pages/EstadoVueloPage';
 import { DetalleReservaPage } from './pages/DetalleReservaPage';
 import { FacturasPage } from './pages/FacturasPage';
 import { WebhooksPage } from './pages/WebhooksPage';
-import { FacturasPage } from './pages/FacturasPage';
 
 // --- Autenticacion: destino del logout forzado por 401 ---
 import { LoginPage } from './pages/LoginPage';
