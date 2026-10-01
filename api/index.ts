@@ -13,10 +13,8 @@ import {
   InvalidParam,
 } from '../src/core/errors/codigo-error';
 import { HateoasInterceptor } from '../src/core/interceptors/hateoas.interceptor';
-import * as express from 'express';
 
-let app: INestApplication;
-let expressApp: express.Express;
+let cachedApp: INestApplication;
 
 function aplanarValidacion(
   errores: ValidationError[],
@@ -44,24 +42,22 @@ function factoryDeValidacion(errores: ValidationError[]): BadRequestException {
   });
 }
 
-async function bootstrap(): Promise<express.Express> {
-  if (expressApp) return expressApp;
+async function bootstrap(): Promise<INestApplication> {
+  if (cachedApp) return cachedApp;
 
-  const server = express();
-
-  app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
 
   app.enableCors({
     origin: [
       /^http:\/\/localhost:\d+$/,
-      /^http:\/\/127\.0\.0\.1:\d+$/,
       /^https:\/\/.*\.vercel\.app$/,
       /^https:\/\/.*\.onrender\.com$/,
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
+    credentials: true,
   });
 
   app.setGlobalPrefix('api/v1');
@@ -91,20 +87,22 @@ async function bootstrap(): Promise<express.Express> {
   SwaggerModule.setup('api/docs', app, document);
 
   await app.init();
-  expressApp = app.getHttpAdapter().getInstance();
-  return expressApp;
+  cachedApp = app;
+  return cachedApp;
 }
 
 // Vercel Serverless Handler
 export default async function handler(req: any, res: any) {
   try {
-    const server = await bootstrap();
-    server(req, res);
-  } catch (err) {
-    console.error('Error bootstrapping NestJS:', err);
+    const app = await bootstrap();
+    const httpAdapter = app.getHttpAdapter();
+    const instance = httpAdapter.getInstance();
+    instance(req, res);
+  } catch (err: any) {
+    console.error('[Vercel Handler] Bootstrap error:', err?.message, err?.stack);
     res.status(500).json({
       error: 'Internal Server Error',
-      message: err?.message || 'Failed to initialize application',
+      details: err?.message ?? 'Unknown error during initialization',
     });
   }
 }

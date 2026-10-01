@@ -25,7 +25,9 @@ import { VuelosModule } from './modules/vuelos/vuelos.module';
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'),
         autoLoadEntities: true,
-        synchronize: false, // Desactivado para evitar conflictos con vuelos_schema.sql y PgBouncer
+        synchronize: false,
+        ssl: { rejectUnauthorized: false }, // Requerido por Supabase en producción
+        extra: { max: 1 }, // Límite de conexiones para entornos serverless (Vercel)
       }),
     }),
 
