@@ -20,7 +20,7 @@ Ejecuta los siguientes pasos en orden ESTRICTO antes de escribir código o propo
    - Lee `docs Paúl Rosero/context/active-context.md` para recordar QUIÉN está pidiendo el cambio (tu rol en Atracciones) y el estado actual del integrador.
 
 3. **Revisar Requerimientos**:
-   - Lee `docs Paúl Rosero/product-requirements.md` y `docs Paúl Rosero/technical-requirements.md` para garantizar que la tecnología propuesta (NestJS, Docker, React) sea la correcta.
+   - Lee `docs Paúl Rosero/product-requirements.md` y `docs Paúl Rosero/technical-requirements.md` para garantizar que la tecnología propuesta (NestJS, Supabase, React) sea la correcta.
 
 4. **Consultar Diseño de Base de Datos**:
    - Si se requiere alterar la base de datos, revisa el archivo de diseño aprobado (Artefacto: `diseño_base_de_datos.md`). Recuerda: 8 tablas core, sin catálogos locales.

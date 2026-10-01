@@ -1,0 +1,2399 @@
+﻿/* =========================================================================
+   ACCESIBILIDAD
+   ========================================================================= */
+
+/**
+ * Enlace de salto al contenido.
+ * Es el primer elemento enfocable de la pagina (tecla Tab) y permite al
+ * usuario de teclado o de lector de pantalla saltar la navegacion.
+ * Se oculta visualmente hasta recibir el foco, con `focus-visible` para que
+ * SOLO aparezca cuando la navegacion es por teclado: si apareciera siempre,
+ * un usuario de raton veria un elemento que no ha pedido.
+ */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 8px;
+  z-index: 2000;
+  background: var(--booking-blue);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 0 0 4px 4px;
+  font-size: .9rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top .2s;
+}
+.skip-link:focus-visible,
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid var(--booking-yellow);
+  outline-offset: 2px;
+}
+
+/* =========================================================================
+   PAGINAS LEGALES — Privacidad y Terminos (Fase 1)
+   ========================================================================= */
+
+.legal-doc {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  padding: 32px 36px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+.legal-doc-header {
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+}
+.legal-doc-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--booking-blue);
+  letter-spacing: -1px;
+  margin-bottom: 6px;
+}
+.legal-doc-meta {
+  font-size: .82rem;
+  color: var(--text-muted);
+}
+
+.legal-toc {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--booking-yellow);
+  border-radius: 6px;
+  padding: 18px 22px;
+  margin-bottom: 32px;
+}
+.legal-toc-title {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 10px;
+}
+.legal-toc-list {
+  margin: 0;
+  padding-left: 20px;
+  columns: 2;
+  column-gap: 24px;
+}
+.legal-toc-list li { margin-bottom: 6px; break-inside: avoid; }
+.legal-toc-list a {
+  color: var(--booking-blue);
+  text-decoration: none;
+  font-size: .85rem;
+}
+.legal-toc-list a:hover { text-decoration: underline; }
+.legal-toc-list a:focus-visible {
+  outline: 2px solid var(--booking-blue);
+  outline-offset: 2px;
+}
+
+.legal-section { margin-bottom: 32px; scroll-margin-top: 80px; }
+.legal-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 10px;
+}
+.legal-p {
+  font-size: .92rem;
+  line-height: 1.7;
+  color: var(--text-dark);
+  margin-bottom: 12px;
+}
+.legal-list {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+.legal-list li {
+  font-size: .92rem;
+  line-height: 1.7;
+  margin-bottom: 7px;
+}
+.legal-callout {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid var(--booking-yellow);
+  border-radius: 6px;
+  padding: 14px 18px;
+  font-size: .88rem;
+  line-height: 1.6;
+  margin-top: 12px;
+}
+.legal-doc-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 8px;
+  font-size: .9rem;
+  color: var(--text-muted);
+}
+.legal-doc-footer a { color: var(--booking-blue); font-weight: 600; }
+
+/* =========================================================================
+   FOOTER — enlaces legales
+   ========================================================================= */
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+}
+.footer-links a,
+.footer-link-btn {
+  color: rgba(255, 255, 255, .85);
+  font-size: .82rem;
+  font-weight: 500;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: color .2s;
+}
+.footer-links a:hover,
+.footer-link-btn:hover { color: var(--booking-yellow); text-decoration: underline; }
+.footer-links a:focus-visible,
+.footer-link-btn:focus-visible {
+  outline: 2px solid var(--booking-yellow);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* =========================================================================
+   BANNER DE COOKIES (Fase 2)
+   ========================================================================= */
+
+.cookie-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, .45);
+  animation: cookie-fade .2s ease-out;
+}
+@keyframes cookie-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cookie-banner {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .3);
+  border-top: 4px solid var(--booking-yellow);
+  padding: 22px 24px;
+  max-width: 620px;
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  animation: cookie-rise .25s ease-out;
+}
+@keyframes cookie-rise {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+/* El contenedor recibe el foco al abrirse; el anillo se oculta para no
+   duplicar el que ya aporta el outline de los botones hijos. */
+.cookie-banner:focus { outline: none; }
+.cookie-banner:focus-visible { outline: 3px solid var(--booking-blue); outline-offset: 2px; }
+
+.cookie-banner-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.cookie-icon { font-size: 1.6rem; }
+.cookie-banner-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--booking-blue);
+}
+.cookie-banner-text {
+  font-size: .9rem;
+  line-height: 1.6;
+  color: var(--text-dark);
+  margin-bottom: 12px;
+}
+.cookie-banner-links {
+  font-size: .84rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+.cookie-banner-links a { color: var(--booking-blue); font-weight: 600; }
+
+.cookie-categorias { list-style: none; padding: 0; margin: 0 0 18px; }
+.cookie-categoria {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.cookie-categoria-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .9rem;
+  cursor: pointer;
+}
+.cookie-categoria-head input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--booking-blue);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cookie-categoria-head input:disabled { cursor: not-allowed; }
+.cookie-categoria-head input:focus-visible {
+  outline: 2px solid var(--booking-blue);
+  outline-offset: 2px;
+}
+.cookie-tag {
+  background: #e0eafc;
+  color: var(--booking-blue);
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+.cookie-categoria-desc {
+  font-size: .82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 6px 0 0 25px;
+}
+
+.cookie-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.cookie-btn {
+  border: 1.5px solid transparent;
+  border-radius: 4px;
+  padding: 10px 18px;
+  font-size: .87rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: background .2s, color .2s, border-color .2s;
+}
+.cookie-btn:focus-visible {
+  outline: 2px solid var(--booking-blue);
+  outline-offset: 2px;
+}
+.cookie-btn-ghost {
+  background: #fff;
+  color: var(--booking-blue);
+  border-color: var(--border);
+}
+.cookie-btn-ghost:hover { background: #f8fafc; border-color: var(--booking-blue); }
+.cookie-btn-primary {
+  background: var(--booking-blue);
+  color: #fff;
+}
+.cookie-btn-primary:hover { background: var(--booking-blue-dark); }
+
+@media (max-width: 640px) {
+  .legal-doc { padding: 24px 20px; }
+  .legal-doc-title { font-size: 1.5rem; }
+  .legal-toc-list { columns: 1; }
+  .cookie-banner { padding: 18px 18px; }
+  .cookie-actions { flex-direction: column-reverse; }
+  .cookie-btn { width: 100%; }
+}
+
+/* =========================================================================
+   BUSQUEDA DE VUELOS (Fase 4)
+   ========================================================================= */
+
+.buscador-card { margin-bottom: 28px; }
+.buscador-vuelos { display: block; }
+
+/* Los grupos usan `fieldset` + `legend` (no un div), porque es lo que anuncia
+   un lector de pantalla al entrar en el grupo. */
+.buscador-grupo {
+  border: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.buscador-legend {
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--text-muted);
+  padding: 0;
+  margin-bottom: 10px;
+}
+
+/* Flex en escritorio, una columna en movil: el requisito "Mobile-First" del
+   plan se cumple invirtiendo el comportamiento, no al reves. */
+.buscador-campos {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.buscador-campo {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.buscador-campo-mini { flex: 0 1 92px; }
+.buscador-label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 5px;
+}
+.buscador-input {
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: .95rem;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-dark);
+  background: #fff;
+  min-height: 44px; /* objetivo tactil minimo recomendado en movil */
+}
+.buscador-input:focus-visible {
+  outline: 2px solid var(--booking-blue);
+  outline-offset: 1px;
+  border-color: var(--booking-blue);
+}
+.buscador-input.es-error { border-color: #dc2626; }
+.buscador-input.es-error:focus-visible { outline-color: #dc2626; }
+
+.buscador-ayuda {
+  font-size: .7rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+/* `role="alert"` en el error: se anuncia al aparecer. El color rojo nunca es
+   la unica senal, el texto accompanies. */
+.buscador-error {
+  font-size: .74rem;
+  color: #b91c1c;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.buscador-pasajeros { display: flex; gap: 12px; flex-wrap: wrap; }
+.buscador-nota {
+  font-size: .76rem;
+  color: var(--text-muted);
+  margin-top: 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+}
+.buscador-buscar { width: 100%; border-radius: var(--radius); }
+
+/* --- Tarjeta de oferta (extiende la estructura `.card` existente) --------- */
+
+.vuelo-card { cursor: default; } /* la tarjeta no es clicable: solo el boton */
+.vuelo-card:hover { transform: none; } /* sin hover de "tarjeta clicable" */
+.vuelo-numero { color: var(--text-muted); font-weight: 500; }
+.vuelo-desc { margin-bottom: 10px; }
+
+/* Los tramos son una lista semantica: el lector anuncia "lista de N". */
+.vuelo-segmentos {
+  list-style: none;
+  padding: 10px 0;
+  margin: 0 0 10px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.vuelo-segmento {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .82rem;
+  flex-wrap: wrap;
+  padding: 3px 0;
+}
+.vuelo-hora { font-weight: 700; color: var(--text-dark); }
+.vuelo-aeropuerto { color: var(--booking-blue); font-weight: 600; }
+.vuelo-linea { color: var(--border); letter-spacing: -1px; }
+
+/* El estado lleva icono + texto, no solo color: cumple el criterio WCAG 1.4.1
+   (uso del color). */
+.vuelo-estado {
+  margin-left: auto;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e0eafc;
+  color: var(--booking-blue);
+  white-space: nowrap;
+}
+.vuelo-estado-delayed { background: #fef3c7; color: #92400e; }
+.vuelo-estado-cancelled { background: #fee2e2; color: #991b1b; }
+.vuelo-estado-arrived, .vuelo-estado-departed { background: #dcfce7; color: #166534; }
+
+.vuelo-detalles {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vuelo-detalles li {
+  font-size: .7rem;
+  color: var(--text-muted);
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+
+.vuelo-resultados { margin-top: 8px; }
+
+/* --- Login ------------------------------------------------------------- */
+
+.login-acciones {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.login-secundario {
+  background: #fff;
+  color: var(--booking-blue);
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 24px;
+  font-weight: 600;
+  font-size: .95rem;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: border-color .2s;
+}
+.login-secundario:hover { border-color: var(--booking-blue); }
+.login-secundario:focus-visible {
+  outline: 2px solid var(--booking-blue);
+  outline-offset: 2px;
+}
+.login-nota {
+  font-size: .78rem;
+  color: var(--text-muted);
+  max-width: 440px;
+  margin: 24px auto 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .buscador-campos { flex-direction: column; gap: 12px; }
+  .buscador-campo { flex: 1 1 auto; }
+  .buscador-pasajeros { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .buscador-campo-mini { flex: 1 1 auto; }
+  .vuelo-segmento { font-size: .78rem; }
+  .vuelo-estado { margin-left: 0; width: 100%; text-align: center; }
+}
+
+/* =========================================================================
+   DENSIDAD — Modulo de Vuelos (Fase 5, feedback de diseno)
+   =========================================================================
+   Reduce drasticamente el espacio vertical y las tipografias del formulario y
+   de las tarjetas para aprovechar mejor la pantalla.
+
+   TODO va PREFIJADO con `.main-content-vuelos` o `.vuelo-*` / `.buscador-*`,
+   nunca sobre las clases globales. Asi la densidad no afecta a las paginas de
+   Atracciones ni de Autos, que comparten `.card`, `.card-body`, `.main-content`
+   y `.section-title`. Un `:root` aqui habria roto la cohesión del resto.
+   ========================================================================= */
+
+.main-content-vuelos { padding: 18px 20px 28px; }
+.main-content-vuelos .section-title {
+  font-size: 1.15rem;
+  margin-bottom: 4px;
+}
+.main-content-vuelos .section-subtitle {
+  font-size: .8rem;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+/* --- Contenedor del formulario ------------------------------------------ */
+.buscador-card { margin-bottom: 16px; }
+.buscador-card .card-body { padding: 12px 14px; }
+
+.buscador-grupo { margin-bottom: 10px; }
+.buscador-legend {
+  font-size: .66rem;
+  letter-spacing: .5px;
+  margin-bottom: 5px;
+}
+
+.buscador-campos { gap: 8px; }
+.buscador-campo { flex: 1 1 120px; }
+.buscador-campo-mini { flex: 0 1 68px; }
+
+.buscador-label {
+  font-size: .7rem;
+  margin-bottom: 3px;
+}
+.buscador-input {
+  padding: 6px 9px;
+  font-size: .85rem;
+  border-radius: 3px;
+  /* Se mantiene un min-height razonable para el objetivo tactil, pero por
+     debajo de los 44px de escritorio para poder compactar mas. */
+  min-height: 34px;
+}
+.buscador-ayuda { font-size: .63rem; margin-top: 2px; }
+.buscador-error { font-size: .66rem; margin-top: 2px; }
+.buscador-nota { font-size: .68rem; margin-top: 6px; padding-left: 8px; }
+.buscador-pasajeros { gap: 8px; }
+.buscador-buscar { padding: 9px 20px; font-size: .88rem; }
+
+/* --- Selector de tipo de viaje ------------------------------------------ */
+.buscador-grupo-tipo { margin-bottom: 10px; }
+.buscador-radios { display: flex; gap: 8px; }
+.buscador-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .78rem;
+  font-weight: 600;
+  padding: 5px 11px;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  cursor: pointer;
+  color: var(--text-dark);
+  background: #fff;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.buscador-radio:hover { border-color: var(--booking-blue); }
+.buscador-radio.activo {
+  background: var(--booking-blue);
+  border-color: var(--booking-blue);
+  color: #fff;
+}
+.buscador-radio input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--booking-yellow);
+  cursor: pointer;
+}
+.buscador-radio.activo input { accent-color: #fff; }
+.buscador-radio:focus-within {
+  outline: 2px solid var(--booking-blue);
+  outline-offset: 2px;
+}
+/* Texto solo para lectores de pantalla: el legend del fieldset ya aporta el
+   nombre visible, pero `aria-labelledby` necesita un elemento referenciable. */
+.buscador-legend-sr,
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* `.sr-only` es la utilidad GLOBAL (solo lectores de pantalla) y se expone por
+   si misma, no solo agrupada con la del buscador, porque su uso no es cosmetico:
+   sin ella, un `<span>` pensado para nombrar un `role="radiogroup"` se ve
+   literalmente en pantalla.
+
+   Ese fallo ocurrio de verdad: en el modal de bloqueo de cupos, el
+   `<span class="sr-only">Cabina</span>` se mostraba como un "Cabina" suelto
+   encima de las cabinas, duplicando el `<legend>` que ya decia "CABINA". Ni
+   `npm run build` ni el detector de identificadores lo detectan: es un fallo de
+   CSS, y solo se ve mirando la pagina. */
+
+/* --- Tarjetas de resultado: diseño TICKET a ancho completo --------------- */
+/*
+ * Reemplaza la cuadrícula de 3 columnas por una lista vertical de tickets a
+ * ancho completo. Un boleto de avión real es un documento horizontal: la
+ * información del vuelo se lee de izquierda a derecha y el precio queda en el
+ * talón, abajo. En una tarjeta estrecha de 279px dentro de un contenedor de
+ * 857px, además, sobraban dos tercios de pantalla sin usar.
+ *
+ * `.atracciones-grid` sigue en el className porque aporta `display: grid`; solo
+ * se sobrescribe `grid-template-columns` con una sola columna.
+ */
+.vuelo-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+/* Radio uniforme y Notorrio en las CUATRO esquinas.
+ *
+ * Antes el radio venía de `.card` (8px) y se recortaba con `overflow: hidden`.
+ * Era uniforme, sí, pero 8px sobre una tarjeta de 220px de alto es
+ * prácticamente recto: por eso la parte inferior se percibía cuadrada. Aquí se
+ * suben las cuatro esquinas a 14px y se declaran de forma explícita, para que
+ * ninguna anulación posterior pueda dejar solo las superiores redondeadas.
+ */
+.vuelo-card {
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: default;
+  position: relative;
+  border: 1px solid var(--border);
+  box-shadow: var(--card-shadow);
+}
+.vuelo-card:hover {
+  transform: none;
+  box-shadow: 0 4px 18px rgba(0, 59, 149, .16);
+}
+
+/* La cabecera del ticket. `.card-img-wrapper` pasa a ser flex para que el nombre
+   de la aerolinea quede a la derecha del codigo IATA dentro de la MISMA franja,
+   en vez de flotando en una esquina sobre la imagen. */
+.vuelo-card .card-img-wrapper { display: flex; align-items: stretch; }
+.vuelo-card .card-img {
+  flex: 1;
+  height: auto;
+  padding: 7px 14px;
+  font-size: .95rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--booking-blue);
+  background: linear-gradient(135deg, #eef3fc, #e0eafc);
+  border-bottom: 1px solid var(--border);
+  justify-content: flex-start;
+}
+.vuelo-card .card-badge {
+  position: static;
+  align-self: center;
+  margin-left: auto;
+  font-size: .6rem;
+  padding: 3px 9px;
+  border-radius: 3px;
+}
+
+/* El cuerpo se reorganiza en dos columnas: ruta a la izquierda, tramo y
+   condiciones a la derecha. Antes todo se apilaba en 279px y los tramos
+   obligaban a un scroll vertical muy largo. */
+.vuelo-card .card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  grid-template-areas:
+    "titulo   tramos"
+    "desc     tramos"
+    "detalles detalles"
+    "pie      pie";
+  gap: 2px 18px;
+  padding: 12px 14px 0;
+}
+.vuelo-card .card-title { grid-area: titulo; font-size: 1.05rem; margin-bottom: 0; }
+.vuelo-card .card-desc { grid-area: desc; -webkit-line-clamp: 1; margin-bottom: 4px; }
+.vuelo-card .vuelo-segmentos { grid-area: tramos; margin: 0; padding: 0; }
+.vuelo-card .vuelo-detalles { grid-area: detalles; }
+
+/* El pie es el TALÓN del ticket: franja tintada, línea de perforado y las dos
+   muescas laterales. Es lo que convierte una tarjeta en un boleto. */
+/* El pie es el TALÓN del ticket: franja tintada y línea de perforado. */
+.vuelo-card .card-footer {
+  grid-area: pie;
+  position: relative;
+  margin: 8px -14px 0;
+  padding: 9px 14px;
+  background: #f7f9fd;
+  border-top: 1.5px dashed var(--border);
+  gap: 12px;
+}
+.vuelo-card .card-price { font-size: 1.15rem; }
+.vuelo-card .card-price span { font-size: .68rem; }
+.vuelo-card .card-btn { padding: 6px 16px; font-size: .8rem; }
+
+/* Muescas laterales: dos círculos del color del fondo "muerden" la tarjeta a la
+   altura del perforado. Es el detalle que convierte una tarjeta en un boleto
+   recortado.
+
+   Van en los pseudo-elementos del PIE, no en los de la tarjeta, y por eso el
+   alto del talón deja de importar: se anclan a `top: -6px`, o sea centrados
+   sobre su propio borde superior, que es exactamente la línea del perforado.
+   Una versión anterior los colgaba de `.vuelo-card` con `bottom: 46px` fijos, y
+   con una tarifa de tres condiciones el perforado se separaba de las muescas.
+
+   Se recortan solos porque `.vuelo-card` tiene `overflow: hidden`: el círculo
+   sobresale 6px del borde y solo se ve la mitad interior. El color es `--bg`,
+   el fondo real de la página; si algún día cambia `--bg` hay que cambiarlo aquí
+   también, y por eso se usa la variable y no un hexadecimal suelto. */
+.vuelo-card .card-footer::before,
+.vuelo-card .card-footer::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg);
+  pointer-events: none;
+}
+.vuelo-card .card-footer::before { left: -6px; }
+.vuelo-card .card-footer::after { right: -6px; }
+
+.vuelo-segmento { font-size: .78rem; gap: 6px; padding: 2px 0; }
+.vuelo-estado { font-size: .62rem; padding: 1px 6px; }
+.vuelo-detalles { gap: 5px; margin: 6px 0 0; }
+.vuelo-detalles li { font-size: .64rem; padding: 1px 7px; }
+.vuelo-numero { font-size: .95em; }
+
+@media (max-width: 760px) {
+  /* Por debajo de 760px las dos columnas del cuerpo se apilan: mantener las dos
+     columnas en un movil obligaria a comprimir tanto el texto que deja de ser
+     legible, y un horario de vuelo es justo lo que no debe recortarse. */
+  .vuelo-card .card-body {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "titulo"
+      "desc"
+      "tramos"
+      "detalles"
+      "pie";
+    gap: 4px;
+  }
+  .vuelo-card .card-footer { margin-top: 8px; }
+}
+@media (max-width: 640px) {
+  .main-content-vuelos { padding: 14px 12px 22px; }
+  .buscador-radios { flex-wrap: wrap; }
+}
+
+/* =========================================================================
+   MODAL DE BLOQUEO DE CUPOS (Fase 6)
+   =========================================================================
+   Reutiliza la paleta y el radio del sistema. El overlay es fijo a pantalla
+   completa con un tinte oscuro y `backdrop-filter`; el dialogo se centra y
+   tiene `max-height` con scroll propio, para que en un movil el mapa de
+   asientos no empuje el boton de confirmar fuera de la pantalla. */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, .55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .3);
+  width: 100%;
+  max-width: 620px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  /* El contenedor del focus trap recibe el foco al abrirse si no hay ningun
+     elemento enfocable dentro; sin esto, el foco se perderia en <body>. */
+}
+.modal:focus-visible { outline: 2px solid var(--booking-blue); outline-offset: 2px; }
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title { font-size: 1.05rem; font-weight: 700; color: var(--text-dark); }
+.modal-cerrar {
+  background: none;
+  border: none;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.modal-cerrar:hover { background: var(--border); color: var(--text-dark); }
+.modal-cerrar:focus-visible { outline: 2px solid var(--booking-blue); outline-offset: 1px; }
+
+.modal-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
+.modal-vuelo { font-size: .85rem; color: var(--text-muted); margin-bottom: 14px; }
+
+.modal-grupo { border: none; padding: 0; margin: 0 0 16px; }
+.modal-legend {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding: 0;
+}
+.modal-nota {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  font-size: .68rem;
+  color: var(--text-muted);
+  opacity: .8;
+}
+.modal-vacio { font-size: .78rem; color: var(--text-muted); }
+.modal-error {
+  font-size: .78rem;
+  color: #854d0e;
+  background: #fef3c7;
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+/* --- Cabinas: radios en pastilla, igual que los del tipo de viaje ---------- */
+.modal-radios { display: flex; flex-wrap: wrap; gap: 8px; }
+.modal-radio {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color .15s, background .15s;
+  min-width: 120px;
+}
+.modal-radio:hover { border-color: var(--booking-blue); }
+.modal-radio.activo { border-color: var(--booking-blue); background: #eef3fc; }
+.modal-radio:focus-within { outline: 2px solid var(--booking-blue); outline-offset: 2px; }
+.modal-radio input { margin: 0 0 2px; accent-color: var(--booking-blue); }
+.modal-radio-nombre { font-size: .82rem; font-weight: 700; color: var(--text-dark); }
+.modal-radio-meta { font-size: .68rem; color: var(--text-muted); }
+
+/* --- Mapa de asientos ------------------------------------------------------ */
+.asientos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  background: #f7f9fd;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.asientos-cabina { display: flex; flex-direction: column; gap: 3px; }
+.asientos-cabina-nombre {
+  font-size: .66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-muted);
+}
+.asientos-fila { display: flex; align-items: center; gap: 3px; }
+.asientos-numero {
+  font-size: .6rem;
+  color: var(--text-muted);
+  width: 14px;
+  text-align: right;
+  margin-right: 2px;
+  font-variant-numeric: tabular-nums;
+}
+/* El asiento NO es pulsable a proposito: un hold no asigna asientos (ver la
+   nota de `ModalBloqueoCupo`). Es un `span` con `title`, no un `<button>`, para
+   que un lector de pantalla no anuncie docenas de botones que no hacen nada. */
+.asiento {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px 3px 1px 1px;
+  font-size: .55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border: 1px solid var(--border);
+}
+.asiento.libre { background: #fff; color: var(--text-muted); }
+.asiento.ocupado { background: #cbd5e1; color: #64748b; border-color: #94a3b8; }
+.asientos-leyenda {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .66rem;
+  color: var(--text-muted);
+  width: 100%;
+  margin-top: 4px;
+}
+.asientos-leyenda .asiento { margin-left: 6px; }
+
+/* --- Pie ------------------------------------------------------------------- */
+.modal-foot {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #f7f9fd;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.modal-precio { display: flex; flex-direction: column; }
+.modal-precio-etiqueta { font-size: .66rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+.modal-precio-valor { font-size: 1.15rem; font-weight: 800; color: var(--booking-blue); }
+.modal-acciones { display: flex; gap: 8px; }
+.btn-primario {
+  background: var(--booking-yellow);
+  color: #1a1a2e;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 4px;
+  font-size: .85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-primario:hover:not(:disabled) { background: var(--booking-yellow-hover); }
+.btn-primario:disabled { opacity: .55; cursor: not-allowed; }
+.btn-primario:focus-visible { outline: 2px solid var(--booking-blue); outline-offset: 2px; }
+.btn-secundario {
+  background: #fff;
+  color: var(--text-dark);
+  border: 1px solid var(--border);
+  padding: 9px 16px;
+  border-radius: 4px;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-secundario:hover { border-color: var(--booking-blue); }
+.btn-secundario:focus-visible { outline: 2px solid var(--booking-blue); outline-offset: 2px; }
+
+.modal-exito { width: 100%; }
+.modal-exito-titulo { font-size: .88rem; font-weight: 700; color: #166534; }
+.modal-exito-detalle { font-size: .76rem; color: var(--text-muted); margin-top: 2px; }
+.modal-cuenta {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--booking-blue);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.modal-cuenta.caducado { color: #991b1b; }
+
+@media (max-width: 560px) {
+  .modal { max-width: 100%; }
+  .modal-foot { flex-direction: column; align-items: stretch; }
+  .modal-acciones { width: 100%; }
+  .btn-primario, .btn-secundario { flex: 1; }
+}
+
+/* =========================================================================
+   FORMULARIO DE RESERVA (Fase 7)
+   =========================================================================
+   Modal mas alto que el de bloqueo, porque lleva un formulario por pasajero.
+   El `max-height` con scroll en `.modal-body` y el pie fijo son lo que
+   mantienen el boton "Confirmar pago" accesible sin importar cuantos
+   pasajeros haya. */
+
+.modal-form { max-width: 760px; }
+.modal-subtitulo { font-size: .78rem; color: var(--text-muted); margin-top: 2px; }
+.modal-nota-bloque {
+  font-size: .74rem;
+  color: var(--text-muted);
+  background: #f7f9fd;
+  border-left: 3px solid var(--booking-blue);
+  border-radius: 3px;
+  padding: 8px 10px;
+  margin-bottom: 14px;
+}
+
+.bloque-pasajero {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px 14px;
+  margin: 0 0 14px;
+  background: #fff;
+}
+.bloque-pasajero-legend {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--booking-blue);
+  padding: 0 5px;
+}
+
+/* Rejilla de 3 columnas en escritorio, 1 en movil. Se prefiere `auto-fit` con
+   minimo de 180px a puntos de corte: asi el numero de columnas se ajusta al
+   ancho del modal sin tener que repetir la regla para cadaTamano. */
+.rejilla-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 12px;
+  margin-bottom: 4px;
+}
+.campo { display: flex; flex-direction: column; min-width: 0; }
+.campo-ancho { margin-top: 8px; }
+.campo-grupo { border: none; padding: 0; margin: 10px 0 0; }
+
+.modal-label {
+  font-size: .7rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 3px;
+  padding: 0;
+}
+.modal-input {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 9px;
+  font-size: .82rem;
+  font-family: inherit;
+  color: var(--text-dark);
+  background: #fff;
+  min-height: 34px;
+  width: 100%;
+}
+.modal-input:focus-visible { outline: 2px solid var(--booking-blue); outline-offset: 1px; border-color: var(--booking-blue); }
+.modal-input.es-error { border-color: #dc2626; background: #fef2f2; }
+.modal-error-campo { font-size: .66rem; color: #991b1b; margin-top: 2px; }
+
+.modal-radios-inline { display: flex; gap: 6px; }
+.modal-radio-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: .78rem;
+  cursor: pointer;
+}
+.modal-radio-mini.activo { border-color: var(--booking-blue); background: #eef3fc; }
+.modal-radio-mini input { margin: 0; accent-color: var(--booking-blue); }
+.modal-radio-mini:focus-within { outline: 2px solid var(--booking-blue); outline-offset: 1px; }
+
+/* --- Pantalla de reserva confirmada ---------------------------------------- */
+.confirmacion { max-width: 720px; margin: 0 auto; }
+.confirmacion-cabecera { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.confirmacion-icono {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 1.3rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pnr-caja {
+  background: var(--booking-blue);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.pnr-etiqueta {
+  display: block;
+  font-size: .66rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: .8;
+}
+/* `letter-spacing` amplio + `monospace`: el PNR se dicta por telefono y con
+   espacios de letras se evita la confusion clasica entre O y 0, I y 1. */
+.pnr-valor {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 8px;
+  margin: 6px 0 2px;
+  color: var(--booking-yellow);
+  word-break: break-all;
+}
+.pnr-estado { font-size: .8rem; opacity: .92; }
+.pnr-fecha { font-size: .72rem; opacity: .75; margin-top: 2px; }
+
+.lista-pasajeros { list-style: none; padding: 0; margin: 6px 0 0; }
+.lista-pasajero {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.lista-pasajero:last-child { border-bottom: none; }
+.lista-pasajero-nombre { font-size: .84rem; font-weight: 700; color: var(--text-dark); }
+.lista-pasajero-detalle { font-size: .74rem; color: var(--text-muted); }
+.lista-pasajero-contacto { font-size: .7rem; color: var(--text-muted); }
+
+.aviso-tickets {
+  font-size: .76rem;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 4px;
+  padding: 9px 11px;
+  margin-top: 14px;
+}
+.confirmacion-acciones { margin-top: 20px; display: flex; gap: 10px; }
+
+@media (max-width: 560px) {
+  .rejilla-campos { grid-template-columns: 1fr; }
+  .pnr-valor { font-size: 1.7rem; letter-spacing: 5px; }
+}
+
+/* =========================================================================
+   FASE 8 · MIS RESERVAS, DETALLE Y BOARDING PASS
+   =========================================================================
+   Todo pre?jado por clase propia (`migas`, `boarding-`, `tarjeta-reserva-`,
+   `estado-pill`, `detalle-`). Se evita tocar `.card` y `.state-*` para no
+   arrastrar cambios a Atracciones y Autos. */
+
+.migas { font-size: .78rem; color: var(--text-muted); margin-bottom: 10px; }
+.migas a { color: var(--booking-blue); font-weight: 600; }
+
+/* --- Filtros del listado --------------------------------------------------- */
+.filtros-reservas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.lista-reservas { list-style: none; padding: 0; margin: 0; }
+.lista-reservas > li { margin-bottom: 8px; }
+.tarjeta-reserva {
+  display: grid;
+  grid-template-columns: 90px 130px minmax(0, 1fr) 150px 110px;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .15s, box-shadow .15s;
+}
+.tarjeta-reserva:hover {
+  border-color: var(--booking-blue);
+  box-shadow: var(--card-shadow);
+}
+.tarjeta-reserva:focus-visible { outline: 2px solid var(--booking-blue); outline-offset: 2px; }
+/* El PNR en monoespaciado: se dicta por telefono. */
+.tarjeta-reserva-pnr {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--booking-blue);
+}
+.tarjeta-reserva-ruta { font-size: .88rem; font-weight: 600; }
+.tarjeta-reserva-fecha { font-size: .76rem; color: var(--text-muted); }
+.tarjeta-reserva-total { font-size: .9rem; font-weight: 700; text-align: right; }
+
+.estado-pill {
+  display: inline-block;
+  /* `justify-self: start` es necesario porque `.tarjeta-reserva` es un grid: como
+     item de grid, un `inline-block` se estira a la anchura de la columna y la
+     pastilla queda como una barra en vez de una etiqueta. */
+  justify-self: start;
+  align-self: center;
+  font-size: .66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--border);
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+.estado-confirmed { background: #dcfce7; color: #166534; }
+.estado-pending, .estado-pending_payment { background: #fef3c7; color: #92400e; }
+.estado-ticket_issuing { background: #dbeafe; color: #1e40af; }
+.estado-failed, .estado-cancelled { background: #fee2e2; color: #991b1b; }
+.estado-change_pending, .estado-cancellation_pending { background: #ede9fe; color: #5b21b6; }
+
+.acciones-paginacion { margin-top: 14px; display: flex; justify-content: center; }
+
+/* --- Cabecera del detalle --------------------------------------------------- */
+.detalle-cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+/* `display: flex; flex-direction: column` igual que `.modal-precio`: sin esto los
+   dos `<span>` (etiqueta e importe) caen en la MISMA linea y el texto se solapa,
+   porque ambos son inline por defecto. */
+.detalle-total { text-align: right; display: flex; flex-direction: column; }
+.detalle-segmento {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: .82rem;
+  padding: 4px 0;
+}
+.detalle-hora { font-weight: 700; }
+.detalle-iata { color: var(--booking-blue); font-weight: 700; }
+.boarding-mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
+.card-title-nota { font-size: .74rem; font-weight: 400; color: var(--text-muted); text-transform: none; }
+
+.tabla-equipaje { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.tabla-equipaje th, .tabla-equipaje td {
+  text-align: left;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.tabla-equipaje thead th {
+  font-size: .66rem;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+}
+.tabla-equipaje tbody th { font-weight: 600; }
+
+/* --- Boarding pass ---------------------------------------------------------- */
+.boarding-lista { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.boarding {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  /* Franja lateral de color por estado: nunca es el UNICO indicador, el texto
+     de estado acompana siempre (requisito de accesibilidad). */
+  border-left: 5px solid var(--border);
+}
+.boarding-esmitido { border-left-color: #16a34a; }
+.boarding-proceso { border-left-color: var(--booking-blue); }
+.boarding-pendiente { border-left-color: #d97706; }
+.boarding-fallido { border-left-color: #dc2626; }
+/* Un boleto no emitido se atenua, pero NO se oculta: el usuario necesita saber
+   que existe y en que estado esta. */
+.boarding-no-emitido { background: #fafbfd; }
+.boarding-no-emitido .boarding-dato-valor { opacity: .55; }
+
+.boarding-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.boarding-etiqueta {
+  display: block;
+  font-size: .6rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+.boarding-pasajero { font-size: .95rem; font-weight: 700; }
+.boarding-estado {
+  font-size: .66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.boarding-estado-emitido { background: #dcfce7; color: #166534; }
+.boarding-estado-proceso { background: #dbeafe; color: #1e40af; }
+.boarding-estado-pendiente { background: #fef3c7; color: #92400e; }
+.boarding-estado-fallido { background: #fee2e2; color: #991b1b; }
+
+.boarding-cuerpo {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+}
+.boarding-bloque-ancho { grid-column: span 2; }
+.boarding-dato-etiqueta {
+  display: block;
+  font-size: .58rem;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--text-muted);
+  margin-bottom: 1px;
+}
+.boarding-dato-valor { font-size: .82rem; font-weight: 600; }
+.boarding-destacado { letter-spacing: 1px; }
+
+.boarding-ruta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0 2px;
+}
+.boarding-aeropuerto { display: flex; flex-direction: column; }
+.boarding-codigo { font-size: 1.5rem; font-weight: 800; color: var(--booking-blue); line-height: 1.1; }
+.boarding-hora { font-size: .78rem; color: var(--text-muted); }
+.boarding-linea { flex: 1; display: flex; align-items: center; gap: 6px; color: var(--border); }
+.boarding-avion { font-size: .9rem; color: var(--booking-blue-light); }
+.boarding-guion { flex: 1; height: 1px; background: var(--border); }
+
+/* Talón: separación punteada, como en un pasaje real. */
+.boarding-talon {
+  border-top: 2px dashed var(--border);
+  padding: 8px 14px;
+  background: #f7f9fd;
+}
+.boarding-talon-texto { font-size: .68rem; color: var(--text-muted); }
+
+@media (max-width: 700px) {
+  .tarjeta-reserva { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .tarjeta-reserva-ruta { grid-column: 1 / -1; }
+  .tarjeta-reserva-total { text-align: left; }
+  .boarding-cuerpo { grid-template-columns: repeat(2, 1fr); }
+  .boarding-codigo { font-size: 1.2rem; }
+}
+
+/* =========================================================================
+   FASE 9 · POSTVENTA (check-in, equipaje, cancelacion)
+   =========================================================================
+   Clases propias (`postventa-`, `cotizacion-`, `modal-postventa`, `btn-peligro`)
+   para no arrastrar cambios a los modulos de Atracciones y Autos. */
+
+/*
+ * El modal tiene que quedar POR ENCIMA del banner de cookies.
+ *
+ * El banner esta en `z-index: 2000` y el overlay del modal en `200`, asi que
+ * abrir un dialogo con la cookie pendiente ponia el banner ENCIMA: tapaba la
+ * confirmacion de cancelar y el boton de confirmar quedaba debajo. Es el peor
+ * orden posible, porque el usuario ve una pantalla de cookies en lugar de la
+ * decision economica que abrir.
+ *
+ * Se sube el overlay y no se baja el banner: un dialogo modal es siempre la
+ * capa mas alta. El banner es contenido de pagina, no un dialogo.
+ */
+.modal-overlay { z-index: 3000; }
+
+/* --- Barra de acciones --------------------------------------------------- */
+.postventa-acciones {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+/*
+ * `btn-peligro` no existia. Se define con el mismo esqueleto que `btn-secundario`
+ * para que el boton destructivo tenga la misma altura y el mismo radio, y solo
+ * cambie de color. Un boton de otro tamaño al lado de los otros dos del grupo
+ * rompe la linea base de la barra.
+ */
+.btn-peligro {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  font-size: .84rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1px solid #dc2626;
+  border-radius: var(--radius);
+  background: #fff;
+  color: #991b1b;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.btn-peligro:hover:not(:disabled) { background: #fef2f2; border-color: #b91c1c; }
+.btn-peligro:focus-visible { outline: 2px solid #dc2626; outline-offset: 2px; }
+.btn-peligro:disabled { opacity: .5; cursor: not-allowed; }
+
+.postventa-exito {
+  font-size: .82rem;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+/* --- Cotizacion de cancelacion -------------------------------------------- */
+.cotizacion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.cotizacion-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  font-size: .82rem;
+  border-bottom: 1px solid var(--border);
+}
+.cotizacion-fila:last-child { border-bottom: none; }
+.cotizacion-fila-penalidad { color: #991b1b; }
+/* La fila del total va destacada: es la cifra que el usuario vino a ver. */
+.cotizacion-fila-total {
+  background: #f7f9fd;
+  font-weight: 700;
+  font-size: .88rem;
+}
+
+.modal-aviso {
+  font-size: .76rem;
+  padding: 9px 11px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.modal-texto { font-size: .84rem; line-height: 1.5; }
+.modal-nota { font-size: .7rem; color: var(--text-muted); margin-top: 8px; }
+.modal-lista { margin: 10px 0 0; padding-left: 18px; font-size: .8rem; color: var(--text-dark); }
+.modal-lista li { margin-bottom: 3px; }
+
+.modal-postventa { max-width: 440px; }
+.modal-postventa .modal-form { display: flex; flex-direction: column; gap: 12px; }
+
+/* =========================================================================
+   FASE 10 · TABLERO DE ESTADO DE VUELO Y WEBHOOKS
+   =========================================================================
+   Clases propias (`tablero-`, `webhooks-`). Reutiliza `--booking-blue` y
+   `--radius` del tema para no crear una paleta nueva. */
+
+/* --- Buscador ------------------------------------------------------------- */
+.campo-boton { display: flex; align-items: flex-end; }
+.campo-boton .btn-primario { width: 100%; }
+
+/* --- Tablero --------------------------------------------------------------
+   Imita un panel FIDS: filas monoespaciadas, IATA grande y las horas
+   alineadas a la derecha. El estado se refuerza con TEXTO ademas de con
+   color, porque el color solo no llega a quien no distingue rojo y verde. */
+.tablero {
+  background: #0f2033;
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  color: #e8f0fa;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
+.tablero-cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .14);
+  margin-bottom: 16px;
+}
+.tablero-vuelo { font-size: 1.5rem; font-weight: 700; letter-spacing: 1px; }
+.tablero-subtitulo { font-size: .72rem; color: #9db4cc; margin-top: 2px; }
+
+.tablero-estado {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 5px 11px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.tablero-estado-programado  { background: #1e3a5f; color: #93c5fd; }
+.tablero-estado-embarcando { background: #1e3a5f; color: #fcd34d; }
+.tablero-estado-envuelo    { background: #064e3b; color: #6ee7b7; }
+.tablero-estado-retrasado  { background: #78350f; color: #fdba74; }
+.tablero-estado-aterrizado { background: #14532d; color: #86efac; }
+.tablero-estado-cancelado  { background: #7f1d1d; color: #fca5a5; }
+.tablero-estado-desviado   { background: #581c87; color: #d8b4fe; }
+
+.tablero-ruta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.tablero-par {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 150px;
+  flex: 1;
+}
+.tablero-etiqueta {
+  font-size: .58rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #7d94ad;
+}
+.tablero-iata { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+.tablero-terminal { font-size: .7rem; color: #9db4cc; }
+.tablero-flecha { color: #3d5875; font-size: 1rem; white-space: nowrap; }
+
+.tablero-hora { display: flex; flex-direction: column; gap: 1px; margin-top: 6px; }
+.tablero-hora-programada { font-size: 1.25rem; font-weight: 700; }
+.tablero-hora-secundaria { font-size: .72rem; color: #fdba74; }
+.tablero-hora-real { font-size: .72rem; color: #6ee7b7; }
+.tablero-retraso {
+  font-size: .68rem;
+  color: #fdba74;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.tablero-nota {
+  font-size: .62rem;
+  color: #7d94ad;
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+  font-family: inherit;
+}
+
+/* --- Webhooks ------------------------------------------------------------- */
+.webhooks-eventos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+.webhooks-evento {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .78rem;
+  padding: 5px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  /* Sin lign-items: center, el texto queda desalineado respecto a la casilla.
+     Se alinea la fila completa porque el code de evento es de ancho variable. */
+}
+.webhooks-evento:hover { background: #f7f9fd; }
+.webhooks-evento code { font-size: .64rem; color: var(--text-muted); }
+.webhooks-evento span { flex: 1; }
+
+.webhooks-lista { list-style: none; padding: 0; margin: 12px 0 0; }
+.webhooks-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 9px;
+}
+.webhooks-item-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.webhooks-url {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: .78rem;
+  color: var(--booking-blue);
+  word-break: break-all;
+}
+.webhooks-datos {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: .72rem;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.webhooks-datos code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  letter-spacing: 1px;
+}
+.webhooks-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.webhooks-chip {
+  font-size: .62rem;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  background: #eef2f9;
+  color: var(--text-dark);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+.btn-pequeno { padding: 5px 11px; font-size: .72rem; }
+
+@media (max-width: 640px) {
+  .tablero-ruta { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .tablero-flecha { transform: rotate(90deg); }
+  .campo-boton { width: 100%; }
+}
+
+
+/* ======= MODERN FLIGHT SEARCH ======= */
+.busq-vuelos-moderno {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  margin-bottom: 30px;
+  border: 1px solid #e1e4e8;
+  font-family: inherit;
+}
+
+.busq-vuelos-header {
+  margin-bottom: 20px;
+}
+.busq-tipo-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #666;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+}
+.busq-pill-group {
+  display: inline-flex;
+  background: #f0f2f5;
+  border-radius: 30px;
+  padding: 4px;
+}
+.busq-pill-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.busq-pill-btn.activo {
+  background: #003087; /* Airline blue */
+  color: white;
+  box-shadow: 0 2px 8px rgba(0,48,135,0.3);
+}
+
+.busq-ruta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.busq-input-box {
+  flex: 1;
+  min-width: 200px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.busq-input-box:focus-within {
+  border-color: #003087;
+  box-shadow: 0 0 0 3px rgba(0,48,135,0.1);
+}
+.busq-input-box.error {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.busq-input-icon {
+  font-size: 1.2rem;
+  margin-right: 12px;
+  color: #6b7280;
+}
+.busq-input-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.busq-input-content label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #4b5563;
+  margin-bottom: 2px;
+}
+.busq-input-content select,
+.busq-input-content input {
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #111827;
+  padding: 0;
+  outline: none;
+  width: 100%;
+}
+.busq-help {
+  font-size: 0.65rem;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.busq-swap-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #4b5563;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.busq-swap-btn:hover {
+  background: #e5e7eb;
+}
+
+.busq-pasajeros-row {
+  position: relative;
+  margin-bottom: 20px;
+}
+.busq-pasajeros-toggle {
+  cursor: pointer;
+}
+.busq-pasajeros-summary {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #111827;
+}
+.busq-caret {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-left: auto;
+}
+
+.busq-pasajeros-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 300px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  padding: 16px;
+  z-index: 100;
+}
+.busq-pasajeros-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.busq-pasajeros-item:last-child {
+  margin-bottom: 0;
+}
+.busq-pasajeros-item span {
+  font-weight: 500;
+  color: #374151;
+}
+.busq-pasajeros-ctrls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.busq-pasajeros-ctrls button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #d1d5db;
+  background: white;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.busq-pasajeros-ctrls button:hover {
+  background: #f3f4f6;
+}
+
+.busq-vuelos-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.busq-error-msg {
+  color: #dc2626;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.busq-buscar-btn {
+  background: #ffb700;
+  color: #000;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  width: 100%;
+}
+.busq-buscar-btn:hover {
+  background: #e6a500;
+}
+.busq-buscar-btn:disabled {
+  background: #fcd34d;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .busq-ruta-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .busq-swap-btn {
+    align-self: center;
+    transform: rotate(90deg);
+  }
+}
+
+
+/* ======= NAVBAR DROPDOWN ======= */
+.navbar-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #003580;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  z-index: 2000;
+}
+.navbar-dropdown-item {
+  color: white !important;
+  text-decoration: none;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  font-weight: 500 !important;
+  transition: background 0.2s;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+.navbar-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #febb02 !important;
+}
+
+
+/* ======= FARE FAMILIES (ACORDEON) ======= */
+.vuelo-card-expanded {
+  border-color: #003087;
+  box-shadow: 0 4px 20px rgba(0, 48, 135, 0.15);
+}
+
+.vuelo-plane-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: #f4f7fc;
+  padding: 0 4px;
+  color: #64748b;
+  font-size: 1.2rem;
+}
+
+.vuelo-price-minimo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.vuelo-price-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.vuelo-card-fares-wrapper {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  padding: 24px;
+}
+
+.fare-families-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.fare-tabs {
+  display: flex;
+  gap: 10px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 10px;
+}
+
+.fare-tab {
+  background: transparent;
+  border: none;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 4px;
+}
+
+.fare-tab.active {
+  color: #003087;
+  background: #e0e7ff;
+}
+
+.fare-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 280px));
+  justify-content: start;
+  gap: 20px;
+}
+
+.fare-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  padding: 24px;
+  position: relative;
+  transition: transform 0.2s;
+}
+
+.fare-card:hover {
+  transform: translateY(-4px);
+}
+
+.fare-card-badge {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  background: #10b981; /* Verde exito */
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fare-card-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+}
+
+.fare-card-benefits {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+
+.fare-card-light .fare-card-benefits {
+  color: #334155;
+}
+
+.fare-card-dark .fare-card-benefits {
+  color: #cbd5e1;
+}
+
+.fare-card-action {
+  margin-top: 24px;
+}
+
+.fare-card-btn {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.fare-card-price {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.fare-card-price-sub {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+
+/* ======= RESUMEN DE VIAJE (BARRA FLOTANTE COMPACTA) ======= */
+.resumen-viaje-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #ffffff;
+  box-shadow: 0 -6px 25px rgba(15, 23, 42, 0.12);
+  z-index: 100;
+  border-top: 3px solid #0284c7;
+  animation: slideUp 0.25s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.resumen-viaje-card {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 24px;
+}
+
+.resumen-viaje-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+.resumen-viaje-flights {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.resumen-flight-block {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 14px;
+  min-width: 270px;
+  flex: 1;
+  max-width: 480px;
+  transition: border-color 0.2s;
+}
+
+.resumen-flight-block:hover {
+  border-color: #cbd5e1;
+}
+
+.resumen-flight-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+}
+
+.resumen-type-pill {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.resumen-flight-date {
+  color: #475569;
+  font-weight: 600;
+}
+
+.resumen-flight-number {
+  color: #64748b;
+  font-size: 0.72rem;
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+}
+
+.resumen-flight-route-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.resumen-route-times {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.resumen-time {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.resumen-iata {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.resumen-arrow {
+  color: #94a3b8;
+  font-weight: 700;
+  margin: 0 4px;
+}
+
+.resumen-fare-pill {
+  background: #003087;
+  color: #ffffff;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.resumen-fare-pill.fare-premium_economy {
+  background: #0284c7;
+}
+
+.resumen-fare-pill.fare-business {
+  background: #1e293b;
+}
+
+.resumen-viaje-total {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.resumen-price-breakdown {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.resumen-total-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.resumen-price-wrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 1px 0;
+}
+
+.resumen-total-amount {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.resumen-currency {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.resumen-taxes-note {
+  font-size: 0.72rem;
+  color: #10b981;
+  font-weight: 600;
+}
+
+.resumen-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.resumen-btn-outline {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.resumen-btn-outline:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.resumen-btn-primary {
+  background: #f59e0b;
+  border: none;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1rem;
+  border-radius: 8px;
+  padding: 10px 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(245, 158, 11, 0.35);
+}
+
+.resumen-btn-primary:hover {
+  background: #d97706;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
+}
+
+@media (max-width: 900px) {
+  .resumen-viaje-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .resumen-viaje-flights {
+    width: 100%;
+  }
+  .resumen-viaje-total {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .resumen-price-breakdown {
+    align-items: flex-start;
+  }
+}
+/* ======= MODERN VUELO CARD ======= */
+.vuelo-card-modern {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.vuelo-card-modern:hover {
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  border-color: #cbd5e1;
+}
+
+.vuelo-card-body {
+  padding: 24px;
+}
+
+.vuelo-route-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.vuelo-route-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.vuelo-route-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 4px 0 0 0;
+}
+
+.vuelo-timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.vuelo-line-container {
+  display: flex;
+  width: 100%;
+}
+
+.vuelo-line-dashed {
+  height: 2px;
+  width: 100%;
+  border-bottom: 2px dashed #cbd5e1;
+  position: relative;
+  margin-top: 8px;
+}
+
+.vuelo-price-minimo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 120px;
+}
+
+.vuelo-price-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.vuelo-price-amount {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #003087;
+  line-height: 1;
+}
+
+/* Ensure grid handles it properly */
+.vuelo-grid {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}

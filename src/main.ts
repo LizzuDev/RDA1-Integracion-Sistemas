@@ -2,9 +2,9 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { BadRequestException, ValidationError, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-
 import { Rfc7807ExceptionFilter } from './core/filters/rfc7807-exception.filter';
 import { CodigoProblema, InvalidParam } from './core/errors/codigo-error';
+import { HateoasInterceptor } from './core/interceptors/hateoas.interceptor';
 
 /**
  * Aplana el arbol de `ValidationError` de `class-validator` a la lista plana
@@ -129,6 +129,10 @@ async function bootstrap() {
 
   // Registrar el filtro global de excepciones para cumplir con la RFC 7807
   app.useGlobalFilters(new Rfc7807ExceptionFilter());
+
+  // HATEOAS: inyectar enlaces en las respuestas (Richardson Nivel 3)
+  app.useGlobalInterceptors(new HateoasInterceptor());
+
 
   const config = new DocumentBuilder()
     .setTitle('Booking Prototipo API')

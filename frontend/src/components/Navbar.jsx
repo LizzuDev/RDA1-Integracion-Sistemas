@@ -1,116 +1,50 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabase';
 
 export function Navbar() {
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const [menuVuelosAbierto, setMenuVuelosAbierto] = useState(false);
+  const location = useLocation();
+  const isAutos = location.pathname.startsWith('/autos');
   const { user } = useAuth();
 
-  const esActivo = (prefijo) =>
-    prefijo === '/' ? pathname === '/' : pathname.startsWith(prefijo);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   return (
-    <nav className="navbar" aria-label="Navegacion principal">
+    <nav className="navbar">
       <div className="navbar-inner">
         <div className="navbar-logo">
           Booking<span>.com</span>
-          <span
-            style={{
-              fontSize: '0.55rem',
-              fontWeight: 400,
-              opacity: 0.7,
-              marginLeft: 6,
-            }}
-          >
-            Prototipo
-          </span>
         </div>
-
-        <div className="navbar-links">
-          <Link
-            to="/"
-            aria-current={esActivo('/') ? 'page' : undefined}
-            style={esActivo('/') ? { color: '#febb02', fontWeight: 700 } : {}}
-          >
-            🏨 Alojamientos
-          </Link>
-          <Link
-            to="/atracciones"
-            aria-current={esActivo('/atracciones') ? 'page' : undefined}
-            style={esActivo('/atracciones') ? { color: '#febb02', fontWeight: 700 } : {}}
-          >
-            🎡 Atracciones
-          </Link>
-          
-          <div 
-            className="navbar-dropdown-container"
-            onMouseEnter={() => setMenuVuelosAbierto(true)}
-            onMouseLeave={() => setMenuVuelosAbierto(false)}
-            style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '100%' }}
-          >
-            <Link
-              to="/vuelos"
-              aria-current={esActivo('/vuelos') && !esActivo('/estado-vuelos') && !esActivo('/mis-reservas') ? 'page' : undefined}
-              style={(esActivo('/vuelos') || esActivo('/estado-vuelos') || esActivo('/mis-reservas')) ? { color: '#febb02', fontWeight: 700 } : {}}
-            >
-              ✈️ Vuelos ▾
-            </Link>
-            
-            {menuVuelosAbierto && (
-              <div className="navbar-dropdown-menu">
-                <Link to="/vuelos" className="navbar-dropdown-item">Buscar Vuelos</Link>
-                <Link to="/vuelos/reservas" className="navbar-dropdown-item">Mis Reservas</Link>
-                <Link to="/estado-vuelos" className="navbar-dropdown-item">Estado de Vuelos</Link>
-              </div>
-            )}
-          </div>
-
-          <Link
-            to="/autos"
-            aria-current={esActivo('/autos') ? 'page' : undefined}
-            style={esActivo('/autos') ? { color: '#febb02', fontWeight: 700 } : {}}
-          >
-            🚗 Autos
-          </Link>
-        </div>
-
-        <div className="navbar-auth" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div className="navbar-actions">
+          <span className="nav-currency">USD</span>
+          <span className="nav-flag">🇪🇨</span>
+          <span className="nav-help">?</span>
           {user ? (
             <>
-              <span style={{ fontSize: '0.9rem' }}>
+              <span style={{ fontSize: '0.9rem', color: '#fff', marginRight: '1rem' }}>
                 {user.user_metadata?.nombre ? `¡Hola, ${user.user_metadata.nombre}!` : user.email}
               </span>
-              <Link 
-                to="/facturas" 
-                className="navbar-btn" 
-                style={{ background: 'transparent', border: '1px solid #fff', color: '#fff', textDecoration: 'none' }}
-              >
-                Mis Facturas
-              </Link>
-              <button 
-                className="navbar-btn" 
-                style={{ background: 'transparent', border: '1px solid #fff' }}
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  navigate('/');
-                }}
-              >
-                Salir
-              </button>
+              <Link to="/facturas" className="navbar-btn outline" style={{textDecoration: 'none'}}>Mis Facturas</Link>
+              <Link to="/mis-reservas" className="navbar-btn outline" style={{textDecoration: 'none'}}>Mis reservas</Link>
+              <button className="navbar-btn solid" onClick={handleLogout}>Cerrar sesión</button>
             </>
           ) : (
             <>
-              <button className="navbar-btn" onClick={() => navigate('/register')} style={{ background: '#fff', color: '#003580' }}>
-                Registrarse
-              </button>
-              <button className="navbar-btn" onClick={() => navigate('/login')}>
-                Iniciar sesión
-              </button>
+              <Link to="/register" className="navbar-btn outline" style={{textDecoration: 'none'}}>Regístrate</Link>
+              <Link to="/login" className="navbar-btn solid" style={{textDecoration: 'none'}}>Iniciar sesión</Link>
             </>
           )}
+        </div>
+      </div>
+      <div className="navbar-secondary">
+        <div className="navbar-links">
+          <Link to="/">🛏️ Hospedajes</Link>
+          <Link to="/vuelos">✈️ Vuelos</Link>
+          <Link to="/autos" className={isAutos ? 'active' : ''}>🚗 Renta de autos</Link>
+          <Link to="/" className={!isAutos ? 'active' : ''}>🎡 Atracciones</Link>
+          <Link to="/">🚕 Taxis aeropuerto</Link>
         </div>
       </div>
     </nav>

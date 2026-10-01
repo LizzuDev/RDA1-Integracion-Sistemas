@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!--Descripción para SEO-->
+    <meta name="description" content="Esqueleto semántico y accesible para el curso Desarrollo de Plataformas">
+    <title>Base - Sistema de Gestión de Procesos</title>
+    <link rel="stylesheet" href="../styles/styles.css">
+</head>
+<body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+    <header>
+        <h1>Sistema de Gestión de Procesos</h1>
+        <nav aria-label="Navegación principal">
+            <ul>
+                <li><a href="#" aria-current="page">Inicio</a></li>
+                <li><a href="#modulos">Módulos</a></li>
+                <li><a href="#accesibilidad">Accesibilidad</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main id="contenido">
+        <section aria-labelledby="sec-intro">
+            <h2 id="sec-intro">Introducción</h2>
+            <p>Este es el esqueleto base para el proyecto del curso. Prioriza semántica y accesibilidad</p>
+        </section>
+        
+        <section id="módulos" aria-labelledby="sec-modulos">
+            <h2 id="sec-modulos">Módulos</h2>
+            <article aria-labelledby="art-turnos">
+                <h3 id="art-turnos">Módulo: Gestión de Turnos</h3>
+                <p>Contenido placeholder. Aquí, más adelante, se integrará cliente-servidor</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Entorno</th>
+                            <th scope="col">Estado</th>
+                            <th scope="col">Última revisión</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row">Producción</th>
+                            <td>Operativo Parcial</td>
+                            <td>2025-09-21</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <figure>
+                    <img id="escuela" src="../assets/images/escuela.jpg" alt="ESCUELA">
+                    <figcaption>Figura 1: Vista general de la escuela</figcaption>
+                </figure>
+            </article>
+            <aside aria-label="información complementaria">
+                <p>Nota: Mantén una jerarquía de encabezados coherente (h1→h2→h3) </p>
+            </aside>    
+
+        </section>
+        <section id="accesibilidad" aria-labelledby="sec-a11y">
+            <h2 id="sec-a11y">Accesibilidad</h2>
+            <p role="note" aria-live="polite">Recuerda: texto alternativo en imágenes y formularios etiquetados.</p>
+        </section>
+
+        <form aria-labelledby="tituloregistro">
+            <h3 id="tituloregistro">Registro de Participación</h3>
+
+            <label for="nombre">Nombre completo</label>
+            <input id="nombre" name="nombre" type="text" required aria-describedby="ayudanombre">
+
+            <p id="ayuda-nombre">Usa tu nombre institucional</p>
+
+            <label for="email">Correo</label>
+            <input id="email" name="email"  type="email" required aria-describedby="ayuda-email">
+            <p id="ayuda-email">Formato: usuario@ejemplo.edu.ec</p>
+
+            <fieldset>
+                <legend>Preferencia de contacto</legend>
+                <label><input type="radio" name="contacto" value="correo" checked>Correo</label>
+                <label><input type="radio" name="contacto" value="teléfono" checked>Teléfono</label>
+            </fieldset>
+            
+            <button type="submit">Guardar</button>
+        </form>
+        
+        <form aria-labelledby="tituloformejemplo">
+            <h3 id="tituloformejemplo">Registro de Prueba</h3>
+            <fieldset>
+                <label for="unidad">Unidades</label>
+                <span>1</span>
+                <input id="unidad" name="unidad" type="range" min="0" max="100" step="1" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                <span>100</span>
+                <label for="fecha">Fecha</label>
+                <input id="fecha" name="fecha" type="date" aria-label="Fecha de envio" aria-describedby="ayuda-fecha">
+                <p id="ayuda-fecha">Selecciona la fecha de envío</p>
+                <label for="telefono">Teléfono</label>
+                <input id="telefono" name="telefono" type="tel"  pattern="[0-9]{10}" required placeholder="1234567890" title="Ingrese 10 dígitos numéricos" aria-describedby="ayuda-telefono">
+                <p id="ayuda-telefono">Formato: (000) 000-0000</p>
+                <fieldset>
+                    <legend>Método de Pago</legend>
+                    <label><input type="radio" name="contacto" value="correo" checked>Efectivo</label>
+                    <label><input type="radio" name="contacto" value="teléfono" checked>Tarjeta de Crédito</label>
+                </fieldset>
+                <label for="usuario">Usuario</label>
+                <input id="usuario" name="usuario" type="email" required autocomplete="email" aria-describedby="ayuda-usuario">
+                <small id="ayuda-usuario">Formato: usuario@ejemplo.edu.ec</small>
+                <label for="password">Contraseña</label>
+                <input id="password" name="password" type="password" required minlength="8" aria-describedby="ayuda-password">
+                <p id="ayuda-password">Debe tener al menos 8 caracteres</p>
+                <label for="image">Imagen</label>
+                <input id="image" name="image" type="file" accept="image/*" aria-describedby="ayuda-image">
+                <p id="ayuda-image">Sube una imagen del lugar de entrega</p>
+                <label for="entrega-fast">Entrega rápida</label>
+                <input type="checkbox" id="entrega-fast" name="entrega-fast" aria-describedby="ayuda-entrega">
+                <p id="ayuda-entrega">Marca si deseas una entrega rápida</p>
+                <label for="opciones">Elige una opción:</label>
+                    <select id="opciones" name="opciones" required aria-describedby="ayuda-opciones">
+                    <option value="opcion1">Quito</option>
+                    <option value="opcion2">Guayaquil</option>
+                    <option value="opcion3">Cuenca</option>
+                    </select>
+                <p id="ayuda-opciones">Selecciona tu ciudad de residencia</p>
+
+                
+                <button type="submit">Guardar</button>
+            </fieldset>
+            
+
+        </form>
+    </main>
+    <footer>
+        <p>&copy;2025. Curso de Desarrollo de Plataformas</p>
+    </footer>
+</body>
+</html>
+
+
+
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Registro de Cuenta — Semana 2 (Hotfix)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Formulario accesible con validación nativa y personalizada."
+/>
+<link rel="stylesheet" href="../styles/styles.css" />
+</head>
+<body>
+<!-- Skip link para teclado/lectores -->
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<header>
+<h1>Plataforma Académica</h1>
+<nav aria-label="Principal">
+<ul>
+<li><a href="#" aria-current="page">Inicio</a></li>
+<li><a href="#formulario">Registro</a></li>
+</ul>
+</nav>
+</header>
+<main id="contenido">
+<!-- Resumen de errores (JS lo rellena si hace falta) -->
+<section aria-labelledby="t-resumen" class="visually-group" id="resumen-seccion">
+<h2 id="t-resumen">Resumen de errores</h2>
+<div id="form-summary" role="alert" aria-live="polite"></div>
+</section>
+<section id="formulario" aria-labelledby="t-form">
+<h2 id="t-form">Registro de cuenta</h2>
+<!-- Usamos novalidate para controlar mensajes,
+pero dejamos atributos nativos en el resto de campos -->
+<form id="f-registro" novalidate aria-describedby="ayuda-general">
+<p id="ayuda-general">Completa los campos obligatorios. Navega con Tab y Enter.</p>
+<!-- Datos personales -->
+<fieldset>
+<legend>Datos personales</legend>
+<label for="nombre">Nombre</label>
+<input id="nombre" name="nombre" type="text" required minlength="2"
+autocomplete="given-name" aria-describedby="hint-nombre nombre-err">
+<small id="hint-nombre">Tal como figura en tu documento (mínimo 2 caracteres).</small>
+<span id="nombre-err" class="error" role="alert" hidden></span>
+<label for="apellidos">Apellidos</label>
+<input id="apellidos" name="apellidos" type="text" required minlength="2"
+autocomplete="family-name" aria-describedby="hint-apellidos apellidos-err">
+<small id="hint-apellidos">Mínimo 2 caracteres.</small>
+<span id="apellidos-err" class="error" role="alert" hidden></span>
+<label for="email">Correo institucional</label>
+<input id="email" name="email" type="email" required
+autocomplete="email" aria-describedby="hint-email email-status email-err">
+<small id="hint-email">Formato: usuario@dominio.</small>
+<!-- Estado no intrusivo (validación asíncrona simulada) -->
+<small id="email-status" role="status" aria-live="polite"></small>
+<span id="email-err" class="error" role="alert" hidden></span>
+<label for="tel">Teléfono</label>
+<input id="tel" name="tel" type="tel" inputmode="tel"
+autocomplete="tel" aria-describedby="hint-tel">
+<small id="hint-tel">Incluye código de área si aplica.</small>
+</fieldset>
+<!-- Acceso -->
+<fieldset>
+<legend>Acceso</legend>
+<label for="pass">Contraseña</label>
+<!-- SIN minlength: la longitud se valida en JS -->
+<input id="pass" name="pass" type="password" required
+aria-describedby="hint-pass pass-err pass-strength-text">
+<small id="hint-pass">Mínimo 8 caracteres. Combina mayúsculas, números y
+símbolos.</small>
+<progress id="pass-strength" value="0" max="4" aria-hidden="true"></progress>
+<small id="pass-strength-text" role="status" aria-live="polite"></small>
+<span id="pass-err" class="error" role="alert" hidden></span>
+<label for="pass2">Confirmar contraseña</label>
+<input id="pass2" name="pass2" type="password" required
+aria-describedby="pass2-err">
+<span id="pass2-err" class="error" role="alert" hidden></span>
+</fieldset>
+<!-- Preferencias -->
+<fieldset>
+<legend>Preferencias</legend>
+<label><input type="radio" name="contacto" value="correo" checked> Contacto por
+correo</label>
+<label><input type="radio" name="contacto" value="telefono"> Contacto por
+teléfono</label>
+<label><input type="checkbox" id="news" name="news" value="si"> Deseo recibir
+boletines</label>
+</fieldset>
+<!-- Aceptación -->
+<fieldset>
+<legend>Condiciones</legend>
+<label>
+<input type="checkbox" id="acepto" name="acepto" required aria-describedby="aceptoerr">
+Acepto términos y condiciones
+</label>
+<span id="acepto-err" class="error" role="alert" hidden></span>
+</fieldset>
+<button type="submit">Crear cuenta</button>
+</form>
+</section>
+</main>
+<footer>
+<p>© 2025. Curso Desarrollo en Plataformas.</p>
+</footer>
+<!-- cache-busting para evitar JS viejo en caché -->
+<script src="../scripts/app.js?v=hotfix5"></script>
+</body>
+</html>
+
+
+
+
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Registro de Cuenta — Semana 2 (Hotfix)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Formulario accesible con validación nativa y personalizada."
+/>
+<link rel="stylesheet" href="../styles/styles.css" />
+</head>
+<body>
+<!-- Skip link para teclado/lectores -->
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<header>
+<h1>Plataforma Académica</h1>
+<nav aria-label="Principal">
+<ul>
+<li><a href="#" aria-current="page">Inicio</a></li>
+<li><a href="#formulario">Registro</a></li>
+</ul>
+</nav>
+</header>
+<main id="contenido">
+<!-- Resumen de errores (JS lo rellena si hace falta) -->
+<section aria-labelledby="t-resumen" class="visually-group" id="resumen-seccion">
+<h2 id="t-resumen">Resumen de errores</h2>
+<div id="form-summary" role="alert" aria-live="polite"></div>
+</section>
+<section id="formulario" aria-labelledby="t-form">
+<h2 id="t-form">Registro de cuenta</h2>
+<!-- Usamos novalidate para controlar mensajes,
+pero dejamos atributos nativos en el resto de campos -->
+<form id="f-registro" novalidate aria-describedby="ayuda-general">
+<p id="ayuda-general">Completa los campos obligatorios. Navega con Tab y Enter.</p>
+<!-- Datos personales -->
+<fieldset>
+<legend>Datos personales</legend>
+<label for="nombre">Nombre</label>
+<input id="nombre" name="nombre" type="text" required minlength="2"
+autocomplete="given-name" aria-describedby="hint-nombre nombre-err">
+<small id="hint-nombre">Tal como figura en tu documento (mínimo 2 caracteres).</small>
+<span id="nombre-err" class="error" role="alert" hidden></span>
+<label for="apellidos">Apellidos</label>
+<input id="apellidos" name="apellidos" type="text" required minlength="2"
+autocomplete="family-name" aria-describedby="hint-apellidos apellidos-err">
+<small id="hint-apellidos">Mínimo 2 caracteres.</small>
+<span id="apellidos-err" class="error" role="alert" hidden></span>
+<label for="email">Correo institucional</label>
+<input id="email" name="email" type="email" required
+autocomplete="email" aria-describedby="hint-email email-status email-err">
+<small id="hint-email">Formato: usuario@dominio.</small>
+<!-- Estado no intrusivo (validación asíncrona simulada) -->
+<small id="email-status" role="status" aria-live="polite"></small>
+<span id="email-err" class="error" role="alert" hidden></span>
+<label for="tel">Teléfono</label>
+<input id="tel" name="tel" type="tel" inputmode="tel"
+autocomplete="tel" aria-describedby="hint-tel">
+<small id="hint-tel">Incluye código de área si aplica.</small>
+</fieldset>
+<!-- Acceso -->
+<fieldset>
+<legend>Acceso</legend>
+<label for="pass">Contraseña</label>
+<!-- SIN minlength: la longitud se valida en JS -->
+<input id="pass" name="pass" type="password" required
+aria-describedby="hint-pass pass-err pass-strength-text">
+<small id="hint-pass">Mínimo 8 caracteres. Combina mayúsculas, números y
+símbolos.</small>
+<progress id="pass-strength" value="0" max="4" aria-hidden="true"></progress>
+<small id="pass-strength-text" role="status" aria-live="polite"></small>
+<span id="pass-err" class="error" role="alert" hidden></span>
+<label for="pass2">Confirmar contraseña</label>
+<input id="pass2" name="pass2" type="password" required
+aria-describedby="pass2-err">
+<span id="pass2-err" class="error" role="alert" hidden></span>
+</fieldset>
+<!-- Preferencias -->
+<fieldset>
+<legend>Preferencias</legend>
+<label><input type="radio" name="contacto" value="correo" checked> Contacto por
+correo</label>
+<label><input type="radio" name="contacto" value="telefono"> Contacto por
+teléfono</label>
+<label><input type="checkbox" id="news" name="news" value="si"> Deseo recibir
+boletines</label>
+</fieldset>
+<!-- Aceptación -->
+<fieldset>
+<legend>Condiciones</legend>
+<label>
+<input type="checkbox" id="acepto" name="acepto" required aria-describedby="aceptoerr">
+Acepto términos y condiciones
+</label>
+<span id="acepto-err" class="error" role="alert" hidden></span>
+</fieldset>
+<button type="submit">Crear cuenta</button>
+</form>
+</section>
+</main>
+<footer>
+<p>© 2025. Curso Desarrollo en Plataformas.</p>
+</footer>
+<!-- cache-busting para evitar JS viejo en caché -->
+<script src="../scripts/app.js?v=hotfix5"></script>
+</body>
+</html>
+
+<!doctype html>
+<html lang="es">
+<head>
+ <meta charset="utf-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1" />
+ <title>Semana 3 · Ejercicio 1 — Box Model + Tipografía fluida</title>
+ <style>
+ /* ====== Reset mínimo + Box Model coherente ====== */
+ * { box-sizing: border-box; margin: 0; padding: 0; }
+ /* ====== Tipografía base ====== */
+ html { font-size: 100%; } /* 16px por defecto en la mayoría de navegadores */
+ body {
+ font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+ line-height: 1.5;
+ color: #111;
+ background: #fff;
+ }
+ /* ====== Tokens simples (espacios y contenedor) ====== */
+ :root{
+ --space-1: .5rem; --space-2: 1rem; --space-3: 1.5rem; --space-4: 2rem;
+ --maxw: 64rem; /* ~1024px */
+ --border: 1px solid #e5e7eb;
+ }
+ .wrap { max-width: var(--maxw); margin-inline: auto; padding: var(--space-2); }
+ /* ====== Encabezado (sin flex aún) ====== */
+ header { border-bottom: var(--border); padding: var(--space-2) 0; }
+ .brand { font-weight: 700; font-size: 1.125rem; margin-bottom: .25rem; }
+ nav a {
+ display: inline-block;
+ text-decoration: none;
+ color: #0366d6;
+ margin-right: 1rem;
+ padding: .25rem 0;
+ }
+ /* ====== Card principal (en columna) ====== */
+ .card {
+ background: #fff;
+ border: var(--border);
+ border-radius: .5rem;
+ padding: var(--space-3);
+ margin-block: var(--space-3);
+ /* Box Model aplicado: padding para que "respire" internamente */
+ }
+ .card h1 {
+ /* Tipografía fluida: mínimo 1.5rem, máximo 2.25rem, zona fluida 2.5vw */
+ font-size: clamp(1.5rem, 2.5vw, 2.25rem);
+ margin-bottom: .5rem;
+ }
+ .card p { margin-bottom: var(--space-2); }
+ .card img {
+ /* Medios fluidos: nunca sobrepasan el ancho de su contenedor */
+ max-width: 100%; height: auto; border-radius: .5rem; border: var(--border);
+ }
+ /* ====== Features (bloques apilados por ahora) ====== */
+ .features { margin-block: var(--space-3); }
+ .feature {
+ background: #f9fafb;
+ border: var(--border);
+ border-radius: .5rem;
+ padding: var(--space-3);
+ font-weight: 600;
+ text-align: center;
+ /* Márgenes externos: separa esta caja de la siguiente (Box Model) */
+ margin-bottom: var(--space-2);
+ }
+ /* ====== Pie ====== */
+ footer { border-top: var(--border); text-align: center; padding: var(--space-2) 0; }
+ </style>
+</head>
+<body>
+ <header>
+ <div class="wrap">
+ <div class="brand">MiSitio</div>
+ <nav aria-label="principal">
+ <a href="#">Inicio</a>
+ <a href="#">Blog</a>
+ <a href="#">Contacto</a>
+ </nav>
+ </div>
+ </header>
+ <main class="wrap">
+ <article class="card">
+ <h1>Bienvenido</h1>
+ <p>Este es el contenido principal. Aquí practicamos <strong>Box Model</strong> (padding, border, margin) y
+<strong>tipografía fluida</strong> con <code>clamp()</code>.</p>
+ <img src="https://picsum.photos/800/400" alt="Imagen ilustrativa aleatoria">
+ </article>
+ <section class="features" aria-label="Módulos">
+ <article class="feature">Módulo A</article>
+ <article class="feature">Módulo B</article>
+ <article class="feature">Módulo C</article>
+ </section>
+ </main>
+ <footer>
+ <div class="wrap"><small>© 2025 — Ejercicio 1 (CSS puro sin Flex/Grid)</small></div>
+ </footer>
+</body>
+</html>
+4) Layout con Flexbox (header) + Grid (card/features), mobile-first (sin Media Queries aún)
+Meta: organizar la página combinando Flexbox para cabecera y Grid para el contenido.
+Pasos:
+1. Aplica display: flex en el header para alinear logo y menú.
+2. Convierte .card en grid: 1 columna en móvil, 2 columnas en pantallas más grandes.
+3. Configura .features como grid que irá cambiando con media queries.
+<!doctype html>
+<html lang="es">
+<head>
+ <meta charset="utf-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1" />
+ <title>Semana 3 · Ejercicio 2 — Flexbox + Grid (mobile-first)</title>
+ <style>
+ /* Reset + box model */
+ * { box-sizing: border-box; margin: 0; padding: 0; }
+ /* Tipografía base */
+ body {
+ font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+ line-height: 1.5; color: #111; background: #fff;
+ }
+ /* Tokens */
+ :root{
+ --space-1: .5rem; --space-2: 1rem; --space-3: 1.5rem; --space-4: 2rem;
+ --maxw: 72rem; --border: 1px solid #e5e7eb;
+ }
+ .wrap { max-width: var(--maxw); margin-inline: auto; padding: var(--space-2); }
+ /* ====== Header con Flexbox (alineación en 1 eje) ====== */
+ header { border-bottom: var(--border); }
+ .header-inner {
+ display: flex; align-items: center; justify-content: space-between;
+ gap: var(--space-2); padding: var(--space-2) 0;
+ }
+ .brand { font-weight: 700; font-size: 1.125rem; }
+ nav a { text-decoration: none; color: #0366d6; margin-left: 1rem; }
+ /* ====== Card con Grid (macro) — por ahora 1 columna ====== */
+ .card {
+ display: grid; /* activamos grid */
+ gap: var(--space-2); /* separación entre celdas */
+ background: #fff; border: var(--border); border-radius: .5rem;
+ padding: var(--space-3); margin-block: var(--space-3);
+ }
+ .card h1 { font-size: clamp(1.5rem, 2.5vw, 2.25rem); }
+ .card img { max-width: 100%; height: auto; border-radius: .5rem; border: var(--border); }
+ /* ====== Features con Grid (macro) — 1 columna por ahora ====== */
+ .features { display: grid; gap: var(--space-2); margin-block: var(--space-3); }
+ .feature {
+ background: #f9fafb; border: var(--border); border-radius: .5rem;
+ padding: var(--space-3); text-align: center; font-weight: 600;
+ }
+ /* Pie */
+ footer { border-top: var(--border); text-align: center; padding: var(--space-2) 0; }
+ </style>
+</head>
+<body>
+ <header>
+ <div class="wrap header-inner">
+ <div class="brand">MiSitio</div>
+ <nav aria-label="principal">
+ <a href="#">Inicio</a>
+ <a href="#">Blog</a>
+ <a href="#">Contacto</a>
+ </nav>
+ </div>
+ </header>
+ <main class="wrap">
+ <article class="card">
+ <!-- En móvil: 1 columna (texto sobre imagen) -->
+ <div class="card-text">
+ <h1>Bienvenido</h1>
+ <p>Ahora combinamos <strong>Flexbox</strong> (en el header) y <strong>Grid</strong> (en esta tarjeta y en
+features), todavía sin Media Queries.</p>
+ </div>
+ <img src="https://picsum.photos/800/400" alt="Imagen ilustrativa aleatoria">
+ </article>
+ <section class="features" aria-label="Módulos">
+ <article class="feature">Módulo A</article>
+ <article class="feature">Módulo B</article>
+ <article class="feature">Módulo C</article>
+ </section>
+ </main>
+ <footer>
+ <div class="wrap"><small>© 2025 — Ejercicio 2 (Flexbox + Grid, sin MQ)</small></div>
+ </footer>
+</body>
+</html>
+5) Ejercicio 3 – Media Queries (tablet/escritorio) sobre el layout de Flex+Grid
+Meta: aplicar breakpoints para reorganizar el layout en tablet y escritorio.
+Código:
+<!doctype html>
+<html lang="es">
+<head>
+ <meta charset="utf-8" />
+ <meta name="viewport" content="width=device-width, initial-scale=1" />
+ <title>Semana 3 · Ejercicio 3 — Media Queries (tablet/escritorio)</title>
+ <style>
+ /* Reset + box model */
+ * { box-sizing: border-box; margin: 0; padding: 0; }
+ /* Tipografía base */
+ body {
+ font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+ line-height: 1.5; color: #111; background: #fff;
+ }
+ /* Tokens */
+ :root{
+ --space-1: .5rem; --space-2: 1rem; --space-3: 1.5rem; --space-4: 2rem;
+ --maxw: 72rem; --border: 1px solid #e5e7eb;
+ }
+ .wrap { max-width: var(--maxw); margin-inline: auto; padding: var(--space-2); }
+ /* ====== Header con Flexbox ====== */
+ header { border-bottom: var(--border); }
+ .header-inner {
+ display: flex; align-items: center; justify-content: space-between;
+ gap: var(--space-2); padding: var(--space-2) 0;
+ }
+ .brand { font-weight: 700; font-size: 1.125rem; }
+ nav a { text-decoration: none; color: #0366d6; margin-left: 1rem; }
+ /* ====== Card con Grid ====== */
+ .card {
+ display: grid; gap: var(--space-2);
+ background: #fff; border: var(--border); border-radius: .5rem;
+ padding: var(--space-3); margin-block: var(--space-3);
+ }
+ .card h1 { font-size: clamp(1.5rem, 2.5vw, 2.25rem); }
+ .card img { max-width: 100%; height: auto; border-radius: .5rem; border: var(--border); }
+ /* ====== Features con Grid ====== */
+ .features { display: grid; gap: var(--space-2); margin-block: var(--space-3); }
+ .feature {
+ background: #f9fafb; border: var(--border); border-radius: .5rem;
+ padding: var(--space-3); text-align: center; font-weight: 600;
+ }
+ /* ====== Pie ====== */
+ footer { border-top: var(--border); text-align: center; padding: var(--space-2) 0; }
+ /* ====== MEDIA QUERIES (Mobile-first) ====== */
+ /* Tablet: a partir de 768px */
+ @media (min-width: 768px) {
+ .card {
+ /* 2 columnas: texto (más ancho) + imagen */
+ grid-template-columns: 1.25fr 1fr;
+ align-items: start;
+ }
+ .features { grid-template-columns: repeat(2, 1fr); }
+ /* (Opcional) crecer la marca */
+ .brand { font-size: 1.25rem; }
+ }
+ /* Escritorio: a partir de 1200px */
+ @media (min-width: 1200px) {
+ .features { grid-template-columns: repeat(3, 1fr); }
+ .wrap { padding: var(--space-3); }
+ }
+ /* Preferencias de usuario (accesibilidad) */
+ @media (prefers-reduced-motion: reduce) {
+ * { animation: none !important; transition-duration: 0.01ms !important; }
+ }
+ @media (prefers-color-scheme: dark) {
+ body { background: #0b0d10; color: #e5e7eb; }
+ .feature, .card { background: #111827; border-color: #1f2937; }
+ nav a { color: #93c5fd; }
+ }
+ </style>
+</head>
+<body>
+ <header>
+ <div class="wrap header-inner">
+ <div class="brand">MiSitio</div>
+ <nav aria-label="principal">
+ <a href="#">Inicio</a>
+ <a href="#">Blog</a>
+ <a href="#">Contacto</a>
+ </nav>
+ </div>
+ </header>
+ <main class="wrap">
+ <article class="card">
+ <div class="card-text">
+ <h1>Bienvenido</h1>
+ <p>Aplicamos <strong>Media Queries</strong>: en tablet la tarjeta pasa a 2 columnas; las <em>features</em>
+a 2 columnas; en escritorio, a 3.</p>
+ </div>
+ <img src="https://picsum.photos/800/400" alt="Imagen ilustrativa aleatoria">
+ </article>
+ <section class="features" aria-label="Módulos">
+ <article class="feature">Módulo A</article>
+ <article class="feature">Módulo B</article>
+ <article class="feature">Módulo C</article>
+ </section>
+ </main>
+ <footer>
+ <div class="wrap"><small>© 2025 — Ejercicio 3 (Flex+Grid + Media Queries)</small></div>
+ </footer>
+</body>
+</html>
+
+a) Versión con CSS puro
+index.html
+<!doctype html>
+<html lang="es">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <title>Práctica CSS puro - Semana 3</title>
+ <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+ <header class="site-header">
+ <div class="brand">MiSitio</div>
+ <nav class="site-nav">
+ <a href="#">Inicio</a>
+ <a href="#">Blog</a>
+ <a href="#">Contacto</a>
+ </nav>
+ </header>
+ <main class="content">
+ <article class="card">
+ <div class="card-text">
+ <h1>Bienvenido</h1>
+ <p>Este es el contenido principal. Ajusta estilos y layout según el ancho de pantalla.</p>
+ </div>
+ <img src="https://picsum.photos/600/400" alt="Imagen ilustrativa">
+ </article>
+ <section class="features">
+ <article class="feature">Módulo A</article>
+ <article class="feature">Módulo B</article>
+ <article class="feature">Módulo C</article>
+ </section>
+ </main>
+ <footer class="site-footer">
+ <small>© 2025 — CSS puro</small>
+ </footer>
+</body>
+</html>
+b) Versión con Bootstrap 5
+index.html
+<!doctype html>
+<html lang="es">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <title>Práctica Bootstrap - Semana 3</title>
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+ <header class="bg-light border-bottom mb-4">
+ <div class="container d-flex justify-content-between align-items-center py-2">
+ <span class="fw-bold">MiSitio</span>
+ <nav>
+ <a class="mx-2 text-decoration-none text-primary" href="#">Inicio</a>
+ <a class="mx-2 text-decoration-none text-primary" href="#">Blog</a>
+ <a class="mx-2 text-decoration-none text-primary" href="#">Contacto</a>
+ </nav>
+ </div>
+ </header>
+ <main class="container mb-4">
+ <div class="row g-3 align-items-center mb-4">
+ <div class="col-md-8">
+ <h1 class="fs-2">Bienvenido</h1>
+ <p>Este es el contenido principal. Ajusta estilos y layout según el ancho de pantalla.</p>
+ </div>
+ <div class="col-md-4">
+ <img src="https://picsum.photos/600/400" class="img-fluid rounded" alt="Imagen ilustrativa">
+ </div>
+ </div>
+ <div class="row g-3">
+ <div class="col-12 col-md-6 col-xl-4"><div class="p-3 bg-light border rounded text-center">Módulo
+A</div></div>
+ <div class="col-12 col-md-6 col-xl-4"><div class="p-3 bg-light border rounded text-center">Módulo
+B</div></div>
+ <div class="col-12 col-md-6 col-xl-4"><div class="p-3 bg-light border rounded text-center">Módulo
+C</div></div>
+ </div>
+ </main>
+ <footer class="bg-light border-top text-center py-3">
+ <small>© 2025 — Bootstrap</small>
+ </footer>
+</body>
+</html>
+
+c) Versión con Tailwind CSS
+index.html
+<!doctype html>
+<html lang="es">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <title>Práctica Tailwind - Semana 3</title>
+ <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="font-sans text-gray-900">
+ <header class="flex justify-between items-center border-b p-4 bg-white">
+ <span class="font-bold">MiSitio</span>
+ <nav class="space-x-4">
+ <a href="#" class="text-blue-600 hover:underline">Inicio</a>
+ <a href="#" class="text-blue-600 hover:underline">Blog</a>
+ <a href="#" class="text-blue-600 hover:underline">Contacto</a>
+ </nav>
+ </header>
+ <main class="max-w-5xl mx-auto p-4">
+ <div class="grid gap-4 md:grid-cols-2 items-center mb-6">
+ <div>
+ <h1 class="text-2xl md:text-3xl font-bold mb-2">Bienvenido</h1>
+ <p class="text-gray-700">Este es el contenido principal. Ajusta estilos y layout según el ancho de pantalla.</p>
+ </div>
+ <img src="https://picsum.photos/600/400" alt="Imagen ilustrativa" class="rounded-lg shadow">
+ </div>
+ <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+ <div class="bg-gray-100 border rounded-lg p-6 text-center font-semibold">Módulo A</div>
+ <div class="bg-gray-100 border rounded-lg p-6 text-center font-semibold">Módulo B</div>
+ <div class="bg-gray-100 border rounded-lg p-6 text-center font-semibold">Módulo C</div>
+ </section>
+ </main>
+ <footer class="border-t text-center py-3 mt-6 bg-white">
+ <small>© 2025 — Tailwind</small>
+ </footer>
+</body>
+</html>

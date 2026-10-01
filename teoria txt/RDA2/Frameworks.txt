@@ -1,0 +1,188 @@
+1. ¿Qué es un framework CSS?
+Un framework CSS es un conjunto predefinido de reglas, componentes y utilidades que
+simplifica el diseño de páginas web.
+Ventajas principales:
+•
+•
+•
+
+Ahorra tiempo: ya trae botones, formularios, rejillas y tipografía.
+Consistencia: mantiene un estilo uniforme en todo el proyecto.
+Adaptabilidad: casi todos incluyen un sistema responsivo listo.
+
+2. Bootstrap: rejilla y componentes listos
+Bootstrap es el framework más popular del mundo, usado en millones de sitios. Se centra
+en ofrecer una rejilla responsiva (grid system) y una gran cantidad de componentes
+preconstruidos.
+12 columnas → puedes combinar:
+[ 4 | 4 | 4 ] → tres iguales
+[ 6 | 6 ]
+→ dos iguales
+[ 3 | 9 ]
+→ una pequeña y otra grande
+
+Imagen 14. Esquema de la rejilla de Bootstrap
+
+Fuente: elaboración propia (2025).
+
+Ejemplo de uso de la rejilla
+<div class="container">
+<div class="row">
+<div class="col-4">Columna 1</div>
+<div class="col-4">Columna 2</div>
+<div class="col-4">Columna 3</div>
+</div>
+</div>
+
+Con pocas clases, se logra un layout adaptable.
+Tabla 1. Ventajas y desventajas de Bootstrap
+Ventajas
+Gran comunidad y documentación
+Componentes listos: menús, botones,
+modales
+Rejilla responsiva fácil de usar
+
+Desventajas
+Puede sentirse rígido si no se personaliza
+CSS algo pesado si no se optimiza
+El diseño puede lucir genérico si no se
+adapta
+
+Fuente: elaboración propia (2025).
+
+3. Tailwind CSS: utilidades primero
+A diferencia de Bootstrap, Tailwind CSS no trae componentes listos. Su enfoque es
+utility-first, es decir, ofrece clases pequeñas y específicas para estilos (colores, márgenes,
+tipografía, etc.), que el desarrollador combina para crear interfaces personalizadas.
+Ejemplo en Tailwind
+<div class="max-w-sm mx-auto bg-white rounded-xl shadow-md overflowhidden p-4">
+<h1 class="text-xl font-bold text-gray-900">Título</h1>
+<p class="text-gray-600">Este es un párrafo con Tailwind.</p>
+</div>
+
+Aquí no hay CSS adicional: todo se define con clases.
+Bootstrap:
+Tailwind:
+
+<div class="card"> … </div>
+<div class="bg-white p-4 shadow-md rounded-lg"> … </div>
+
+Imagen 15. Filosofía Utility-first
+
+Fuente: elaboración propia (2025).
+Tabla 2. Ventajas y desventajas de Tailwind
+Ventajas
+Desventajas
+Gran flexibilidad, diseños únicos
+Curva de aprendizaje inicial
+Código más ligero (si se usa purge)
+Puede verse sobrecargado de clases
+Excelente integración con React, Vue, etc. No trae componentes listos
+
+Fuente: elaboración propia (2025).
+
+4. Comparación entre Bootstrap y Tailwind
+Bootstrap → Componentes listos (rápido)
+Tailwind → Estilos utilitarios (flexible)
+
+Imagen 16. Comparación visual
+
+Fuente: elaboración propia (2025).
+Tabla 3. Bootstrap vs Tailwind
+Característica
+Bootstrap
+Filosofía
+Componentes
+predefinidos
+Velocidad inicial Muy rápida
+Personalización
+Peso inicial
+Comunidad
+
+Limitada sin sobrescribir
+Mayor
+Muy amplia
+
+Tailwind
+Clases utilitarias
+Requiere aprender combinación de
+clases
+Muy alta
+Menor (con purge)
+En rápido crecimiento
+
+5. Ejemplo comparativo
+Bootstrap
+<button class="btn btn-primary">Enviar</button>
+
+Tailwind
+<button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2
+px-4 rounded">
+Enviar
+</button>
+
+Bootstrap ofrece un botón listo, mientras que Tailwind permite definirlo con clases
+utilitarias.
+
+6. Buenas prácticas con frameworks
+1. No depender al 100%: aprende primero CSS puro.
+2. Personaliza: cambia colores, tipografías y variables para que tu sitio no se vea
+genérico.
+3. Optimiza: en producción, elimina clases o componentes que no uses.
+4. Accesibilidad: revisa contraste, foco visible y compatibilidad con lectores de
+pantalla.
+5. Combina lo mejor: puedes usar Tailwind para la base y Bootstrap para algunos
+componentes si el proyecto lo permite.
+
+7. Caso: página de inicio
+Un estudiante debe diseñar una landing page con un encabezado, un bloque central y un
+pie de página.
+•
+•
+
+Con Bootstrap, puede usar container, row y col para organizar el layout, y
+añadir un navbar ya construido.
+Con Tailwind, define grid, gap-4, text-center y colores directamente en las
+clases HTML, logrando un estilo único.
+
+Bootstrap:
+Tailwind:
+
+Layout estándar con componentes prehechos
+Layout único con clases utilitarias
+
+Imagen 17. Resultado visual
+
+Fuente: elaboración propia (2025).
+
+8. Resumen
+•
+•
+•
+•
+
+Los frameworks CSS modernos son herramientas que aceleran el diseño.
+Bootstrap es ideal para empezar rápido, con componentes listos y una rejilla
+responsiva.
+Tailwind ofrece máxima flexibilidad con un enfoque utility-first, favoreciendo la
+personalización.
+La elección depende del proyecto: rapidez y estandarización con Bootstrap, o
+flexibilidad y unicidad con Tailwind.
+
+Título del enlace relacionado: Bootstrap vs Tailwind: comparación práctica (CSS Tricks)
+Descripción del enlace relacionado: Artículo que compara los frameworks CSS más
+populares, Bootstrap y Tailwind, destacando sus diferencias en filosofía, ventajas y usos
+prácticos en proyectos modernos.
+Enlace: https://css-tricks.com/tailwind-vs-bootstrap/
+
+Dominar estos frameworks es fundamental para un desarrollador moderno, pero siempre
+recordando que la base sigue siendo CSS3 puro.
+Referencias citadas en la Clase 3.
+•
+•
+•
+
+Frain, B. (2020). Responsive Web Design with HTML5 and CSS. Packt Publishing.
+Cederholm, D. (2018). CSS Grid Layout. A Book Apart.
+W3C. (2023). CSS Cascading Style Sheets Level 3 (CSS3) Specification.
+https://www.w3.org/TR/css-2023/

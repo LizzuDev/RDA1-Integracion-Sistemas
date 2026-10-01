@@ -2,11 +2,11 @@ import { useCallback, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import { AtraccionesPage } from './pages/AtraccionesPage';
+import { AtraccionesSearchPage } from './pages/AtraccionesSearchPage';
 import { AtraccionDetail } from './pages/AtraccionDetail';
 import { AutosPage } from './pages/AutosPage';
 import { AutoDetail } from './pages/AutoDetail';
 import { AdminDashboard } from './pages/AdminDashboard';
-
 // --- Modulo de Vuelos (Fase 4: busqueda implementada) ---
 import { VuelosPage } from './pages/VuelosPage';
 import { MisReservasPage } from './pages/MisReservasPage';
@@ -17,6 +17,7 @@ import { FacturasPage } from './pages/FacturasPage';
 
 // --- Autenticacion: destino del logout forzado por 401 ---
 import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
 
 // --- Componentes legales (seccion 5 del plan) ---
 import { PrivacidadPage } from './pages/PrivacidadPage';
@@ -27,11 +28,11 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { BannerCookies } from './components/BannerCookies';
 
 import { AuthProvider } from './hooks/useAuth';
-import { RegisterPage } from './pages/RegisterPage';
 
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import './index.css';
+import './vuelos.css';
 import { useParams } from 'react-router-dom';
 
 /**
@@ -73,37 +74,25 @@ function App() {
 
       <div className="app-wrapper">
         <Navbar />
-
         <Routes>
           <Route path="/" element={<AtraccionesPage />} />
+          <Route path="/search" element={<AtraccionesSearchPage />} />
           <Route path="/atracciones/:id" element={<AtraccionDetail />} />
           <Route path="/autos" element={<AutosPage />} />
           <Route path="/autos/:id" element={<AutoDetail />} />
           <Route path="/admin" element={<AdminDashboard />} />
-
           {/* Modulo de Vuelos */}
           <Route path="/vuelos" element={<VuelosPage />} />
           <Route path="/vuelos/busqueda" element={<VuelosPage />} />
-
-          {/* Fase 10 · Estado de vuelo (PUBLICO, sin sesion) y webhooks.
-              El estado de vuelo vive FUERA de `/vuelos` a proposito: es el
-              unico endpoint con `security: []` del contrato, y meterlo bajo la
-              ruta del modulo de reservas haria que se leyera como parte del
-              flujo de compra, que es lo contrario de lo que es. */}
-          <Route path="/estado-vuelos" element={<EstadoVueloPage />} />
-          <Route path="/webhooks" element={<WebhooksPage />} />
           <Route path="/vuelos/reserva" element={<VuelosPage />} />
-
-          {/* Fase 8 - Listado y detalle de reservas. EL ORDEN IMPORTA: React
-              Router evalua las rutas en orden, asi que `/vuelos/reservas` tiene
-              que declararse ANTES que `/vuelos/reservas/:bookingId`. Al reves,
-              la ruta con parametro se come `/vuelos/reservas` e interpreta
-              "reservas" como si fuera un bookingId. */}
           <Route path="/vuelos/reservas" element={<MisReservasPage />} />
-          <Route
-            path="/vuelos/reservas/:bookingId"
-            element={<DetalleReservaRoute />}
-          />
+          <Route path="/vuelos/reservas/:bookingId" element={<DetalleReservaRoute />} />
+          <Route path="/mis-reservas" element={<MisReservasPage />} />
+
+          {/* Otros endpoints de vuelos */}
+          <Route path="/estado-vuelos" element={<EstadoVueloPage />} />
+          <Route path="/vuelos/estado" element={<EstadoVueloPage />} />
+          <Route path="/webhooks" element={<WebhooksPage />} />
 
           {/* Autenticacion */}
           <Route path="/login" element={<LoginPage />} />
@@ -113,7 +102,8 @@ function App() {
           {/* Paginas legales */}
           <Route path="/privacidad" element={<PrivacidadPage />} />
           <Route path="/terminos" element={<TerminosPage />} />
-
+          <Route path="/legal/privacidad" element={<PrivacidadPage />} />
+          <Route path="/legal/terminos" element={<TerminosPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
 
