@@ -12,7 +12,7 @@ export function Navbar() {
   };
 
   return (
-    <nav className="navbar" aria-label="Navegacion principal">
+    <nav className="navbar">
       <div className="navbar-inner">
         <div className="navbar-logo">
           Booking<span>.com</span>
@@ -23,6 +23,10 @@ export function Navbar() {
           <span className="nav-help">?</span>
           {user ? (
             <>
+              <span style={{ fontSize: '0.9rem', color: '#fff', marginRight: '1rem' }}>
+                {user.user_metadata?.nombre ? `¡Hola, ${user.user_metadata.nombre}!` : user.email}
+              </span>
+              <Link to="/facturas" className="navbar-btn outline" style={{textDecoration: 'none'}}>Mis Facturas</Link>
               <Link to="/mis-reservas" className="navbar-btn outline" style={{textDecoration: 'none'}}>Mis reservas</Link>
               <button className="navbar-btn solid" onClick={handleLogout}>Cerrar sesión</button>
             </>

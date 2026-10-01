@@ -7,22 +7,47 @@ import { AtraccionDetail } from './pages/AtraccionDetail';
 import { AutosPage } from './pages/AutosPage';
 import { AutoDetail } from './pages/AutoDetail';
 import { AdminDashboard } from './pages/AdminDashboard';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
+// --- Modulo de Vuelos (Fase 4: busqueda implementada) ---
+import { VuelosPage } from './pages/VuelosPage';
 import { MisReservasPage } from './pages/MisReservasPage';
 import { VuelosPage } from './pages/VuelosPage';
 import { EstadoVueloPage } from './pages/EstadoVueloPage';
 import { DetalleReservaPage } from './pages/DetalleReservaPage';
 import { FacturasPage } from './pages/FacturasPage';
 import { WebhooksPage } from './pages/WebhooksPage';
+import { FacturasPage } from './pages/FacturasPage';
+
+// --- Autenticacion: destino del logout forzado por 401 ---
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+
+// --- Componentes legales (seccion 5 del plan) ---
 import { PrivacidadPage } from './pages/PrivacidadPage';
 import { TerminosPage } from './pages/TerminosPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+
+// --- Banner global de consentimiento (Fase 2) ---
+import { BannerCookies } from './components/BannerCookies';
+
 import { AuthProvider } from './hooks/useAuth';
+
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import './index.css';
 import './vuelos.css';
+import { useParams } from 'react-router-dom';
+
+/**
+ * Puente entre la ruta y `DetalleReservaPage`.
+ *
+ * La pagina recibe `bookingId` como prop en lugar de llamar a `useParams` por
+ * dentro. Es separacion de responsabilidades: asi la pagina es testeable sin
+ * montar un Router, y este wrapper es el unico que conoce la ruta.
+ */
+function DetalleReservaRoute() {
+  const { bookingId } = useParams();
+  return <DetalleReservaPage bookingId={bookingId} />;
+}
 
 /**
  * Raiz de la aplicacion.
@@ -44,9 +69,13 @@ function App() {
 
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <div className="app-wrapper">
-          <Navbar />
+    <BrowserRouter>
+      <a className="skip-link" href="#contenido-principal">
+        Saltar al contenido
+      </a>
+
+      <div className="app-wrapper">
+        <Navbar />
         <Routes>
           <Route path="/" element={<AtraccionesPage />} />
           <Route path="/search" element={<AtraccionesSearchPage />} />
@@ -54,14 +83,27 @@ function App() {
           <Route path="/autos" element={<AutosPage />} />
           <Route path="/autos/:id" element={<AutoDetail />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          {/* Modulo de Vuelos */}
+          <Route path="/vuelos" element={<VuelosPage />} />
+          <Route path="/vuelos/busqueda" element={<VuelosPage />} />
+          <Route path="/vuelos/reserva" element={<VuelosPage />} />
+          <Route path="/vuelos/reservas" element={<MisReservasPage />} />
+          <Route path="/vuelos/reservas/:bookingId" element={<DetalleReservaRoute />} />
+          <Route path="/mis-reservas" element={<MisReservasPage />} />
+
+          {/* Otros endpoints de vuelos */}
+          <Route path="/estado-vuelos" element={<EstadoVueloPage />} />
+          <Route path="/vuelos/estado" element={<EstadoVueloPage />} />
+          <Route path="/webhooks" element={<WebhooksPage />} />
+
+          {/* Autenticacion */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/mis-reservas" element={<MisReservasPage />} />
-          <Route path="/vuelos" element={<VuelosPage />} />
-          <Route path="/vuelos/estado" element={<EstadoVueloPage />} />
-          <Route path="/vuelos/reservas/:id" element={<DetalleReservaPage />} />
           <Route path="/facturas" element={<FacturasPage />} />
-          <Route path="/webhooks" element={<WebhooksPage />} />
+
+          {/* Paginas legales */}
+          <Route path="/privacidad" element={<PrivacidadPage />} />
+          <Route path="/terminos" element={<TerminosPage />} />
           <Route path="/legal/privacidad" element={<PrivacidadPage />} />
           <Route path="/legal/terminos" element={<TerminosPage />} />
           <Route path="*" element={<NotFoundPage />} />

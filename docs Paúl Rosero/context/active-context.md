@@ -44,6 +44,15 @@ Somos un grupo de 3 estudiantes responsables de crear la plataforma central (Mar
 - **Backend:** NestJS con `AtraccionesModule` como BFF: usa `@nestjs/axios` para consumir la API externa. CORS habilitado para el frontend.
 - **Frontend:** React + Vite en `/frontend`. Diseño estilo Booking.com con Axios.
 
+## Tareas Completadas — RDA1
+1. ✅ Base de datos PostgreSQL en Supabase operativa y conectada.
+2. ✅ 8 entidades TypeORM en `src/core/entities/`.
+3. ✅ `AtraccionesModule` con `@nestjs/axios` como integrador HTTP (BFF).
+4. ✅ Swagger activo en `http://localhost:3000/api/docs`.
+5. ✅ CORS habilitado en `main.ts` para `localhost:5173`.
+6. ✅ Frontend React con buscador, filtros, tarjetas paginadas y vista detalle.
+7. ✅ Todo subido a GitHub (`semestre5grupal-ops/RDA1-Integracion-Sistemas`).
+
 ## Próximos Pasos — RDA2
 - Esperar la URL de la API real de Atracciones del compañero responsable.
 - Actualizar `ATRACCIONES_API_URL` en `.env` apuntando a esa URL real.
