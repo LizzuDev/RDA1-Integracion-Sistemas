@@ -306,6 +306,19 @@ a { text-decoration: none; color: var(--booking-blue-light); }
 .destino-top-card:nth-child(1), .destino-top-card:nth-child(2) {
   grid-column: span 1.5; /* Aproximación flex o modificar grid. Haremos 2 columnas arriba y 3 abajo */
 }
+.destino-top-card img {
+  width: 100%; height: 100%; object-fit: cover; transition: 0.3s;
+}
+.destino-top-card:hover img { transform: scale(1.05); }
+.destino-top-card::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40%;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+}
+.dt-info {
+  position: absolute; bottom: 16px; left: 16px; z-index: 2; color: #fff;
+}
+.dt-info h3 { font-size: 1.5rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+.dt-info p { font-size: 0.9rem; font-weight: 500; }
 
 /* Modificamos el grid para hacer el layout exacto de Booking */
 .destinos-top-grid {
