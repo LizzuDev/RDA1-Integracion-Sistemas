@@ -120,7 +120,6 @@ paths:
       security:
         - OAuth2Security:
           - attractions:read
-      summary: Obtener el detalle de una atracción
       parameters:
         - name: id
           in: path
@@ -674,6 +673,7 @@ components:
       required:
         - date
         - ticket_count
+        - payment_reference
         - customer_name
       properties:
         date:
@@ -683,10 +683,18 @@ components:
           type: string
         ticket_count:
           type: integer
+        payment_reference:
+          type: string
+          description: |
+            Identificador del pago emitido por la Payment API.
+            Mismo campo que usa `vuelos-openapi` y `alojamientos-openapi`.
+          example: 'pay_3NxQ1mJZqEvB'
         customer_name:
           type: string
+          description: Nombre del cliente. Si se omite se extrae del JWT (fullName).
         customer_email:
           type: string
+          description: Email del cliente. Si se omite se extrae del JWT (email).
     ReservationResponse:
       type: object
       properties:

@@ -12,7 +12,7 @@ export function Navbar() {
   };
 
   return (
-    <nav className="navbar">
+    <nav className="navbar" aria-label="Navegacion principal">
       <div className="navbar-inner">
         <div className="navbar-logo">
           Booking<span>.com</span>

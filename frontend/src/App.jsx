@@ -1,4 +1,6 @@
+import { useCallback, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+
 import { AtraccionesPage } from './pages/AtraccionesPage';
 import { AtraccionesSearchPage } from './pages/AtraccionesSearchPage';
 import { AtraccionDetail } from './pages/AtraccionDetail';
@@ -22,7 +24,24 @@ import { Footer } from './components/Footer';
 import './index.css';
 import './vuelos.css';
 
+/**
+ * Raiz de la aplicacion.
+ *
+ * ## Banner de Cookies
+ * Se monta UNA sola vez aqui, por encima de Navbar, Routes y Footer. Si se
+ * montara dentro de una ruta, dejaria de existir al navegar y volveria a
+ * aparecer en cada pantalla.
+ *
+ * ## Accesibilidad del salto de contenido
+ * El enlace "Saltar al contenido" es el primer elemento enfocable de la pagina
+ * y permite al usuario de teclado saltarse la navegacion. Solo se ve al
+ * recibir el foco, para no cargar visualmente el diseno.
+ */
 function App() {
+  // Controla la apertura del panel de preferencias desde el Footer.
+  const [preferenciasCookies, setPreferenciasCookies] = useState(false);
+  const cerrarPreferencias = useCallback(() => setPreferenciasCookies(false), []);
+
   return (
     <AuthProvider>
       <BrowserRouter>
@@ -47,8 +66,15 @@ function App() {
           <Route path="/legal/terminos" element={<TerminosPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
-        <Footer />
+
+        <Footer onAbrirPreferenciasCookies={() => setPreferenciasCookies(true)} />
       </div>
+
+      {/* Global, fuera del router visual pero dentro de la app */}
+      <BannerCookies
+        abiertoExternamente={preferenciasCookies}
+        onCerrarExterno={cerrarPreferencias}
+      />
     </BrowserRouter>
     </AuthProvider>
   );

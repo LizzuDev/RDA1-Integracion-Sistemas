@@ -37,3 +37,15 @@ lerna-debug.log*
 .env
 .env.test
 .env.production
+
+# Archivos de contexto OpenCode
+OPENCLOUD_*.md
+DB_IMPLEMENTATION_PLAN.md
+FRONTEND_IMPLEMENTATION_PLAN.md
+
+# Pruebas locales
+src/modules/*/pruebas/
+
+seed-ecuador.cjs
+
+alejo/
