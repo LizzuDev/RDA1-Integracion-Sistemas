@@ -1,9 +1,13 @@
 {
   "version": 2,
+  "buildCommand": "npm run build",
   "builds": [
     {
       "src": "api/index.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 30
+      }
     }
   ],
   "routes": [
