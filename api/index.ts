@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ValidationError,
   ValidationPipe,
+  INestApplication,
 } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Rfc7807ExceptionFilter } from '../src/core/filters/rfc7807-exception.filter';
@@ -12,9 +13,10 @@ import {
   InvalidParam,
 } from '../src/core/errors/codigo-error';
 import { HateoasInterceptor } from '../src/core/interceptors/hateoas.interceptor';
-import { INestApplication } from '@nestjs/common';
+import * as express from 'express';
 
 let app: INestApplication;
+let expressApp: express.Express;
 
 function aplanarValidacion(
   errores: ValidationError[],
@@ -42,55 +44,67 @@ function factoryDeValidacion(errores: ValidationError[]): BadRequestException {
   });
 }
 
-async function getApp(): Promise<INestApplication> {
-  if (!app) {
-    app = await NestFactory.create(AppModule, { logger: ['error', 'warn'] });
+async function bootstrap(): Promise<express.Express> {
+  if (expressApp) return expressApp;
 
-    app.enableCors({
-      origin: [
-        /^http:\/\/localhost:\d+$/,
-        /^http:\/\/127\.0\.0\.1:\d+$/,
-        /^https:\/\/.*\.vercel\.app$/,
-        /^https:\/\/.*\.onrender\.com$/,
-      ],
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
-    });
+  const server = express();
 
-    app.setGlobalPrefix('api/v1');
+  app = await NestFactory.create(AppModule, {
+    logger: ['error', 'warn', 'log'],
+  });
 
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        transform: true,
-        forbidNonWhitelisted: true,
-        exceptionFactory: factoryDeValidacion,
-      }),
-    );
+  app.enableCors({
+    origin: [
+      /^http:\/\/localhost:\d+$/,
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+      /^https:\/\/.*\.vercel\.app$/,
+      /^https:\/\/.*\.onrender\.com$/,
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
+  });
 
-    app.useGlobalFilters(new Rfc7807ExceptionFilter());
-    app.useGlobalInterceptors(new HateoasInterceptor());
+  app.setGlobalPrefix('api/v1');
 
-    const config = new DocumentBuilder()
-      .setTitle('Booking Prototipo API')
-      .setDescription(
-        'API base para los dominios de Alojamientos, Autos, Atracciones y Vuelos.',
-      )
-      .setVersion('1.0')
-      .build();
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+      exceptionFactory: factoryDeValidacion,
+    }),
+  );
 
-    const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/docs', app, document);
+  app.useGlobalFilters(new Rfc7807ExceptionFilter());
+  app.useGlobalInterceptors(new HateoasInterceptor());
 
-    await app.init();
-  }
-  return app;
+  const config = new DocumentBuilder()
+    .setTitle('Booking Prototipo API')
+    .setDescription(
+      'API base para los dominios de Alojamientos, Autos, Atracciones y Vuelos.',
+    )
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
+  await app.init();
+  expressApp = app.getHttpAdapter().getInstance();
+  return expressApp;
 }
 
 // Vercel Serverless Handler
 export default async function handler(req: any, res: any) {
-  const nestApp = await getApp();
-  const httpAdapter = nestApp.getHttpAdapter();
-  // @ts-ignore
-  httpAdapter.getInstance()(req, res);
+  try {
+    const server = await bootstrap();
+    server(req, res);
+  } catch (err) {
+    console.error('Error bootstrapping NestJS:', err);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: err?.message || 'Failed to initialize application',
+    });
+  }
 }
