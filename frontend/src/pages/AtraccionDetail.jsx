@@ -62,6 +62,20 @@ export function AtraccionDetail() {
       
       setBookingResult({ success: true, data: result });
       setShowSuccessModal(true);
+
+      const atraccionRes = {
+        id: result?.reservation_id || idempotencyKey,
+        reservation_id: result?.reservation_id || idempotencyKey,
+        tipo: 'atraccion',
+        titulo: atraccion?.nombre || atraccion?.name || `Tour / Atracción (${form.ticket_count} personas)`,
+        date: form.date,
+        time: form.time,
+        ticket_count: parseInt(form.ticket_count, 10),
+        status: 'CONFIRMED',
+        totalPrice: { currency: 'USD', total: (precio * parseInt(form.ticket_count, 10)).toFixed(2) }
+      };
+      const existing = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
+      localStorage.setItem('reservas_atracciones', JSON.stringify([atraccionRes, ...existing]));
     } catch (err) {
       setBookingResult({ 
         success: false, 

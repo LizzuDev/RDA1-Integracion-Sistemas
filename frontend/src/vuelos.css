@@ -1,4 +1,4 @@
-/* =========================================================================
+ï»¿/* =========================================================================
    ACCESIBILIDAD
    ========================================================================= */
 
@@ -32,7 +32,7 @@
 }
 
 /* =========================================================================
-   PAGINAS LEGALES — Privacidad y Terminos (Fase 1)
+   PAGINAS LEGALES â€” Privacidad y Terminos (Fase 1)
    ========================================================================= */
 
 .legal-doc {
@@ -135,7 +135,7 @@
 .legal-doc-footer a { color: var(--booking-blue); font-weight: 600; }
 
 /* =========================================================================
-   FOOTER — enlaces legales
+   FOOTER â€” enlaces legales
    ========================================================================= */
 
 .footer-links {
@@ -511,7 +511,7 @@
 }
 
 /* =========================================================================
-   DENSIDAD — Modulo de Vuelos (Fase 5, feedback de diseno)
+   DENSIDAD â€” Modulo de Vuelos (Fase 5, feedback de diseno)
    =========================================================================
    Reduce drasticamente el espacio vertical y las tipografias del formulario y
    de las tarjetas para aprovechar mejor la pantalla.
@@ -519,7 +519,7 @@
    TODO va PREFIJADO con `.main-content-vuelos` o `.vuelo-*` / `.buscador-*`,
    nunca sobre las clases globales. Asi la densidad no afecta a las paginas de
    Atracciones ni de Autos, que comparten `.card`, `.card-body`, `.main-content`
-   y `.section-title`. Un `:root` aqui habria roto la cohesión del resto.
+   y `.section-title`. Un `:root` aqui habria roto la cohesiÃ³n del resto.
    ========================================================================= */
 
 .main-content-vuelos { padding: 18px 20px 28px; }
@@ -628,13 +628,13 @@
    `npm run build` ni el detector de identificadores lo detectan: es un fallo de
    CSS, y solo se ve mirando la pagina. */
 
-/* --- Tarjetas de resultado: diseño TICKET a ancho completo --------------- */
+/* --- Tarjetas de resultado: diseÃ±o TICKET a ancho completo --------------- */
 /*
- * Reemplaza la cuadrícula de 3 columnas por una lista vertical de tickets a
- * ancho completo. Un boleto de avión real es un documento horizontal: la
- * información del vuelo se lee de izquierda a derecha y el precio queda en el
- * talón, abajo. En una tarjeta estrecha de 279px dentro de un contenedor de
- * 857px, además, sobraban dos tercios de pantalla sin usar.
+ * Reemplaza la cuadrÃ­cula de 3 columnas por una lista vertical de tickets a
+ * ancho completo. Un boleto de aviÃ³n real es un documento horizontal: la
+ * informaciÃ³n del vuelo se lee de izquierda a derecha y el precio queda en el
+ * talÃ³n, abajo. En una tarjeta estrecha de 279px dentro de un contenedor de
+ * 857px, ademÃ¡s, sobraban dos tercios de pantalla sin usar.
  *
  * `.atracciones-grid` sigue en el className porque aporta `display: grid`; solo
  * se sobrescribe `grid-template-columns` con una sola columna.
@@ -646,11 +646,11 @@
 
 /* Radio uniforme y Notorrio en las CUATRO esquinas.
  *
- * Antes el radio venía de `.card` (8px) y se recortaba con `overflow: hidden`.
- * Era uniforme, sí, pero 8px sobre una tarjeta de 220px de alto es
- * prácticamente recto: por eso la parte inferior se percibía cuadrada. Aquí se
- * suben las cuatro esquinas a 14px y se declaran de forma explícita, para que
- * ninguna anulación posterior pueda dejar solo las superiores redondeadas.
+ * Antes el radio venÃ­a de `.card` (8px) y se recortaba con `overflow: hidden`.
+ * Era uniforme, sÃ­, pero 8px sobre una tarjeta de 220px de alto es
+ * prÃ¡cticamente recto: por eso la parte inferior se percibÃ­a cuadrada. AquÃ­ se
+ * suben las cuatro esquinas a 14px y se declaran de forma explÃ­cita, para que
+ * ninguna anulaciÃ³n posterior pueda dejar solo las superiores redondeadas.
  */
 .vuelo-card {
   border-radius: 14px;
@@ -709,9 +709,9 @@
 .vuelo-card .vuelo-segmentos { grid-area: tramos; margin: 0; padding: 0; }
 .vuelo-card .vuelo-detalles { grid-area: detalles; }
 
-/* El pie es el TALÓN del ticket: franja tintada, línea de perforado y las dos
+/* El pie es el TALÃ“N del ticket: franja tintada, lÃ­nea de perforado y las dos
    muescas laterales. Es lo que convierte una tarjeta en un boleto. */
-/* El pie es el TALÓN del ticket: franja tintada y línea de perforado. */
+/* El pie es el TALÃ“N del ticket: franja tintada y lÃ­nea de perforado. */
 .vuelo-card .card-footer {
   grid-area: pie;
   position: relative;
@@ -725,20 +725,20 @@
 .vuelo-card .card-price span { font-size: .68rem; }
 .vuelo-card .card-btn { padding: 6px 16px; font-size: .8rem; }
 
-/* Muescas laterales: dos círculos del color del fondo "muerden" la tarjeta a la
+/* Muescas laterales: dos cÃ­rculos del color del fondo "muerden" la tarjeta a la
    altura del perforado. Es el detalle que convierte una tarjeta en un boleto
    recortado.
 
    Van en los pseudo-elementos del PIE, no en los de la tarjeta, y por eso el
-   alto del talón deja de importar: se anclan a `top: -6px`, o sea centrados
-   sobre su propio borde superior, que es exactamente la línea del perforado.
-   Una versión anterior los colgaba de `.vuelo-card` con `bottom: 46px` fijos, y
+   alto del talÃ³n deja de importar: se anclan a `top: -6px`, o sea centrados
+   sobre su propio borde superior, que es exactamente la lÃ­nea del perforado.
+   Una versiÃ³n anterior los colgaba de `.vuelo-card` con `bottom: 46px` fijos, y
    con una tarifa de tres condiciones el perforado se separaba de las muescas.
 
-   Se recortan solos porque `.vuelo-card` tiene `overflow: hidden`: el círculo
+   Se recortan solos porque `.vuelo-card` tiene `overflow: hidden`: el cÃ­rculo
    sobresale 6px del borde y solo se ve la mitad interior. El color es `--bg`,
-   el fondo real de la página; si algún día cambia `--bg` hay que cambiarlo aquí
-   también, y por eso se usa la variable y no un hexadecimal suelto. */
+   el fondo real de la pÃ¡gina; si algÃºn dÃ­a cambia `--bg` hay que cambiarlo aquÃ­
+   tambiÃ©n, y por eso se usa la variable y no un hexadecimal suelto. */
 .vuelo-card .card-footer::before,
 .vuelo-card .card-footer::after {
   content: "";
@@ -1163,7 +1163,7 @@
 }
 
 /* =========================================================================
-   FASE 8 · MIS RESERVAS, DETALLE Y BOARDING PASS
+   FASE 8 Â· MIS RESERVAS, DETALLE Y BOARDING PASS
    =========================================================================
    Todo pre?jado por clase propia (`migas`, `boarding-`, `tarjeta-reserva-`,
    `estado-pill`, `detalle-`). Se evita tocar `.card` y `.state-*` para no
@@ -1364,7 +1364,7 @@
 .boarding-avion { font-size: .9rem; color: var(--booking-blue-light); }
 .boarding-guion { flex: 1; height: 1px; background: var(--border); }
 
-/* Talón: separación punteada, como en un pasaje real. */
+/* TalÃ³n: separaciÃ³n punteada, como en un pasaje real. */
 .boarding-talon {
   border-top: 2px dashed var(--border);
   padding: 8px 14px;
@@ -1381,7 +1381,7 @@
 }
 
 /* =========================================================================
-   FASE 9 · POSTVENTA (check-in, equipaje, cancelacion)
+   FASE 9 Â· POSTVENTA (check-in, equipaje, cancelacion)
    =========================================================================
    Clases propias (`postventa-`, `cotizacion-`, `modal-postventa`, `btn-peligro`)
    para no arrastrar cambios a los modulos de Atracciones y Autos. */
@@ -1411,7 +1411,7 @@
 /*
  * `btn-peligro` no existia. Se define con el mismo esqueleto que `btn-secundario`
  * para que el boton destructivo tenga la misma altura y el mismo radio, y solo
- * cambie de color. Un boton de otro tamaño al lado de los otros dos del grupo
+ * cambie de color. Un boton de otro tamaÃ±o al lado de los otros dos del grupo
  * rompe la linea base de la barra.
  */
 .btn-peligro {
@@ -1487,7 +1487,7 @@
 .modal-postventa .modal-form { display: flex; flex-direction: column; gap: 12px; }
 
 /* =========================================================================
-   FASE 10 · TABLERO DE ESTADO DE VUELO Y WEBHOOKS
+   FASE 10 Â· TABLERO DE ESTADO DE VUELO Y WEBHOOKS
    =========================================================================
    Clases propias (`tablero-`, `webhooks-`). Reutiliza `--booking-blue` y
    `--radius` del tema para no crear una paleta nueva. */

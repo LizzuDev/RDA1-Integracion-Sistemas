@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseAdmin } from '../services/supabase';
+import { useAuth } from '../hooks/useAuth';
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [cedula, setCedula] = useState('');
@@ -11,6 +13,12 @@ export function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
   
   const [errors, setErrors] = useState({
     nombre: '',
@@ -99,6 +107,8 @@ export function RegisterPage() {
     if (hasError) return;
 
     setLoading(true);
+    let sessionEstablished = false;
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -107,89 +117,161 @@ export function RegisterPage() {
       }
     });
 
-    if (error) {
+    if (data?.session) {
+      sessionEstablished = true;
+    } else if (data?.user?.id) {
+      if (supabaseAdmin) {
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(data.user.id, { email_confirm: true });
+        } catch (err) {
+          console.warn('Auto confirm error:', err);
+        }
+      }
+    } else if (error && (error.status === 429 || error.message?.includes('rate limit')) && supabaseAdmin) {
+      try {
+        const adminRes = await supabaseAdmin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { nombre: nombre.trim(), apellido: apellido.trim(), cedula, telefono }
+        });
+        if (adminRes.error) {
+          setErrors(prev => ({ ...prev, general: adminRes.error.message }));
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Admin create error:', err);
+      }
+    } else if (error) {
       setErrors(prev => ({ ...prev, general: error.message }));
-    } else {
-      navigate('/', { replace: true });
+      setLoading(false);
+      return;
+    }
+
+    if (!sessionEstablished) {
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (loginData?.session) {
+        sessionEstablished = true;
+      } else if (loginError) {
+        setErrors(prev => ({ ...prev, general: loginError.message }));
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (sessionEstablished) {
+      window.location.href = '/';
     }
     setLoading(false);
   };
 
-  // Sanitizadores con detector de intentos inválidos
+  // Sanitizadores con mensajes de error en tiempo real
   const handleNombreChange = (e) => {
     const rawValue = e.target.value;
-    let val = rawValue.replace(/[^A-Za-záéíóúÁÉÍÓÚñÑ\s]/g, '');
-    val = val.replace(/^\s+/, '').replace(/\s{2,}/g, ' ');
-    
-    if (rawValue !== val) {
-      triggerFlash('nombre');
-    }
-    
-    if (val.length <= 50) {
-      setNombre(val);
+    const hasInvalid = /[^A-Za-záéíóúÁÉÍÓÚñÑ\s]/.test(rawValue);
+    const hasSpaces = /\s{2,}/.test(rawValue) || /^\s/.test(rawValue);
+
+    let val = rawValue.replace(/[^A-Za-záéíóúÁÉÍÓÚñÑ\s]/g, '').replace(/^\s+/, '').replace(/\s{2,}/g, ' ');
+
+    if (hasInvalid) {
+      setErrors(prev => ({ ...prev, nombre: 'Solo se permiten letras, sin números ni símbolos.' }));
+    } else if (hasSpaces) {
+      setErrors(prev => ({ ...prev, nombre: 'No se permiten espacios al inicio ni consecutivos.' }));
+    } else {
       setErrors(prev => ({ ...prev, nombre: '' }));
     }
+
+    if (val.length <= 50) setNombre(val);
   };
 
   const handleApellidoChange = (e) => {
     const rawValue = e.target.value;
-    let val = rawValue.replace(/[^A-Za-záéíóúÁÉÍÓÚñÑ\s]/g, '');
-    val = val.replace(/^\s+/, '').replace(/\s{2,}/g, ' ');
-    
-    if (rawValue !== val) {
-      triggerFlash('apellido');
-    }
+    const hasInvalid = /[^A-Za-záéíóúÁÉÍÓÚñÑ\s]/.test(rawValue);
+    const hasSpaces = /\s{2,}/.test(rawValue) || /^\s/.test(rawValue);
 
-    if (val.length <= 50) {
-      setApellido(val);
+    let val = rawValue.replace(/[^A-Za-záéíóúÁÉÍÓÚñÑ\s]/g, '').replace(/^\s+/, '').replace(/\s{2,}/g, ' ');
+
+    if (hasInvalid) {
+      setErrors(prev => ({ ...prev, apellido: 'Solo se permiten letras, sin números ni símbolos.' }));
+    } else if (hasSpaces) {
+      setErrors(prev => ({ ...prev, apellido: 'No se permiten espacios al inicio ni consecutivos.' }));
+    } else {
       setErrors(prev => ({ ...prev, apellido: '' }));
     }
+
+    if (val.length <= 50) setApellido(val);
   };
 
   const handleCedulaChange = (e) => {
     const rawValue = e.target.value;
+    const hasInvalid = /\D/.test(rawValue);
     const val = rawValue.replace(/\D/g, '');
-    
-    if (rawValue !== val) {
-      triggerFlash('cedula');
+
+    if (hasInvalid) {
+      setErrors(prev => ({ ...prev, cedula: 'La cédula solo puede contener números.' }));
+    } else {
+      setErrors(prev => ({ ...prev, cedula: '' }));
     }
 
     if (val.length <= 10) {
       setCedula(val);
-      setErrors(prev => ({ ...prev, cedula: '' }));
+      if (val.length === 10 && !validarCedulaEcuatoriana(val)) {
+        setErrors(prev => ({ ...prev, cedula: 'La cédula ingresada no es válida (Módulo 10).' }));
+      }
     }
   };
 
   const handleTelefonoChange = (e) => {
     const rawValue = e.target.value;
+    const hasInvalid = /\D/.test(rawValue);
     const val = rawValue.replace(/\D/g, '');
-    
-    if (rawValue !== val) {
-      triggerFlash('telefono');
-    }
 
-    if (val.length <= 15) {
-      setTelefono(val);
+    if (hasInvalid) {
+      setErrors(prev => ({ ...prev, telefono: 'El teléfono solo puede contener números.' }));
+    } else {
       setErrors(prev => ({ ...prev, telefono: '' }));
     }
+
+    if (val.length <= 15) setTelefono(val);
   };
 
   const handleEmailChange = (e) => {
-    setEmail(e.target.value);
-    setErrors(prev => ({ ...prev, email: '' }));
+    const rawValue = e.target.value;
+    const hasSpaces = /\s/.test(rawValue);
+    const val = rawValue.replace(/\s/g, '');
+
+    if (hasSpaces) {
+      setErrors(prev => ({ ...prev, email: 'El correo no puede contener espacios.' }));
+    } else {
+      setErrors(prev => ({ ...prev, email: '' }));
+    }
+    setEmail(val);
   };
 
   const handlePasswordChange = (e) => {
-    setPassword(e.target.value);
-    setErrors(prev => ({ ...prev, password: '' }));
+    const rawValue = e.target.value;
+    const hasSpaces = /\s/.test(rawValue);
+    const val = rawValue.replace(/\s/g, '');
+
+    if (hasSpaces) {
+      setErrors(prev => ({ ...prev, password: 'La contraseña no puede contener espacios.' }));
+    } else {
+      setErrors(prev => ({ ...prev, password: '' }));
+    }
+    setPassword(val);
   };
 
-  const inputStyle = (errorField, isFlashing) => ({
+  const inputStyle = (errorField) => ({
     width: '100%', 
     padding: '0.75rem', 
     borderRadius: '4px', 
-    border: errorField || isFlashing ? '2px solid #d93025' : '1px solid #ccc',
-    backgroundColor: errorField || isFlashing ? '#fce8e6' : '#fff', // Fondo rojo si hay error o intento inválido
+    border: errorField ? '2px solid #d93025' : '1px solid #ccc',
+    backgroundColor: errorField ? '#fce8e6' : '#fff', // Fondo rojo si hay error
     outline: 'none',
     transition: 'background-color 0.2s, border-color 0.2s'
   });
@@ -213,7 +295,7 @@ export function RegisterPage() {
               value={nombre} 
               onChange={handleNombreChange}
               placeholder="Ej. Juan"
-              style={inputStyle(errors.nombre, invalidFlash.nombre)}
+              style={inputStyle(errors.nombre)}
             />
             {errors.nombre && <div style={errorMsgStyle}>{errors.nombre}</div>}
           </div>
@@ -226,7 +308,7 @@ export function RegisterPage() {
               value={apellido} 
               onChange={handleApellidoChange}
               placeholder="Ej. Pérez"
-              style={inputStyle(errors.apellido, invalidFlash.apellido)}
+              style={inputStyle(errors.apellido)}
             />
             {errors.apellido && <div style={errorMsgStyle}>{errors.apellido}</div>}
           </div>
@@ -239,7 +321,7 @@ export function RegisterPage() {
               value={cedula} 
               onChange={handleCedulaChange}
               placeholder="10 dígitos"
-              style={inputStyle(errors.cedula, invalidFlash.cedula)}
+              style={inputStyle(errors.cedula)}
             />
             {errors.cedula && <div style={errorMsgStyle}>{errors.cedula}</div>}
           </div>
@@ -252,7 +334,7 @@ export function RegisterPage() {
               value={telefono} 
               onChange={handleTelefonoChange}
               placeholder="Ej. 0912345678"
-              style={inputStyle(errors.telefono, invalidFlash.telefono)}
+              style={inputStyle(errors.telefono)}
             />
             {errors.telefono && <div style={errorMsgStyle}>{errors.telefono}</div>}
           </div>
@@ -265,7 +347,7 @@ export function RegisterPage() {
               value={email} 
               onChange={handleEmailChange}
               placeholder="ejemplo@correo.com"
-              style={inputStyle(errors.email, false)}
+              style={inputStyle(errors.email)}
             />
             {errors.email && <div style={errorMsgStyle}>{errors.email}</div>}
           </div>
@@ -278,7 +360,7 @@ export function RegisterPage() {
               value={password} 
               onChange={handlePasswordChange}
               placeholder="Crea una contraseña segura"
-              style={{ ...inputStyle(errors.password, false), marginBottom: '8px' }}
+              style={{ ...inputStyle(errors.password), marginBottom: '8px' }}
             />
             <div style={{ fontSize: '0.75rem', color: '#555', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: reqLength ? '#1e8e3e' : '#777' }}>{reqLength ? '✓' : '○'} Al menos 8 caracteres</span>

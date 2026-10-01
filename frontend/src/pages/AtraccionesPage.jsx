@@ -6,20 +6,30 @@ import 'react-datepicker/dist/react-datepicker.css';
 
 // Datos Mock para Destinos Top en Ecuador
 const DESTINOS_TOP = [
-  { id: 1, nombre: 'Quito', cosas: '245 cosas que hacer', img: 'https://images.unsplash.com/photo-1583526569145-31a3194beeb6?q=80&w=800&auto=format&fit=crop' },
-  { id: 2, nombre: 'Guayaquil', cosas: '128 cosas que hacer', img: 'https://images.unsplash.com/photo-1620302302388-3481232eb1e4?q=80&w=800&auto=format&fit=crop' },
-  { id: 3, nombre: 'Cuenca', cosas: '184 cosas que hacer', img: 'https://images.unsplash.com/photo-1618331766620-30fc719e7280?q=80&w=800&auto=format&fit=crop' },
-  { id: 4, nombre: 'Baños', cosas: '312 cosas que hacer', img: 'https://images.unsplash.com/photo-1583526568856-11b0589fc0c4?q=80&w=800&auto=format&fit=crop' },
-  { id: 5, nombre: 'Galápagos', cosas: '89 cosas que hacer', img: 'https://images.unsplash.com/photo-1581404091630-f4b6fa754eb2?q=80&w=800&auto=format&fit=crop' }
+  { id: 1, nombre: 'Quito', cosas: '245 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Quito_skyline_2.jpg/800px-Quito_skyline_2.jpg' },
+  { id: 2, nombre: 'Guayaquil', cosas: '128 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Guayaquil_Centro_Navidad.jpg/800px-Guayaquil_Centro_Navidad.jpg' },
+  { id: 3, nombre: 'Cuenca', cosas: '184 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg/800px-Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg' },
+  { id: 4, nombre: 'Baños', cosas: '312 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Banos_-_Ecuador_%288346618456%29.jpg/800px-Banos_-_Ecuador_%288346618456%29.jpg' },
+  { id: 5, nombre: 'Galápagos', cosas: '89 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg/800px-Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg' }
 ];
 
 const EXPLORA_TABS = ['Pichincha', 'Guayas', 'Azuay', 'Tungurahua', 'Manabí', 'Imbabura', 'Galápagos'];
 const EXPLORA_DESTINOS = [
-  { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://images.unsplash.com/photo-1596401057633-54a8fe8ef647?q=80&w=400&auto=format&fit=crop' },
-  { nombre: 'Mindo', cosas: '78 cosas que hacer', img: 'https://images.unsplash.com/photo-1621508215684-25e227092329?q=80&w=400&auto=format&fit=crop' },
-  { nombre: 'Sangolquí', cosas: '12 cosas que hacer', img: 'https://images.unsplash.com/photo-1596401057633-54a8fe8ef647?q=80&w=400&auto=format&fit=crop' },
-  { nombre: 'Machachi', cosas: '24 cosas que hacer', img: 'https://images.unsplash.com/photo-1621508215684-25e227092329?q=80&w=400&auto=format&fit=crop' },
+  { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Mitaddelmundo.jpg/800px-Mitaddelmundo.jpg' },
+  { nombre: 'Mindo', cosas: '78 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Mindo_Cloud_Forest_01.jpg/800px-Mindo_Cloud_Forest_01.jpg' },
+  { nombre: 'Sangolquí', cosas: '12 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Sangolqu%C3%AD_-_Ecuador.jpg/800px-Sangolqu%C3%AD_-_Ecuador.jpg' },
+  { nombre: 'Machachi', cosas: '24 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Volc%C3%A1n_Coraz%C3%B3n.jpg/800px-Volc%C3%A1n_Coraz%C3%B3n.jpg' },
 ];
+
+const ECUADOR_IMAGES = [
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Quito_skyline_2.jpg/800px-Quito_skyline_2.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Guayaquil_Centro_Navidad.jpg/800px-Guayaquil_Centro_Navidad.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg/800px-Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Banos_-_Ecuador_%288346618456%29.jpg/800px-Banos_-_Ecuador_%288346618456%29.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg/800px-Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Mitaddelmundo.jpg/800px-Mitaddelmundo.jpg'
+];
+const getEcuadorImage = (idx) => ECUADOR_IMAGES[idx % ECUADOR_IMAGES.length];
 
 export function AtraccionesPage() {
   const navigate = useNavigate();
@@ -128,10 +138,15 @@ export function AtraccionesPage() {
           
           <div className="atracciones-horizontal-scroll">
             {atraccionesFiltradas.slice(0, 5).map((atraccion, idx) => (
-              <div key={atraccion.id} className="atraccion-scroll-card">
+              <div 
+                key={atraccion.id} 
+                className="atraccion-scroll-card"
+                onClick={() => navigate(`/atracciones/${atraccion.id}`)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="asc-img-wrapper">
                   <span className="asc-badge">#{idx + 1} Más vendido</span>
-                  <img src={atraccion.image_url || `https://picsum.photos/seed/${atraccion.id}/400/500`} alt={atraccion.nombre} />
+                  <img src={getEcuadorImage(idx)} alt={atraccion.nombre} />
                 </div>
                 <div className="asc-info">
                   <h3 className="asc-title">{atraccion.nombre || atraccion.name || atraccion.title}</h3>
@@ -150,7 +165,12 @@ export function AtraccionesPage() {
           <h2 className="section-title">Destinos top en Ecuador</h2>
           <div className="destinos-top-grid">
             {DESTINOS_TOP.map((destino, idx) => (
-              <div key={destino.id} className={`destino-top-card ${idx < 2 ? 'large' : ''}`}>
+              <div 
+                key={destino.id} 
+                className={`destino-top-card ${idx < 2 ? 'large' : ''}`}
+                onClick={() => navigate(`/atracciones/${destino.id}`)}
+                style={{ cursor: 'pointer' }}
+              >
                 <img src={destino.img} alt={destino.nombre} />
                 <div className="dt-info">
                   <h3>{destino.nombre}</h3>
@@ -226,7 +246,12 @@ export function AtraccionesPage() {
           
           <div className="explora-grid">
             {EXPLORA_DESTINOS.map((dest, idx) => (
-              <div key={idx} className="explora-card">
+              <div 
+                key={idx} 
+                className="explora-card"
+                onClick={() => navigate(`/atracciones/${idx + 1}`)}
+                style={{ cursor: 'pointer' }}
+              >
                 <img src={dest.img} alt={dest.nombre} />
                 <div className="ex-info">
                   <h4>{dest.nombre}</h4>
