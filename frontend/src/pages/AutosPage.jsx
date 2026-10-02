@@ -8,7 +8,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 export function AutosPage() {
   const navigate = useNavigate();
   const [autos, setAutos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
   // Search form state
@@ -37,9 +37,11 @@ export function AutosPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const timeOptions = [];
+  for(let i=0; i<24; i++) {
+    const h = i.toString().padStart(2, '0');
+    timeOptions.push(`${h}:00`, `${h}:30`);
+  }
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -72,70 +74,70 @@ export function AutosPage() {
             <div style={{ background: '#febb02', padding: '4px', borderRadius: '4px', display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
               
               {/* Pickup Location */}
-              <div style={{ flex: '1.5', minWidth: '300px', background: 'white', display: 'flex', alignItems: 'center', padding: '4px 12px', borderRadius: '2px', height: '52px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#666', marginRight: '10px' }}>🔍</span>
+              <div style={{ flex: '1.5', minWidth: '300px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px', border: '3px solid transparent', transition: 'border 0.2s', outline: 'none' }} onFocus={(e) => e.currentTarget.style.border = '3px solid #febb02'} onBlur={(e) => e.currentTarget.style.border = '3px solid transparent'}>
+                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🚗</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#333', fontWeight: 'bold' }}>Lugar de recogida</span>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Lugar de recogida</span>
                   <input
                     type="text"
                     placeholder="Aeropuerto, ciudad o estación"
                     value={pickupLocation}
                     onChange={(e) => setPickupLocation(e.target.value)}
-                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.9rem', color: '#333' }}
+                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
                   />
                 </div>
               </div>
               
               {/* Pickup Date */}
-              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '4px 12px', borderRadius: '2px', height: '52px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#666', marginRight: '10px' }}>📅</span>
+              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px' }}>
+                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>📅</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#333', fontWeight: 'bold' }}>Fecha de recogida</span>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Fecha de recogida</span>
                   <DatePicker
                     selected={startDate}
                     onChange={(date) => setDateRange([date, endDate])}
                     placeholderText="sáb 3 de oct"
                     dateFormat="EEE d 'de' MMM"
                     className="custom-date-picker-input"
-                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.9rem' }}
+                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
                   />
                 </div>
               </div>
 
               {/* Pickup Time */}
-              <div style={{ flex: '0.8', minWidth: '120px', background: 'white', display: 'flex', alignItems: 'center', padding: '4px 12px', borderRadius: '2px', height: '52px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#666', marginRight: '10px' }}>🕒</span>
+              <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px' }}>
+                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#333', fontWeight: 'bold' }}>Hora</span>
-                  <select style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.9rem', color: '#333', width: '100%' }}>
-                    <option>10:00 a.m.</option>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Hora</span>
+                  <select style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
+                    {timeOptions.map(t => <option key={`pickup-${t}`} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
               
               {/* Dropoff Date */}
-              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '4px 12px', borderRadius: '2px', height: '52px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#666', marginRight: '10px' }}>📅</span>
+              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px' }}>
+                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>📅</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#333', fontWeight: 'bold' }}>Fecha de devolución</span>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Fecha de devolución</span>
                   <DatePicker
                     selected={endDate}
                     onChange={(date) => setDateRange([startDate, date])}
                     placeholderText="mar 6 de oct"
                     dateFormat="EEE d 'de' MMM"
                     className="custom-date-picker-input"
-                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.9rem' }}
+                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
                   />
                 </div>
               </div>
 
               {/* Dropoff Time */}
-              <div style={{ flex: '0.8', minWidth: '120px', background: 'white', display: 'flex', alignItems: 'center', padding: '4px 12px', borderRadius: '2px', height: '52px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#666', marginRight: '10px' }}>🕒</span>
+              <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px' }}>
+                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#333', fontWeight: 'bold' }}>Hora</span>
-                  <select style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.9rem', color: '#333', width: '100%' }}>
-                    <option>10:00 a.m.</option>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Hora</span>
+                  <select style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
+                    {timeOptions.map(t => <option key={`dropoff-${t}`} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
