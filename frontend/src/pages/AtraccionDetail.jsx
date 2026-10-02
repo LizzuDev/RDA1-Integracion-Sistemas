@@ -333,8 +333,8 @@ export function AtraccionDetail() {
                 <div className="ticket-radio active">
                   <input type="radio" checked readOnly />
                   <div>
-                    <strong>Grupo (máx. 10 personas)</strong><br/>
-                    <span className="muted">US${precio}</span>
+                    <strong>Boletos ({form.ticket_count} personas)</strong><br/>
+                    <span className="muted">US${(precio * form.ticket_count).toFixed(2)} subtotal</span>
                   </div>
                 </div>
 
