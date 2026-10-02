@@ -137,17 +137,7 @@ export function RegisterPage() {
       }
     });
 
-    if (data?.session) {
-      sessionEstablished = true;
-    } else if (data?.user?.id) {
-      if (supabaseAdmin) {
-        try {
-          await supabaseAdmin.auth.admin.updateUserById(data.user.id, { email_confirm: true });
-        } catch (err) {
-          console.warn('Auto confirm error:', err);
-        }
-      }
-    } else if (error && (error.status === 429 || error.message?.includes('rate limit')) && supabaseAdmin) {
+    if (error && (error.status === 429 || error.message?.includes('rate limit')) && supabaseAdmin) {
       try {
         const adminRes = await supabaseAdmin.auth.admin.createUser({
           email,
@@ -167,6 +157,9 @@ export function RegisterPage() {
           setErrors(prev => ({ ...prev, general: errorMsg }));
           setLoading(false);
           return;
+        } else {
+          // Creación exitosa por admin
+          sessionEstablished = true; // fingimos sesión para redirigir, o intentamos login real abajo
         }
       } catch (err) {
         setErrors(prev => ({ ...prev, general: 'Error del servidor al registrar usuario administrador.' }));
@@ -187,22 +180,46 @@ export function RegisterPage() {
       return;
     }
 
-    if (!sessionEstablished) {
-      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (loginData?.session) {
-        sessionEstablished = true;
-      } else if (loginError) {
-        if (loginError.message.includes('Invalid login credentials')) {
-          setErrors(prev => ({ ...prev, general: 'El correo ya está registrado. Por favor, inicia sesión con tu contraseña original.' }));
-        } else {
-          setErrors(prev => ({ ...prev, general: loginError.message }));
-        }
+    // Si llegamos aquí sin error en signUp, revisamos la data retornada:
+    if (data?.user) {
+      // Detección de cuenta falsa por ofuscación de Supabase (correo ya existía)
+      if (data.user.identities && data.user.identities.length === 0) {
+        setErrors(prev => ({ ...prev, general: 'Este correo electrónico ya se encuentra registrado. Usa uno diferente o inicia sesión.' }));
         setLoading(false);
         return;
+      }
+    }
+
+    if (data?.session) {
+      sessionEstablished = true;
+    } else if (data?.user?.id) {
+      // El usuario se creó pero NO hay sesión (requiere confirmar correo)
+      if (supabaseAdmin) {
+        try {
+          // Intentamos auto-confirmarlo si tenemos la llave admin
+          await supabaseAdmin.auth.admin.updateUserById(data.user.id, { email_confirm: true });
+          const { data: loginData } = await supabase.auth.signInWithPassword({ email, password });
+          if (loginData?.session) {
+            sessionEstablished = true;
+          }
+        } catch (err) {
+          console.warn('Auto confirm error:', err);
+        }
+      } 
+      
+      if (!sessionEstablished) {
+        // Mostrar mensaje verde de éxito pidiendo confirmación de correo
+        setErrors(prev => ({ ...prev, general: '¡Registro exitoso! Por seguridad, revisa tu correo electrónico para confirmar tu cuenta y luego inicia sesión.' }));
+        // Opcionalmente podríamos vaciar el formulario aquí para dar feedback de éxito
+        setNombre('');
+        setApellido('');
+        setCedula('');
+        setTelefono('');
+        setEmail('');
+        setPassword('');
+        localStorage.removeItem('register_form');
+        setLoading(false);
+        return; // Terminamos aquí sin redirigir, ya que debe confirmar
       }
     }
 
