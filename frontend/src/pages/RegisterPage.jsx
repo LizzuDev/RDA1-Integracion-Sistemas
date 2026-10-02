@@ -93,7 +93,7 @@ export function RegisterPage() {
       hasError = true;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email) || email.length > 60) {
+    if (!emailRegex.test(email) || email.length > 30) {
       newErrors.email = 'Por favor ingresa un correo electrónico válido.';
       hasError = true;
     }
@@ -262,7 +262,7 @@ export function RegisterPage() {
       setErrors(prev => ({ ...prev, email: '' }));
     }
     
-    if (val.length <= 60) setEmail(val);
+    if (val.length <= 30) setEmail(val);
   };
 
   const handlePasswordChange = (e) => {
@@ -357,7 +357,7 @@ export function RegisterPage() {
             <input 
               type="email" 
               required 
-              maxLength={60}
+              maxLength={30}
               value={email} 
               onChange={handleEmailChange}
               placeholder="ejemplo@correo.com"
