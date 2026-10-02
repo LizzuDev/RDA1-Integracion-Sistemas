@@ -156,15 +156,33 @@ export function RegisterPage() {
           user_metadata: { nombre: nombre.trim(), apellido: apellido.trim(), cedula, telefono }
         });
         if (adminRes.error) {
-          setErrors(prev => ({ ...prev, general: adminRes.error.message }));
+          let errorMsg = adminRes.error.message;
+          if (errorMsg.toLowerCase().includes('already registered') || errorMsg.toLowerCase().includes('already exists')) {
+             errorMsg = 'Este correo electrónico ya se encuentra registrado. Debes usar un correo diferente.';
+          } else if (adminRes.error.status === 429) {
+             errorMsg = 'Demasiados intentos de registro desde tu conexión. Por favor, espera unos minutos e intenta de nuevo.';
+          } else if (adminRes.error.status === 400) {
+             errorMsg = 'El correo ingresado ya existe o es inválido. Prueba con un correo diferente.';
+          }
+          setErrors(prev => ({ ...prev, general: errorMsg }));
           setLoading(false);
           return;
         }
       } catch (err) {
-        console.error('Admin create error:', err);
+        setErrors(prev => ({ ...prev, general: 'Error del servidor al registrar usuario administrador.' }));
+        setLoading(false);
+        return;
       }
     } else if (error) {
-      setErrors(prev => ({ ...prev, general: error.message }));
+      let errorMsg = error.message;
+      if (errorMsg.toLowerCase().includes('already registered')) {
+        errorMsg = 'Este correo electrónico ya se encuentra registrado. Debes usar un correo diferente para crear una cuenta nueva.';
+      } else if (error.status === 429 || errorMsg.toLowerCase().includes('rate limit')) {
+        errorMsg = 'Has intentado registrarte demasiadas veces (límite de seguridad). Espera una hora o intenta con otro correo.';
+      } else if (error.status === 400) {
+        errorMsg = 'Solicitud inválida. Es probable que este correo ya esté en uso o tenga un formato bloqueado. Prueba con otro correo.';
+      }
+      setErrors(prev => ({ ...prev, general: errorMsg }));
       setLoading(false);
       return;
     }
