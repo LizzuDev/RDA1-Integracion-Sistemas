@@ -6,28 +6,28 @@ import 'react-datepicker/dist/react-datepicker.css';
 
 // Datos Mock para Destinos Top en Ecuador
 const DESTINOS_TOP = [
-  { id: 1, nombre: 'Quito', cosas: '245 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Quito_skyline_2.jpg/800px-Quito_skyline_2.jpg' },
-  { id: 2, nombre: 'Guayaquil', cosas: '128 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Guayaquil_Centro_Navidad.jpg/800px-Guayaquil_Centro_Navidad.jpg' },
-  { id: 3, nombre: 'Cuenca', cosas: '184 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg/800px-Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg' },
-  { id: 4, nombre: 'Baños', cosas: '312 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Banos_-_Ecuador_%288346618456%29.jpg/800px-Banos_-_Ecuador_%288346618456%29.jpg' },
-  { id: 5, nombre: 'Galápagos', cosas: '89 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg/800px-Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg' }
+  { id: 1, nombre: 'Quito', cosas: '245 cosas que hacer', img: 'https://picsum.photos/id/28/800/600' },
+  { id: 2, nombre: 'Guayaquil', cosas: '128 cosas que hacer', img: 'https://picsum.photos/id/29/800/600' },
+  { id: 3, nombre: 'Cuenca', cosas: '184 cosas que hacer', img: 'https://picsum.photos/id/38/800/600' },
+  { id: 4, nombre: 'Baños', cosas: '312 cosas que hacer', img: 'https://picsum.photos/id/49/800/600' },
+  { id: 5, nombre: 'Galápagos', cosas: '89 cosas que hacer', img: 'https://picsum.photos/id/58/800/600' }
 ];
 
 const EXPLORA_TABS = ['Pichincha', 'Guayas', 'Azuay', 'Tungurahua', 'Manabí', 'Imbabura', 'Galápagos'];
 const EXPLORA_DESTINOS = [
-  { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Mitaddelmundo.jpg/800px-Mitaddelmundo.jpg' },
-  { nombre: 'Mindo', cosas: '78 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Mindo_Cloud_Forest_01.jpg/800px-Mindo_Cloud_Forest_01.jpg' },
-  { nombre: 'Sangolquí', cosas: '12 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Sangolqu%C3%AD_-_Ecuador.jpg/800px-Sangolqu%C3%AD_-_Ecuador.jpg' },
-  { nombre: 'Machachi', cosas: '24 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Volc%C3%A1n_Coraz%C3%B3n.jpg/800px-Volc%C3%A1n_Coraz%C3%B3n.jpg' },
+  { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://picsum.photos/id/111/800/600' },
+  { nombre: 'Mindo', cosas: '78 cosas que hacer', img: 'https://picsum.photos/id/112/800/600' },
+  { nombre: 'Sangolquí', cosas: '12 cosas que hacer', img: 'https://picsum.photos/id/113/800/600' },
+  { nombre: 'Machachi', cosas: '24 cosas que hacer', img: 'https://picsum.photos/id/114/800/600' },
 ];
 
 const ECUADOR_IMAGES = [
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Quito_skyline_2.jpg/800px-Quito_skyline_2.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Guayaquil_Centro_Navidad.jpg/800px-Guayaquil_Centro_Navidad.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg/800px-Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Banos_-_Ecuador_%288346618456%29.jpg/800px-Banos_-_Ecuador_%288346618456%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg/800px-Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Mitaddelmundo.jpg/800px-Mitaddelmundo.jpg'
+  'https://picsum.photos/id/28/800/600',
+  'https://picsum.photos/id/29/800/600',
+  'https://picsum.photos/id/38/800/600',
+  'https://picsum.photos/id/49/800/600',
+  'https://picsum.photos/id/58/800/600',
+  'https://picsum.photos/id/111/800/600'
 ];
 const getEcuadorImage = (idx) => ECUADOR_IMAGES[idx % ECUADOR_IMAGES.length];
 

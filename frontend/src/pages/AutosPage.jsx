@@ -49,14 +49,14 @@ export function AutosPage() {
   };
 
   const marcasPopulares = [
-    { nombre: 'Europcar', img: 'https://logo.clearbit.com/europcar.com' },
-    { nombre: 'Alamo', img: 'https://logo.clearbit.com/alamo.com' },
-    { nombre: 'Localiza', img: 'https://logo.clearbit.com/localiza.com' },
-    { nombre: 'Keddy By Europcar', img: 'https://logo.clearbit.com/europcar.com' },
-    { nombre: 'Goldcar', img: 'https://logo.clearbit.com/goldcar.es' },
-    { nombre: 'Sixt', img: 'https://logo.clearbit.com/sixt.com' },
-    { nombre: 'Avis', img: 'https://logo.clearbit.com/avis.com' },
-    { nombre: 'Budget', img: 'https://logo.clearbit.com/budget.com' }
+    { nombre: 'Europcar', img: 'https://picsum.photos/id/1/100/40' },
+    { nombre: 'Alamo', img: 'https://picsum.photos/id/2/100/40' },
+    { nombre: 'Localiza', img: 'https://picsum.photos/id/3/100/40' },
+    { nombre: 'Keddy By Europcar', img: 'https://picsum.photos/id/4/100/40' },
+    { nombre: 'Goldcar', img: 'https://picsum.photos/id/5/100/40' },
+    { nombre: 'Sixt', img: 'https://picsum.photos/id/6/100/40' },
+    { nombre: 'Avis', img: 'https://picsum.photos/id/7/100/40' },
+    { nombre: 'Budget', img: 'https://picsum.photos/id/8/100/40' }
   ];
 
   return (
