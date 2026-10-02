@@ -69,6 +69,62 @@ export function AutosPage() {
     { nombre: 'Budget', bg: 'white', color: '#002244', label: 'Budget' }
   ];
 
+  const marcasLoading = [
+    { nombre: 'Alamo', bg: '#00266b', color: '#ffb700', label: 'Alamo' },
+    { nombre: 'Europcar', bg: '#00843D', color: 'white', label: 'Europcar' },
+    { nombre: 'Enterprise', bg: '#004a32', color: 'white', label: 'enterprise' },
+    { nombre: 'Dollar', bg: 'white', color: '#de002a', label: 'dollar.' },
+    { nombre: 'Budget', bg: 'white', color: '#002244', label: 'Budget' },
+    { nombre: 'Avis', bg: 'white', color: '#d40000', label: 'AVIS' },
+    { nombre: 'Sixt', bg: '#ff5f00', color: '#000', label: 'SIXT' },
+    { nombre: 'Hertz', bg: '#fdd306', color: '#000', label: 'Hertz' },
+    { nombre: 'Record go', bg: '#e50000', color: 'white', label: 'record go' },
+    { nombre: 'Thrifty', bg: 'white', color: '#005b9b', label: 'Thrifty' },
+    { nombre: 'Green Motion', bg: 'white', color: '#88c63f', label: 'green motion' },
+    { nombre: 'Keddy', bg: '#6a1b9a', color: 'white', label: 'keddy' }
+  ];
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '100px 20px', minHeight: '80vh', background: 'white' }}>
+        <h2 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#333', marginBottom: '40px', textAlign: 'center' }}>Buscando las mejores ofertas entre cientos de marcas</h2>
+        
+        {/* Progress bar */}
+        <div style={{ width: '100%', maxWidth: '800px', height: '8px', background: '#f0f0f0', borderRadius: '4px', marginBottom: '60px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', background: '#006ce4', width: '40%', animation: 'loading-slide 1.5s infinite ease-in-out' }}></div>
+        </div>
+
+        {/* Logos Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '20px', maxWidth: '800px', marginBottom: '80px' }}>
+            {marcasLoading.map((marca, i) => (
+              <div key={`load-${i}`} style={{ width: '110px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: marca.bg, color: marca.color, fontWeight: '900', borderRadius: '4px', fontSize: '1rem', border: '1px solid #e7e7e7', letterSpacing: '-0.5px' }}>
+                 {marca.label}
+              </div>
+            ))}
+        </div>
+
+        {/* Bottom indicator */}
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          <img src="https://cf.bstatic.com/static/img/cars/icons/car_icon/d261ad47db337611bdcb4914da6b553c3eefbba5.png" alt="car" style={{ height: '40px', objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+          <span style={{ fontSize: '2.5rem', display: 'none' }}>🚙</span>
+          <div>
+            <h4 style={{ fontWeight: 'bold', color: '#333', margin: 0, fontSize: '1.1rem' }}>Coches de todos los tamaños</h4>
+            <p style={{ color: '#666', margin: 0, fontSize: '1rem' }}>para todo tipo de viajes</p>
+          </div>
+        </div>
+
+        <style>
+          {`
+            @keyframes loading-slide {
+              0% { left: -40%; }
+              100% { left: 100%; }
+            }
+          `}
+        </style>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* HEADER HERO ESTILO BOOKING */}
@@ -345,14 +401,7 @@ export function AutosPage() {
 
         <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', fontWeight: 'bold' }}>Vehículos Recomendados</h2>
 
-        {loading && (
-          <div className="state-container" style={{ textAlign: 'center', padding: '40px 0' }}>
-            <div className="spinner" style={{ margin: '0 auto' }} />
-            <p className="state-title" style={{ marginTop: '10px' }}>Buscando autos...</p>
-          </div>
-        )}
-
-        {!loading && error && (
+        {error && (
           <div className="state-container" style={{ textAlign: 'center', padding: '40px 0' }}>
             <div className="error-icon" style={{ fontSize: '2rem' }}>⚠️</div>
             <p className="state-subtitle">{error}</p>
@@ -360,13 +409,13 @@ export function AutosPage() {
           </div>
         )}
 
-        {!loading && !error && autos.length === 0 && (
+        {!error && autos.length === 0 && (
           <div className="state-container" style={{ textAlign: 'center', padding: '40px 0' }}>
             <p className="state-title">No hay autos disponibles para tu búsqueda</p>
           </div>
         )}
 
-        {!loading && !error && autos.length > 0 && (
+        {!error && autos.length > 0 && (
           <div className="atracciones-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
             {autos.map((a, i) => (
               <AutoCard key={a.vehicle_id || i} auto={a} />
