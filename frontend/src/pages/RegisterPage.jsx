@@ -88,16 +88,16 @@ export function RegisterPage() {
       newErrors.cedula = 'La cédula es inválida (verifique los 10 dígitos).';
       hasError = true;
     }
-    if (telefono.length < 9) {
-      newErrors.telefono = 'El teléfono debe tener al menos 9 dígitos.';
+    if (telefono.length < 10 || !telefono.startsWith('09') || /^09(\d)\1{7}$/.test(telefono)) {
+      newErrors.telefono = 'El celular debe ser válido (10 dígitos, iniciar con 09).';
       hasError = true;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(email) || email.length > 60) {
       newErrors.email = 'Por favor ingresa un correo electrónico válido.';
       hasError = true;
     }
-    if (!reqLength || !reqUpper || !reqLower || !reqNumber || !reqSpecial) {
+    if (!reqLength || !reqUpper || !reqLower || !reqNumber || !reqSpecial || password.length > 30) {
       newErrors.password = 'La contraseña no cumple con los requisitos de seguridad.';
       hasError = true;
     }
@@ -237,20 +237,32 @@ export function RegisterPage() {
       setErrors(prev => ({ ...prev, telefono: '' }));
     }
 
-    if (val.length <= 15) setTelefono(val);
+    if (val.length <= 10) {
+      setTelefono(val);
+      if (val.length === 10) {
+        if (!val.startsWith('09')) {
+          setErrors(prev => ({ ...prev, telefono: 'El celular debe iniciar con 09.' }));
+        } else if (/^09(\d)\1{7}$/.test(val)) {
+          setErrors(prev => ({ ...prev, telefono: 'Número de celular inválido (dígitos repetidos).' }));
+        }
+      } else if (val.length > 0 && !val.startsWith('0')) {
+        setErrors(prev => ({ ...prev, telefono: 'El celular debe iniciar con 09.' }));
+      }
+    }
   };
 
   const handleEmailChange = (e) => {
     const rawValue = e.target.value;
-    const hasSpaces = /\s/.test(rawValue);
-    const val = rawValue.replace(/\s/g, '');
+    const hasInvalid = /[^a-zA-Z0-9.@_-]/.test(rawValue);
+    const val = rawValue.replace(/[^a-zA-Z0-9.@_-]/g, '');
 
-    if (hasSpaces) {
-      setErrors(prev => ({ ...prev, email: 'El correo no puede contener espacios.' }));
+    if (hasInvalid) {
+      setErrors(prev => ({ ...prev, email: 'Caracteres inválidos para correo electrónico.' }));
     } else {
       setErrors(prev => ({ ...prev, email: '' }));
     }
-    setEmail(val);
+    
+    if (val.length <= 60) setEmail(val);
   };
 
   const handlePasswordChange = (e) => {
@@ -331,6 +343,7 @@ export function RegisterPage() {
             <input 
               type="tel" 
               required 
+              maxLength={10}
               value={telefono} 
               onChange={handleTelefonoChange}
               placeholder="Ej. 0912345678"
@@ -344,6 +357,7 @@ export function RegisterPage() {
             <input 
               type="email" 
               required 
+              maxLength={60}
               value={email} 
               onChange={handleEmailChange}
               placeholder="ejemplo@correo.com"
@@ -357,6 +371,7 @@ export function RegisterPage() {
             <input 
               type="password" 
               required 
+              maxLength={30}
               value={password} 
               onChange={handlePasswordChange}
               placeholder="Crea una contraseña segura"
