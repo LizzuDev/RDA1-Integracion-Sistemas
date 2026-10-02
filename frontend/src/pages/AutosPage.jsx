@@ -242,10 +242,9 @@ export function AutosPage() {
         </div>
       </section>
 
-      <main className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
-        
-        {!hasSearched && (
-          <>
+      {!hasSearched && (
+        <>
+          <main className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
             {/* MARCAS POPULARES */}
             <section style={{ marginBottom: '40px' }}>
           <h2 style={{ fontSize: '1.4rem', marginBottom: '20px', fontWeight: 'bold', color: '#333' }}>Empresas populares de alquiler de coches</h2>
@@ -402,10 +401,13 @@ export function AutosPage() {
             </div>
           </div>
         </section>
-        </>
-        )}
+      </main>
+      </>
+      )}
 
-        {hasSearched && error && (
+      {hasSearched && (
+        <main className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
+          {error && (
           <div className="state-container" style={{ textAlign: 'center', padding: '40px 0' }}>
             <div className="error-icon" style={{ fontSize: '2rem' }}>⚠️</div>
             <p className="state-subtitle">{error}</p>
@@ -487,6 +489,7 @@ export function AutosPage() {
           </div>
         )}
       </main>
+      )}
     </>
   );
 }
