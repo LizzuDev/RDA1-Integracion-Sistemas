@@ -106,6 +106,7 @@ async function bootstrap() {
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
+    credentials: true,
   });
 
   app.setGlobalPrefix('api/v1');
