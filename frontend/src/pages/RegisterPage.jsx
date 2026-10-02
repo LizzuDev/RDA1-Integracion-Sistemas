@@ -19,6 +19,26 @@ export function RegisterPage() {
       navigate('/', { replace: true });
     }
   }, [user, navigate]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('register_form');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.nombre) setNombre(parsed.nombre);
+        if (parsed.apellido) setApellido(parsed.apellido);
+        if (parsed.cedula) setCedula(parsed.cedula);
+        if (parsed.telefono) setTelefono(parsed.telefono);
+        if (parsed.email) setEmail(parsed.email);
+      } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('register_form', JSON.stringify({
+      nombre, apellido, cedula, telefono, email
+    }));
+  }, [nombre, apellido, cedula, telefono, email]);
   
   const [errors, setErrors] = useState({
     nombre: '',
@@ -158,7 +178,11 @@ export function RegisterPage() {
       if (loginData?.session) {
         sessionEstablished = true;
       } else if (loginError) {
-        setErrors(prev => ({ ...prev, general: loginError.message }));
+        if (loginError.message.includes('Invalid login credentials')) {
+          setErrors(prev => ({ ...prev, general: 'El correo ya está registrado. Por favor, inicia sesión con tu contraseña original.' }));
+        } else {
+          setErrors(prev => ({ ...prev, general: loginError.message }));
+        }
         setLoading(false);
         return;
       }

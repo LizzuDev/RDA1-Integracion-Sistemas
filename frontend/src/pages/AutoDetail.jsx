@@ -18,6 +18,25 @@ export function AutoDetail() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
+  useEffect(() => {
+    if (id) {
+      const saved = localStorage.getItem(`auto_form_${id}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.dias) setDias(parsed.dias);
+          if (parsed.driverAge) setDriverAge(parsed.driverAge);
+        } catch (e) {}
+      }
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      localStorage.setItem(`auto_form_${id}`, JSON.stringify({ dias, driverAge }));
+    }
+  }, [dias, driverAge, id]);
+
   const handleBooking = async (e) => {
     e.preventDefault();
     if (driverAge < 18) {

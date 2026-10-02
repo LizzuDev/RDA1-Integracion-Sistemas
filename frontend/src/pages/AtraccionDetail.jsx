@@ -25,6 +25,23 @@ export function AtraccionDetail() {
     ticket_count: 1,
   });
 
+  useEffect(() => {
+    if (id) {
+      const saved = localStorage.getItem(`atraccion_form_${id}`);
+      if (saved) {
+        try {
+          setForm(JSON.parse(saved));
+        } catch (e) {}
+      }
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      localStorage.setItem(`atraccion_form_${id}`, JSON.stringify(form));
+    }
+  }, [form, id]);
+
   const [bookingResult, setBookingResult] = useState(null);
 
   useEffect(() => {
