@@ -1,0 +1,2 @@
+"use strict";(self["b-cars-cars-lp__LOADABLE_LOADED_CHUNKS__"]=self["b-cars-cars-lp__LOADABLE_LOADED_CHUNKS__"]||[]).push([["aed27a72"],{fe905f7b:(e,r,a)=>{a.r(r);var _=a("540adcd8");(0,_.serve)({serverRouter:void 0,componentMap:()=>a.e("627e0268").then(a.bind(a,"f95982f0")),appWrapper:()=>a.e("2bc969fe").then(a.bind(a,"5b8d827c")),errorComponentMap:()=>a.e("821ac315").then(a.bind(a,"5d9af9ea")),buiTheme:"traveller_ex-light"})}}]);
+//# sourceMappingURL=https://istatic.booking.com/internal-static/capla/static/js/aed27a72.9be1f886.chunk.js.map
