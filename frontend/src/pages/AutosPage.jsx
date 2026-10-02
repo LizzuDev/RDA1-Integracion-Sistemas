@@ -17,6 +17,11 @@ export function AutosPage() {
   const [startDate, endDate] = dateRange;
   const [sameDropoff, setSameDropoff] = useState(false);
   const [driverAge, setDriverAge] = useState(true);
+  const [openFaq, setOpenFaq] = useState(null);
+
+  const toggleFaq = (idx) => {
+    setOpenFaq(openFaq === idx ? null : idx);
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -47,6 +52,9 @@ export function AutosPage() {
     e.preventDefault();
     if (pickupLocation) {
       fetchData();
+      setTimeout(() => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }, 100);
     }
   };
 
@@ -70,16 +78,17 @@ export function AutosPage() {
           <p style={{ fontSize: '1.4rem', marginBottom: '30px', textAlign: 'left' }}>Coches fantásticos a precios increíbles de las principales empresas de alquiler</p>
           
           {/* SEARCH BOX */}
-          <div className="search-box-container" style={{ position: 'relative', marginTop: '20px' }}>
+          <form className="search-box-container" onSubmit={handleSearch} style={{ position: 'relative', marginTop: '20px' }}>
             <div style={{ background: '#febb02', padding: '4px', borderRadius: '4px', display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
               
               {/* Pickup Location */}
-              <div style={{ flex: '1.5', minWidth: '300px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px', border: '3px solid transparent', transition: 'border 0.2s', outline: 'none' }} onFocus={(e) => e.currentTarget.style.border = '3px solid #febb02'} onBlur={(e) => e.currentTarget.style.border = '3px solid transparent'}>
+              <div style={{ flex: '1.5', minWidth: '300px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px', border: '3px solid transparent', transition: 'border 0.2s', outline: 'none' }} onFocus={(e) => e.currentTarget.style.border = '3px solid #febb02'} onBlur={(e) => e.currentTarget.style.border = '3px solid transparent'}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🚗</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                   <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Lugar de recogida</span>
                   <input
                     type="text"
+                    required
                     placeholder="Aeropuerto, ciudad o estación"
                     value={pickupLocation}
                     onChange={(e) => setPickupLocation(e.target.value)}
@@ -89,23 +98,25 @@ export function AutosPage() {
               </div>
               
               {/* Pickup Date */}
-              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px' }}>
+              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>📅</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                   <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Fecha de recogida</span>
-                  <DatePicker
-                    selected={startDate}
-                    onChange={(date) => setDateRange([date, endDate])}
-                    placeholderText="sáb 3 de oct"
-                    dateFormat="EEE d 'de' MMM"
-                    className="custom-date-picker-input"
-                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
-                  />
+                  <div style={{ width: '100%' }}>
+                    <DatePicker
+                      selected={startDate}
+                      onChange={(date) => setDateRange([date, endDate])}
+                      placeholderText="sáb 3 de oct"
+                      dateFormat="EEE d 'de' MMM"
+                      className="custom-date-picker-input"
+                      style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Pickup Time */}
-              <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px' }}>
+              <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                   <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Hora</span>
@@ -116,23 +127,25 @@ export function AutosPage() {
               </div>
               
               {/* Dropoff Date */}
-              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px' }}>
+              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>📅</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                   <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Fecha de devolución</span>
-                  <DatePicker
-                    selected={endDate}
-                    onChange={(date) => setDateRange([startDate, date])}
-                    placeholderText="mar 6 de oct"
-                    dateFormat="EEE d 'de' MMM"
-                    className="custom-date-picker-input"
-                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
-                  />
+                  <div style={{ width: '100%' }}>
+                    <DatePicker
+                      selected={endDate}
+                      onChange={(date) => setDateRange([startDate, date])}
+                      placeholderText="mar 6 de oct"
+                      dateFormat="EEE d 'de' MMM"
+                      className="custom-date-picker-input"
+                      style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Dropoff Time */}
-              <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: '2px', height: '52px' }}>
+              <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                   <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Hora</span>
@@ -143,8 +156,8 @@ export function AutosPage() {
               </div>
               
               <button 
-                onClick={handleSearch}
-                style={{ flex: '0.8', minWidth: '120px', background: '#006ce4', color: 'white', border: 'none', height: '52px', fontSize: '1.1rem', fontWeight: 'bold', borderRadius: '2px', cursor: 'pointer' }}
+                type="submit"
+                style={{ flex: '0.8', minWidth: '120px', background: '#006ce4', color: 'white', border: 'none', height: '60px', fontSize: '1.1rem', fontWeight: 'bold', borderRadius: '2px', cursor: 'pointer' }}
               >
                 Buscar
               </button>
@@ -167,7 +180,7 @@ export function AutosPage() {
               </div>
             </div>
 
-          </div>
+          </form>
         </div>
       </section>
 
@@ -240,18 +253,41 @@ export function AutosPage() {
           <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', fontWeight: 'bold', color: '#333' }}>Preguntas frecuentes</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {['¿Cuánto cuesta alquilar un coche en Ecuador durante una semana?', '¿Cuánto cuesta alquilar un coche en Ecuador durante un mes?', '¿Cuál es el coche que más se alquila en Ecuador?', '¿Cuánto cuesta alquilar un vehículo del tipo "SUV" en Ecuador?'].map((q, i) => (
-                <div key={i} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', padding: '16px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', background: 'white' }}>
-                  <span style={{ fontWeight: '600', fontSize: '0.95rem', color: '#333' }}>{q}</span>
-                  <span>▼</span>
+              {[
+                {q: '¿Cuánto cuesta alquilar un coche en Ecuador durante una semana?', a: 'En promedio, alquilar un coche en Ecuador cuesta alrededor de US$350 a US$450 por semana, dependiendo de la ciudad y el tipo de vehículo.'}, 
+                {q: '¿Cuánto cuesta alquilar un coche en Ecuador durante un mes?', a: 'El costo mensual suele ser más económico en promedio diario, rondando los US$1,200 a US$1,500.'}, 
+                {q: '¿Cuál es el coche que más se alquila en Ecuador?', a: 'Los vehículos SUV y los compactos económicos son los más populares debido a la topografía del país y el tráfico en las ciudades.'}, 
+                {q: '¿Cuánto cuesta alquilar un vehículo del tipo "SUV" en Ecuador?', a: 'Un SUV estándar puede costar entre US$60 y US$90 al día, ideal para viajes largos o terrenos irregulares.'}
+              ].map((faq, i) => (
+                <div key={`faq1-${i}`} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', background: 'white', overflow: 'hidden' }}>
+                  <div onClick={() => toggleFaq(`l-${i}`)} style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', background: 'white' }}>
+                    <span style={{ fontWeight: '600', fontSize: '0.95rem', color: '#333' }}>{faq.q}</span>
+                    <span style={{ transform: openFaq === `l-${i}` ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                  </div>
+                  {openFaq === `l-${i}` && (
+                    <div style={{ padding: '0 16px 16px', fontSize: '0.9rem', color: '#666', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                      {faq.a}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {['¿Puedo recoger el coche en un lugar y devolverlo en otro distinto en Ecuador?', '¿Con cuánto tiempo de antelación debo reservar un coche de alquiler en Ecuador?', '¿Por qué debería reservar un coche de alquiler en Ecuador con Booking.com?'].map((q, i) => (
-                <div key={i} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', padding: '16px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', background: 'white' }}>
-                  <span style={{ fontWeight: '600', fontSize: '0.95rem', color: '#333' }}>{q}</span>
-                  <span>▼</span>
+              {[
+                {q: '¿Puedo recoger el coche en un lugar y devolverlo en otro distinto en Ecuador?', a: 'Sí, la mayoría de agencias permiten devoluciones en otra sucursal, aunque suele aplicar un cargo adicional conocido como "tarifa de solo ida".'}, 
+                {q: '¿Con cuánto tiempo de antelación debo reservar un coche de alquiler en Ecuador?', a: 'Se recomienda reservar al menos con 1 a 2 semanas de anticipación, especialmente durante temporada alta (vacaciones y feriados).'}, 
+                {q: '¿Por qué debería reservar un coche de alquiler en Ecuador con Booking.com?', a: 'Ofrecemos cancelación gratuita en la mayoría de reservas, sin cargos ocultos y un servicio de atención al cliente disponible 24/7 en múltiples idiomas.'}
+              ].map((faq, i) => (
+                <div key={`faq2-${i}`} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', background: 'white', overflow: 'hidden' }}>
+                  <div onClick={() => toggleFaq(`r-${i}`)} style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', background: 'white' }}>
+                    <span style={{ fontWeight: '600', fontSize: '0.95rem', color: '#333' }}>{faq.q}</span>
+                    <span style={{ transform: openFaq === `r-${i}` ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                  </div>
+                  {openFaq === `r-${i}` && (
+                    <div style={{ padding: '0 16px 16px', fontSize: '0.9rem', color: '#666', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                      {faq.a}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
