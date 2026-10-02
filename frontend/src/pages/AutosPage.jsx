@@ -10,6 +10,7 @@ export function AutosPage() {
   const [autos, setAutos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
   
   // Search form state
   const [pickupLocation, setPickupLocation] = useState('');
@@ -39,6 +40,7 @@ export function AutosPage() {
       setError('No se pudo conectar con el servicio de Autos.');
     } finally {
       setLoading(false);
+      setHasSearched(true);
     }
   }, []);
 
@@ -242,8 +244,10 @@ export function AutosPage() {
 
       <main className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
         
-        {/* MARCAS POPULARES */}
-        <section style={{ marginBottom: '40px' }}>
+        {!hasSearched && (
+          <>
+            {/* MARCAS POPULARES */}
+            <section style={{ marginBottom: '40px' }}>
           <h2 style={{ fontSize: '1.4rem', marginBottom: '20px', fontWeight: 'bold', color: '#333' }}>Empresas populares de alquiler de coches</h2>
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
             {marcasPopulares.map((marca, i) => (
@@ -398,10 +402,10 @@ export function AutosPage() {
             </div>
           </div>
         </section>
+        </>
+        )}
 
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', fontWeight: 'bold' }}>Vehículos Recomendados</h2>
-
-        {error && (
+        {hasSearched && error && (
           <div className="state-container" style={{ textAlign: 'center', padding: '40px 0' }}>
             <div className="error-icon" style={{ fontSize: '2rem' }}>⚠️</div>
             <p className="state-subtitle">{error}</p>
@@ -409,17 +413,77 @@ export function AutosPage() {
           </div>
         )}
 
-        {!error && autos.length === 0 && (
+        {hasSearched && !error && autos.length === 0 && (
           <div className="state-container" style={{ textAlign: 'center', padding: '40px 0' }}>
             <p className="state-title">No hay autos disponibles para tu búsqueda</p>
           </div>
         )}
 
-        {!error && autos.length > 0 && (
-          <div className="atracciones-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-            {autos.map((a, i) => (
-              <AutoCard key={a.vehicle_id || i} auto={a} />
-            ))}
+        {hasSearched && !error && autos.length > 0 && (
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+            {/* Sidebar */}
+            <div style={{ width: '280px', flexShrink: 0 }}>
+              <div style={{ background: '#e0e0e0', height: '150px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '15px' }}>
+                <button style={{ background: '#006ce4', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }}>Mostrar en el Mapa</button>
+              </div>
+              <div style={{ border: '1px solid #e7e7e7', borderRadius: '4px', padding: '16px', background: 'white' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0, color: '#333' }}>Filtrar</h3>
+                  <span style={{ fontSize: '0.8rem', color: '#006ce4', cursor: 'pointer' }}>Borrar todos los filtros</span>
+                </div>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Compañía</h4>
+                  {marcasPopulares.map((m, idx) => (
+                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
+                       <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {m.label} <span style={{ marginLeft: 'auto', color: '#666', fontSize: '0.8rem' }}>10</span>
+                     </label>
+                  ))}
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Categoría del vehículo</h4>
+                  {['Coche pequeño', 'Coche mediano', 'Coche grande', 'SUV'].map((c, idx) => (
+                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
+                       <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {c} <span style={{ marginLeft: 'auto', color: '#666', fontSize: '0.8rem' }}>5</span>
+                     </label>
+                  ))}
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Precio por día</h4>
+                  {['0 US$ - 50 US$', '50 US$ - 100 US$', '100 US$ - 150 US$'].map((p, idx) => (
+                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
+                       <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {p}
+                     </label>
+                  ))}
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Número de plazas</h4>
+                  {['4 plazas', '5 plazas', '7 o más plazas'].map((p, idx) => (
+                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
+                       <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {p}
+                     </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Results Column */}
+            <div style={{ flex: 1 }}>
+              <div style={{ marginBottom: '20px' }}>
+                 <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333', margin: '0 0 15px 0' }}>{autos.length} coches disponibles</h2>
+                 <div style={{ display: 'inline-flex', border: '1px solid #666', borderRadius: '32px', padding: '6px 16px', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', alignItems: 'center', gap: '5px' }}>
+                   <span style={{ fontSize: '0.8rem' }}>↓↑</span> Ordenar por: Recomendado <span style={{ fontSize: '0.7rem', marginLeft: '5px' }}>▼</span>
+                 </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                {autos.map((a, i) => (
+                  <AutoCard key={a.vehicle_id || i} auto={a} />
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </main>
