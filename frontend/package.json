@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --host",
+    "start:prod": "vite preview --port $PORT --host"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   },

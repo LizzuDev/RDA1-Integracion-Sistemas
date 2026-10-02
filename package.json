@@ -5,6 +5,12 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "express": "4.18.2"
+  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -20,6 +26,7 @@
     "prueba:db": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js && node dist/modules/vuelos/pruebas/prueba-gestion.js"
   },
   "dependencies": {
+    "merge-descriptors": "1.0.1",
     "@nestjs/axios": "^3.0.0",
     "@nestjs/cache-manager": "^2.2.0",
     "@nestjs/common": "^10.0.0",
