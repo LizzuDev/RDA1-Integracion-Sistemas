@@ -10,7 +10,12 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  
+  const [errors, setErrors] = useState({
+    email: '',
+    password: '',
+    general: ''
+  });
 
   useEffect(() => {
     if (user) {
@@ -18,64 +23,115 @@ export function LoginPage() {
     }
   }, [user, navigate]);
 
+  const handleEmailChange = (e) => {
+    const rawValue = e.target.value;
+    const hasInvalid = /[^a-zA-Z0-9.@_-]/.test(rawValue);
+    const val = rawValue.replace(/[^a-zA-Z0-9.@_-]/g, '');
+
+    if (hasInvalid) {
+      setErrors(prev => ({ ...prev, email: 'Caracteres inválidos para correo electrónico.' }));
+    } else {
+      setErrors(prev => ({ ...prev, email: '', general: '' })); // clear general error on re-typing
+    }
+    
+    if (val.length <= 30) setEmail(val);
+  };
+
+  const handlePasswordChange = (e) => {
+    const rawValue = e.target.value;
+    const hasSpaces = /\s/.test(rawValue);
+    const val = rawValue.replace(/\s/g, '');
+
+    if (hasSpaces) {
+      setErrors(prev => ({ ...prev, password: 'La contraseña no puede contener espacios.' }));
+    } else {
+      setErrors(prev => ({ ...prev, password: '', general: '' })); // clear general error on re-typing
+    }
+    
+    if (val.length <= 30) setPassword(val);
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    if (errors.email || errors.password) return; // Prevent submission if there are validation errors
 
-    const { error } = await supabase.auth.signInWithPassword({
+    setLoading(true);
+    setErrors(prev => ({ ...prev, general: '' }));
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) {
-      setError(error.message);
+    if (signInError) {
+      // Manejar mensajes comunes de Supabase
+      if (signInError.message.includes('Invalid login credentials')) {
+         setErrors(prev => ({ ...prev, general: 'Credenciales inválidas. Verifica tu correo y contraseña.' }));
+      } else {
+         setErrors(prev => ({ ...prev, general: signInError.message }));
+      }
     } else {
       navigate('/', { replace: true });
     }
     setLoading(false);
   };
 
+  const inputStyle = (errorField) => ({
+    width: '100%', 
+    padding: '0.75rem', 
+    borderRadius: '4px', 
+    border: errorField ? '2px solid #d93025' : '1px solid #ccc',
+    backgroundColor: errorField ? '#fce8e6' : '#fff',
+    outline: 'none',
+    transition: 'background-color 0.2s, border-color 0.2s'
+  });
+
+  const errorMsgStyle = { color: '#d93025', fontSize: '0.8rem', marginTop: '4px', fontWeight: '500' };
+
   return (
     <main className="main-content" id="contenido-principal">
       <div className="state-container" style={{ maxWidth: '400px', margin: '0 auto', textAlign: 'left' }}>
         <h1 className="state-title" style={{ textAlign: 'center' }}>Iniciar sesión</h1>
         
-        {error && <div style={{ color: 'red', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
+        {errors.general && <div style={{ color: '#d93025', marginBottom: '1rem', textAlign: 'center', backgroundColor: '#fce8e6', padding: '10px', borderRadius: '4px', fontWeight: '500' }}>{errors.general}</div>}
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Correo electrónico</label>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Correo electrónico</label>
             <input 
               type="email" 
               required 
+              maxLength={30}
               value={email} 
-              onChange={e => setEmail(e.target.value)}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', border: '1px solid #ccc' }}
+              onChange={handleEmailChange}
+              style={inputStyle(errors.email)}
             />
+            {errors.email && <div style={errorMsgStyle}>{errors.email}</div>}
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Contraseña</label>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Contraseña</label>
             <input 
               type="password" 
               required 
+              maxLength={30}
               value={password} 
-              onChange={e => setPassword(e.target.value)}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', border: '1px solid #ccc' }}
+              onChange={handlePasswordChange}
+              style={inputStyle(errors.password)}
             />
+            {errors.password && <div style={errorMsgStyle}>{errors.password}</div>}
           </div>
           <button 
             type="submit" 
             className="retry-btn" 
             disabled={loading}
-            style={{ width: '100%', marginTop: '1rem' }}
+            style={{ width: '100%', marginTop: '1rem', background: '#006ce4', color: '#fff', border: 'none', padding: '12px', borderRadius: '4px', fontSize: '1rem', fontWeight: '600', cursor: 'pointer' }}
           >
             {loading ? 'Iniciando...' : 'Iniciar sesión'}
           </button>
         </form>
 
-        <p style={{ marginTop: '1rem', textAlign: 'center' }}>
-          ¿No tienes cuenta? <Link to="/register" style={{ color: '#006ce4' }}>Regístrate aquí</Link>
+        <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.9rem' }}>
+          ¿No tienes cuenta? <Link to="/register" style={{ color: '#006ce4', fontWeight: '600', textDecoration: 'none' }}>Regístrate aquí</Link>
         </p>
       </div>
     </main>
