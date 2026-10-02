@@ -100,7 +100,8 @@ async function bootstrap() {
     origin: [
       /^http:\/\/localhost:\d+$/,
       /^http:\/\/127\.0\.0\.1:\d+$/,
-      /^https:\/\/.*\.vercel\.app$/
+      /^https:\/\/.*\.vercel\.app$/,
+      /^https:\/\/.*\.onrender\.com$/
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
