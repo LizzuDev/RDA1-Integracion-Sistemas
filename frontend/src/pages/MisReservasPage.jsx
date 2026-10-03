@@ -228,15 +228,18 @@ export function MisReservasPage() {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
         doc.setTextColor(0, 108, 228); // Azul Booking
-        doc.text('Confirmación de Reserva', 20, 30);
+        doc.text('Confirmacion de Reserva', 20, 30);
         
+        // Función para limpiar emojis y caracteres especiales no soportados por jsPDF base
+        const cleanText = (str) => (str || '').replace(/[^\x00-\xFF]/g, '').trim();
+
         doc.setFontSize(14);
         doc.setTextColor(51, 51, 51);
-        doc.text(`Servicio: ${reserva.servicioTexto} ${reserva.icono}`, 20, 50);
+        doc.text(`Servicio: ${cleanText(reserva.servicioTexto)}`, 20, 50);
         
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(12);
-        doc.text(`Nombre de reserva: ${reserva.titulo}`, 20, 60);
+        doc.text(`Nombre de reserva: ${cleanText(reserva.titulo)}`, 20, 60);
         
         // Bloque de datos
         doc.setDrawColor(200, 200, 200);

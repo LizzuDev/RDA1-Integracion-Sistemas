@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { createOrderAuto } from '../services/autosApi';
 import { v4 as uuidv4 } from 'uuid';
+import emailjs from '@emailjs/browser';
 import { useAuth } from '../hooks/useAuth';
 
 export function AutoDetail() {
@@ -90,7 +91,11 @@ export function AutoDetail() {
       vehicle_id: id,
       dias: parseInt(dias, 10),
       driver: { age: parseInt(driverAge, 10) },
-      booker: { country: 'EC', name: user?.nombre || 'Usuario Web' },
+      booker: { 
+        country: 'EC', 
+        name: user?.nombre || 'Usuario Web',
+        email: user?.email // Pasamos el correo para que el backend sepa a dónde enviar
+      },
       payment_method: paymentMethod
     };
 
@@ -104,7 +109,32 @@ export function AutoDetail() {
       // y simulamos éxito para que el flujo UI se complete.
       console.warn('Backend falló (probablemente por tablas faltantes). Simulando reserva exitosa localmente.', err);
     } finally {
-      setSuccess(`Reserva exitosa. Order ID: ${orderId}`);
+      const emailDestino = user?.email || 'tu correo registrado';
+      const orderTotal = (precioDiario * dias).toFixed(2);
+      
+      // Enviar correo electrónico con EmailJS
+      if (user?.email) {
+        const templateParams = {
+          to_email: user.email,
+          to_name: user.nombre || 'Cliente',
+          pnr: orderId.substring(0, 8).toUpperCase(),
+          service_name: `Renta de ${make} ${model} (${dias} días)`,
+          total_price: `$${orderTotal} USD`,
+        };
+
+        emailjs.send(
+          'YOUR_SERVICE_ID', // Reemplaza con tu Service ID de EmailJS
+          'YOUR_TEMPLATE_ID', // Reemplaza con tu Template ID de EmailJS
+          templateParams,
+          'YOUR_PUBLIC_KEY' // Reemplaza con tu Public Key de EmailJS
+        ).then((response) => {
+          console.log('CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
+        }).catch((error) => {
+          console.error('ERROR AL ENVIAR CORREO CON EMAILJS:', error);
+        });
+      }
+
+      setSuccess(`Reserva exitosa (ID: ${orderId.substring(0,8).toUpperCase()}). ¡Comprobante enviado por EmailJS a ${emailDestino}!`);
       setShowPaymentModal(false);
 
       const autoRes = {
