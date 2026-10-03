@@ -124,6 +124,7 @@ export function MisReservasPage() {
           servicioTexto: 'Atracción',
           titulo: `Tour Quito Centro Histórico (${at.ticket_count || 1} entradas)`,
           fecha: at.date ? formatearFecha(at.date) : '2026-10-10',
+          hora: at.time || '10:00 a.m.',
           status: at.status || 'CONFIRMED',
           total: formatearMoneda(at.total_price?.total || at.total_price || 55.00, 'USD'),
           link: at.atraccionId ? `/atracciones/${at.atraccionId}` : '/'
@@ -132,7 +133,6 @@ export function MisReservasPage() {
         // Fallback silenciado
       }
 
-      // Atracciones locales guardadas
       const atraccionesLocales = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
       const atraccionesLocalesFormatted = atraccionesLocales.map(at => ({
         id: at.id || at.reservation_id,
@@ -142,6 +142,7 @@ export function MisReservasPage() {
         servicioTexto: 'Atracción',
         titulo: at.titulo || `Tour Quito Centro Histórico (${at.ticket_count || 1} entradas)`,
         fecha: at.date ? formatearFecha(at.date) : '2026-10-10',
+        hora: at.time || '10:00 a.m.',
         status: at.status || 'CONFIRMED',
         total: formatearMoneda(at.totalPrice?.total || at.total || 55.00, 'USD'),
         link: '/'
@@ -257,7 +258,7 @@ export function MisReservasPage() {
         doc.setFont('helvetica', 'normal');
         doc.text(`Fecha del servicio:`, 25, 105);
         doc.setFont('helvetica', 'bold');
-        doc.text(`${reserva.fecha}`, 70, 105);
+        doc.text(`${reserva.fecha}${reserva.hora ? ` a las ${reserva.hora}` : ''}`, 70, 105);
         
         doc.setFont('helvetica', 'normal');
         doc.text(`Estado actual:`, 25, 115);
