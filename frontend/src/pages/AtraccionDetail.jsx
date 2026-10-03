@@ -325,7 +325,7 @@ export function AtraccionDetail() {
               <div className="rs-badge">
                 <span className="score">{atraccion.ratings?.score?.toFixed(1) || 'N/A'}</span>
                 <div>
-                  <strong>{atraccion.ratings?.score >= 9 ? 'Excepcional' : 'Muy bueno'}</strong> <a href="#reviews" style={{ cursor: 'pointer', textDecoration: 'underline' }}>{atraccion.ratings?.number_of_reviews || 0} comentarios {'>'}</a><br/>
+                  <strong>{atraccion.ratings?.score >= 9 ? 'Excepcional' : 'Muy bueno'}</strong> {/* <a href="#reviews" style={{ cursor: 'pointer', textDecoration: 'underline' }}>{atraccion.ratings?.number_of_reviews || 0} comentarios {'>'}</a> */}<br/>
                   <span className="muted">Basado en opiniones reales</span>
                 </div>
               </div>
