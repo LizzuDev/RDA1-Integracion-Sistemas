@@ -202,12 +202,12 @@ export function AtraccionesPage() {
                 <div className="asc-img-wrapper">
                   <span className="asc-badge">#{idx + 1} Más vendido</span>
                   <img src={getEcuadorImage(idx)} alt={atraccion.nombre} />
-                </div>
-                <div className="asc-info">
-                  <h3 className="asc-title">{atraccion.nombre || atraccion.name || atraccion.title}</h3>
-                  <div className="asc-rating">
-                    <span className="score">{(Math.random() * 2 + 8).toFixed(1)}</span>
-                    <span className="text">Excepcional ({Math.floor(Math.random() * 500) + 50})</span>
+                  <div className="asc-info">
+                    <h3 className="asc-title">{atraccion.nombre || atraccion.name || atraccion.title}</h3>
+                    <div className="asc-rating">
+                      <span className="score">{(Math.random() * 2 + 8).toFixed(1)}</span>
+                      <span className="text">Excepcional ({Math.floor(Math.random() * 500) + 50})</span>
+                    </div>
                   </div>
                 </div>
               </div>
