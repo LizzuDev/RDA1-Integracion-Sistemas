@@ -317,15 +317,20 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
           const totalVuelo = hold?.lockedPrice?.total
             ? `${Number(hold.lockedPrice.total).toFixed(2)} ${hold.lockedPrice.currency || 'USD'}`
             : 'Pendiente';
+          const nombrePasajero = `${primerPasajero.firstName} ${primerPasajero.lastName}`.trim() || 'Pasajero';
           emailjs.send(
             'service_gc9gkdc',
             'template_nlbgw3v',
             {
               to_email: correoDestino,
-              to_name: `${primerPasajero.firstName} ${primerPasajero.lastName}`.trim() || 'Pasajero',
+              to_name: nombrePasajero,
+              email: correoDestino,
+              name: nombrePasajero,
+              reply_to: correoDestino,
               pnr: pnrVuelo,
               service_name: 'Reserva de Vuelo',
               total_price: totalVuelo,
+              message: `Vuelo reservado. PNR: ${pnrVuelo}. Total: ${totalVuelo}.`,
             },
             'vZyuTrdLeGeWrTWLe'
           ).then((res) => {

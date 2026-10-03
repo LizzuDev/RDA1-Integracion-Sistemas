@@ -111,13 +111,18 @@ export function AtraccionDetail() {
           user.email.split('@')[0] ||
           'Cliente';
         const templateParams = {
+          // Variables para cualquier configuración del template de EmailJS
           to_email: user.email,
           to_name: clienteName,
+          email: user.email,
+          name: clienteName,
+          reply_to: user.email,
           pnr: atraccionRes.id.substring(0, 8).toUpperCase(),
           service_name: atraccionRes.titulo,
           total_price: `$${orderTotal} USD`,
+          message: `Reserva confirmada: ${atraccionRes.titulo}. ${form.ticket_count} boleto(s). Total: $${orderTotal} USD.`,
         };
-
+        console.log('[EmailJS] Enviando a:', user.email, 'params:', templateParams);
         emailjs.send(
           'service_gc9gkdc',
           'template_nlbgw3v',
