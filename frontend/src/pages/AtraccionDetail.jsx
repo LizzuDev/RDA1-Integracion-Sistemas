@@ -16,6 +16,7 @@ export function AtraccionDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isBooking, setIsBooking] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   
   // Auth & UI States
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -92,8 +93,10 @@ export function AtraccionDetail() {
           reply_to: user.email,
           pnr: idempotencyKey.substring(0, 8).toUpperCase(),
           service_name: atraccion?.nombre || atraccion?.name || `Tour / Atracción (${form.ticket_count} personas)`,
+          date: form.date,
+          time: form.time,
           total_price: `$${(precio * parseInt(form.ticket_count, 10)).toFixed(2)} USD`,
-          message: `Reserva confirmada: ${atraccion?.nombre || atraccion?.name}. ${form.ticket_count} boleto(s). Total: $${(precio * parseInt(form.ticket_count, 10)).toFixed(2)} USD.`,
+          message: `Reserva confirmada: ${atraccion?.nombre || atraccion?.name}. Fecha: ${form.date}. Hora: ${form.time}. Total: $${(precio * parseInt(form.ticket_count, 10)).toFixed(2)} USD.`,
         } : null;
 
         await savePendingReservation('atraccion', payload, idempotencyKey, templateParams);
@@ -147,8 +150,10 @@ export function AtraccionDetail() {
           reply_to: user.email,
           pnr: atraccionRes.id.substring(0, 8).toUpperCase(),
           service_name: atraccionRes.titulo,
+          date: form.date,
+          time: form.time,
           total_price: `$${orderTotal} USD`,
-          message: `Reserva confirmada: ${atraccionRes.titulo}. ${form.ticket_count} boleto(s). Total: $${orderTotal} USD.`,
+          message: `Reserva confirmada: ${atraccionRes.titulo}. Fecha: ${form.date}. Hora: ${form.time}. Total: $${orderTotal} USD.`,
         };
         console.log('[EmailJS] Enviando a:', user.email, 'params:', templateParams);
         emailjs.send(
@@ -201,7 +206,7 @@ export function AtraccionDetail() {
                 <div className="gb-score">10</div>
                 <div className="gb-text">
                   <strong>Excepcional</strong><br/>
-                  <span>38 comentarios {'>'}</span>
+                  <a href="#reviews" style={{ color: 'white', textDecoration: 'underline', cursor: 'pointer' }}>38 comentarios {'>'}</a>
                 </div>
               </div>
             </div>
@@ -302,18 +307,25 @@ export function AtraccionDetail() {
           */}
           <div className="detail-section">
             <h2>Ubicación</h2>
-            <div className="map-container">
-              <img src="https://maps.googleapis.com/maps/api/staticmap?center=-0.220164,-78.512327&zoom=15&size=800x300&maptype=roadmap&markers=color:blue%7Clabel:Q%7C-0.220164,-78.512327" alt="Mapa de la atracción" className="static-map" />
+            <div className="map-container" style={{ width: '100%', height: '300px', overflow: 'hidden', borderRadius: '8px', border: '1px solid #ccc', position: 'relative' }}>
+              <iframe
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                style={{ border: 0 }}
+                src="https://www.openstreetmap.org/export/embed.html?bbox=-78.517327%2C-0.225164%2C-78.507327%2C-0.215164&amp;layer=mapnik&amp;marker=-0.220164%2C-78.512327"
+                allowFullScreen
+              ></iframe>
             </div>
           </div>
 
-          <div className="detail-section">
+          <div className="detail-section" id="reviews">
             <h2>Valoraciones de usuarios</h2>
             <div className="reviews-summary">
               <div className="rs-badge">
                 <span className="score">{atraccion.ratings?.score?.toFixed(1) || 'N/A'}</span>
                 <div>
-                  <strong>{atraccion.ratings?.score >= 9 ? 'Excepcional' : 'Muy bueno'}</strong> <a href="#">{atraccion.ratings?.number_of_reviews || 0} comentarios {'>'}</a><br/>
+                  <strong>{atraccion.ratings?.score >= 9 ? 'Excepcional' : 'Muy bueno'}</strong> <a href="#reviews" style={{ cursor: 'pointer', textDecoration: 'underline' }}>{atraccion.ratings?.number_of_reviews || 0} comentarios {'>'}</a><br/>
                   <span className="muted">Basado en opiniones reales</span>
                 </div>
               </div>
@@ -359,27 +371,83 @@ export function AtraccionDetail() {
           <div className="booking-box">
             <h2>Boletos y precios</h2>
             <p><strong>Buscar disponibilidad de boletos por fecha</strong></p>
-            <a href="#" className="link-action" onClick={(e) => { e.preventDefault(); alert('Para propósitos del prototipo, asume que estas fechas son las únicas disponibles.'); }}>Ver más fechas</a>
+            {!showCalendar && (
+              <a href="#" className="link-action" onClick={(e) => { e.preventDefault(); setShowCalendar(true); }}>Ver más fechas</a>
+            )}
             
-            <div className="date-selector">
-              <div className={`date-box ${form.date === '2026-09-28' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-09-28'})}>
-                <span className="day-name">lun</span>
-                <span className="day-num">28</span>
-                <span className="month">sep</span>
-                <span className="badge-hoy">Hoy</span>
+            {showCalendar ? (
+              <div className="custom-calendar-container" style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '16px', marginTop: '12px', marginBottom: '24px', background: '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Indica una fecha para ver la disponibilidad</h3>
+                </div>
+                <button onClick={() => setShowCalendar(false)} style={{ background: 'none', border: 'none', color: '#006ce4', cursor: 'pointer', padding: 0, marginBottom: '16px', fontSize: '0.9rem' }}>Cerrar el calendario</button>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <strong style={{ margin: '0 auto', fontSize: '1.1rem' }}>octubre de 2026</strong>
+                  <span style={{ cursor: 'pointer', fontSize: '1.2rem', padding: '0 8px' }}>{'>'}</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', textAlign: 'center', fontSize: '0.9rem' }}>
+                  <div style={{ color: '#595959', paddingBottom: '8px' }}>dom</div>
+                  <div style={{ color: '#595959', paddingBottom: '8px' }}>lun</div>
+                  <div style={{ color: '#595959', paddingBottom: '8px' }}>mar</div>
+                  <div style={{ color: '#595959', paddingBottom: '8px' }}>mié</div>
+                  <div style={{ color: '#595959', paddingBottom: '8px' }}>jue</div>
+                  <div style={{ color: '#595959', paddingBottom: '8px' }}>vie</div>
+                  <div style={{ color: '#595959', paddingBottom: '8px' }}>sáb</div>
+
+                  {/* Empty days for Oct 2026 (Starts on Thursday) */}
+                  <div></div><div></div><div></div><div></div>
+
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => {
+                    const dateStr = `2026-10-${day.toString().padStart(2, '0')}`;
+                    const isSelected = form.date === dateStr;
+                    return (
+                      <div 
+                        key={day}
+                        onClick={() => { setForm({ ...form, date: dateStr }); setShowCalendar(false); }}
+                        style={{
+                          padding: '12px 0',
+                          cursor: 'pointer',
+                          borderRadius: '4px',
+                          background: isSelected ? '#006ce4' : 'transparent',
+                          color: isSelected ? '#fff' : '#1a1a1a',
+                          fontWeight: isSelected ? 'bold' : 'normal'
+                        }}
+                      >
+                        {day}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="muted" style={{fontSize: '0.85rem', marginTop: 24, borderTop: '1px solid #ddd', paddingTop: 16}}>
+                  La primera fecha en la que se ofrece el precio más bajo <strong>(US${precio})</strong> es el 3 oct
+                </p>
               </div>
-              <div className={`date-box ${form.date === '2026-09-29' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-09-29'})}>
-                <span className="day-name">mar</span>
-                <span className="day-num">29</span>
-                <span className="month">sep</span>
+            ) : (
+              <div className="date-selector">
+                <div className={`date-box ${form.date === '2026-10-01' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-10-01'})}>
+                  <span className="day-name">jue</span>
+                  <span className="day-num">1</span>
+                  <span className="month">oct</span>
+                </div>
+                <div className={`date-box ${form.date === '2026-10-02' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-10-02'})}>
+                  <span className="day-name">vie</span>
+                  <span className="day-num">2</span>
+                  <span className="month">oct</span>
+                </div>
+                <div className={`date-box ${form.date === '2026-10-03' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-10-03'})}>
+                  <span className="day-name">sáb</span>
+                  <span className="day-num">3</span>
+                  <span className="month">oct</span>
+                  <span className="badge-hoy">Mejor Precio</span>
+                </div>
               </div>
-              <div className={`date-box ${form.date === '2026-09-30' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-09-30'})}>
-                <span className="day-name">mié</span>
-                <span className="day-num">30</span>
-                <span className="month">sep</span>
-              </div>
-            </div>
-            <p className="muted" style={{fontSize: '0.85rem', marginBottom: 20}}>La primera fecha en la que este precio más bajo <strong>(US${precio})</strong> está disponible es el 28 sep.</p>
+            )}
+            
+            {!showCalendar && (
+              <p className="muted" style={{fontSize: '0.85rem', marginBottom: 20}}>La primera fecha en la que este precio más bajo <strong>(US${precio})</strong> está disponible es el 3 oct.</p>
+            )}
 
             <p><strong>Seleccionar hora</strong></p>
             <div className="time-selector">
