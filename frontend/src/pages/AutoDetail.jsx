@@ -37,6 +37,8 @@ export function AutoDetail() {
   const [activeTab, setActiveTab] = useState('puntual');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('TARJETA');
+  const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+  const [instructionsType, setInstructionsType] = useState('recogida');
 
   // Sanitizar entradas para permitir solo números
   const handleNumberKeyDown = (e) => {
@@ -330,14 +332,14 @@ export function AutoDetail() {
                   <div style={{ position: 'absolute', left: '-25px', top: '2px', width: '12px', height: '12px', borderRadius: '50%', border: '2px solid #666', background: 'white' }}></div>
                   <div style={{ fontSize: '0.9rem', color: '#333' }}>lun, 5 oct - 10:00</div>
                   <div style={{ fontWeight: 'bold', color: '#333', fontSize: '1rem' }}>Quito Aeropuerto</div>
-                  <div style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', marginTop: '5px' }}>Ver instrucciones para la recogida</div>
+                  <div onClick={() => { setInstructionsType('recogida'); setShowInstructionsModal(true); }} style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', marginTop: '5px' }}>Ver instrucciones para la recogida</div>
                 </div>
 
                 <div style={{ position: 'relative' }}>
                   <div style={{ position: 'absolute', left: '-25px', top: '2px', width: '12px', height: '12px', borderRadius: '50%', border: '2px solid #666', background: 'white' }}></div>
                   <div style={{ fontSize: '0.9rem', color: '#333' }}>jue, 8 oct - 10:00</div>
                   <div style={{ fontWeight: 'bold', color: '#333', fontSize: '1rem' }}>Quito Aeropuerto</div>
-                  <div style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', marginTop: '5px' }}>Ver instrucciones para la devolución</div>
+                  <div onClick={() => { setInstructionsType('devolución'); setShowInstructionsModal(true); }} style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', marginTop: '5px' }}>Ver instrucciones para la devolución</div>
                 </div>
               </div>
             </div>
@@ -394,6 +396,39 @@ export function AutoDetail() {
               <button onClick={procesarPagoYReserva} disabled={loading} style={{ background: '#006ce4', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
                 {loading ? 'Procesando...' : 'Pagar y Reservar'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInstructionsModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowInstructionsModal(false)}>
+          <div style={{ background: 'white', padding: '30px', borderRadius: '8px', maxWidth: '600px', width: '90%', textAlign: 'left', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowInstructionsModal(false)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#666' }}>&times;</button>
+            <h2 style={{ marginBottom: '20px', fontSize: '1.5rem' }}>Instrucciones para la {instructionsType}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <div style={{ background: supplierInfo.bg, color: supplierInfo.color, padding: '4px 8px', borderRadius: '2px', fontWeight: 'bold', fontSize: '0.8rem' }}>{supplierInfo.label}</div>
+              <span style={{ fontSize: '0.95rem' }}>Proveedor: <strong>{supplierInfo.label} By Europcar</strong></span>
+            </div>
+            
+            <h3 style={{ fontSize: '1rem', marginBottom: '5px' }}>Lugar de {instructionsType}</h3>
+            <p style={{ fontSize: '0.9rem', color: '#333', marginBottom: '20px' }}>Aeropuerto Internacional Mariscal Sucre, Planta Baja, Tababela, Quito, Ecuador, 170907</p>
+            
+            <h3 style={{ fontSize: '1rem', marginBottom: '5px' }}>Horario de apertura</h3>
+            <p style={{ fontSize: '0.9rem', color: '#333', marginBottom: '20px' }}>Lun - Dom 00:00 - 23:59</p>
+
+            <div style={{ width: '100%', height: '200px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #006ce4', position: 'relative' }}>
+              <iframe
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                style={{ border: 0 }}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=-78.36151123046876%2C-0.12634354274996906%2C-78.35121154785158%2C-0.11604344487431268&amp;layer=mapnik&amp;marker=-0.12119350410499645%2C-78.35636138916016`}
+                allowFullScreen
+              ></iframe>
+              <div style={{ position: 'absolute', bottom: '20px', left: '0', right: '0', textAlign: 'center', pointerEvents: 'none' }}>
+                <span style={{ background: 'white', color: '#006ce4', padding: '6px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>📍 Mostrar en el Mapa</span>
+              </div>
             </div>
           </div>
         </div>

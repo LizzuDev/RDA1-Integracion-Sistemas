@@ -206,7 +206,7 @@ export function AtraccionDetail() {
                 <div className="gb-score">10</div>
                 <div className="gb-text">
                   <strong>Excepcional</strong><br/>
-                  <span>38 comentarios {'>'}</span>
+                  <a href="#reviews" style={{ color: 'white', textDecoration: 'underline', cursor: 'pointer' }}>38 comentarios {'>'}</a>
                 </div>
               </div>
             </div>
@@ -307,18 +307,25 @@ export function AtraccionDetail() {
           */}
           <div className="detail-section">
             <h2>Ubicación</h2>
-            <div className="map-container">
-              <img src="https://maps.googleapis.com/maps/api/staticmap?center=-0.220164,-78.512327&zoom=15&size=800x300&maptype=roadmap&markers=color:blue%7Clabel:Q%7C-0.220164,-78.512327" alt="Mapa de la atracción" className="static-map" />
+            <div className="map-container" style={{ width: '100%', height: '300px', overflow: 'hidden', borderRadius: '8px', border: '1px solid #ccc', position: 'relative' }}>
+              <iframe
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                style={{ border: 0 }}
+                src="https://www.openstreetmap.org/export/embed.html?bbox=-78.517327%2C-0.225164%2C-78.507327%2C-0.215164&amp;layer=mapnik&amp;marker=-0.220164%2C-78.512327"
+                allowFullScreen
+              ></iframe>
             </div>
           </div>
 
-          <div className="detail-section">
+          <div className="detail-section" id="reviews">
             <h2>Valoraciones de usuarios</h2>
             <div className="reviews-summary">
               <div className="rs-badge">
                 <span className="score">{atraccion.ratings?.score?.toFixed(1) || 'N/A'}</span>
                 <div>
-                  <strong>{atraccion.ratings?.score >= 9 ? 'Excepcional' : 'Muy bueno'}</strong> <a href="#">{atraccion.ratings?.number_of_reviews || 0} comentarios {'>'}</a><br/>
+                  <strong>{atraccion.ratings?.score >= 9 ? 'Excepcional' : 'Muy bueno'}</strong> <a href="#reviews" style={{ cursor: 'pointer', textDecoration: 'underline' }}>{atraccion.ratings?.number_of_reviews || 0} comentarios {'>'}</a><br/>
                   <span className="muted">Basado en opiniones reales</span>
                 </div>
               </div>
