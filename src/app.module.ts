@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MailerModule } from '@nestjs/modules-mailer';
 
 import { CommonModule } from './common/common.module';
 import { CoreModule } from './core/core.module';
@@ -28,6 +29,26 @@ import { VuelosModule } from './modules/vuelos/vuelos.module';
         synchronize: false,
         ssl: { rejectUnauthorized: false }, // Requerido por Supabase en producción
         extra: { max: 1 }, // Límite de conexiones para entornos serverless (Vercel)
+      }),
+    }),
+
+    // Configuración de MailerModule para envío de correos
+    MailerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        transport: {
+          host: configService.get('SMTP_HOST') || 'smtp.gmail.com',
+          port: Number(configService.get('SMTP_PORT')) || 465,
+          secure: true,
+          auth: {
+            user: configService.get('SMTP_USER'), // Ej: tu_correo@gmail.com
+            pass: configService.get('SMTP_PASS'), // Ej: Contraseña de Aplicación de Google
+          },
+        },
+        defaults: {
+          from: `"Booking Prototipo" <${configService.get('SMTP_USER')}>`,
+        },
       }),
     }),
 

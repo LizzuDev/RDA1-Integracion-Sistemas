@@ -90,7 +90,11 @@ export function AutoDetail() {
       vehicle_id: id,
       dias: parseInt(dias, 10),
       driver: { age: parseInt(driverAge, 10) },
-      booker: { country: 'EC', name: user?.nombre || 'Usuario Web' },
+      booker: { 
+        country: 'EC', 
+        name: user?.nombre || 'Usuario Web',
+        email: user?.email // Pasamos el correo para que el backend sepa a dónde enviar
+      },
       payment_method: paymentMethod
     };
 

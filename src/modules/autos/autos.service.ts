@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { catchError, firstValueFrom } from 'rxjs';
+import { MailerService } from '@nestjs/modules-mailer';
 import { Auto } from './entities/auto.entity';
 import { OrderAuto } from './entities/order-auto.entity';
 import { PagoService } from '../atracciones/pago.service';
@@ -15,6 +16,7 @@ export class AutosService {
   constructor(
     private readonly httpService: HttpService,
     private readonly pagoService: PagoService,
+    private readonly mailerService: MailerService,
     @InjectRepository(Auto)
     private readonly autoRepo: Repository<Auto>,
     @InjectRepository(OrderAuto)
@@ -137,6 +139,39 @@ export class AutosService {
     // Confirmar
     order.status = 'CONFIRMED';
     await this.orderRepo.save(order);
+
+    // Enviar correo de confirmación
+    try {
+      // Necesitamos el correo del usuario que viene en la orden, si existe. 
+      // Si el frontend no lo está mandando en `booker.email`, usaremos un correo fijo o extraerlo.
+      // Modificamos el payload desde el frontend para enviar el email, o lo sacamos del header.
+      const correoDestino = orderData.booker?.email || orderData.email || 'tu-correo@gmail.com';
+      
+      await this.mailerService.sendMail({
+        to: correoDestino,
+        subject: `Confirmación de Reserva de Auto - PNR: ${idempotencyKey.substring(0,6).toUpperCase()}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px;">
+            <h2 style="color: #006ce4; text-align: center;">¡Tu reserva está confirmada!</h2>
+            <p>Hola <strong>${order.booker?.name || 'Cliente'}</strong>,</p>
+            <p>Gracias por tu reserva. Aquí tienes los detalles de tu renta de auto:</p>
+            <div style="background-color: #f2fcf5; padding: 15px; border-radius: 4px; border: 1px solid #008009; margin: 20px 0;">
+              <p><strong>Código de Confirmación (PNR):</strong> ${idempotencyKey.substring(0,6).toUpperCase()}</p>
+              <p><strong>Días de renta:</strong> ${order.diasRenta}</p>
+              <p><strong>Estado:</strong> Confirmada ✅</p>
+              <p><strong>Total pagado:</strong> $${order.totalPrice.total} ${order.totalPrice.currency}</p>
+            </div>
+            <p>Puedes ver más detalles ingresando a la sección "Mis Reservas" en la plataforma.</p>
+            <br/>
+            <p>Atentamente,</p>
+            <p><strong>El equipo de Booking Prototipo</strong></p>
+          </div>
+        `,
+      });
+      this.logger.log(`Correo de confirmación enviado a ${correoDestino}`);
+    } catch (error) {
+      this.logger.error('No se pudo enviar el correo de confirmación', error);
+    }
 
     return this.buildOrderResponse(order);
   }
