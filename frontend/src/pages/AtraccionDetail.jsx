@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getAtraccion, reservarAtraccion } from '../services/atraccionesApi';
 import { v4 as uuidv4 } from 'uuid';
+import emailjs from '@emailjs/browser';
 import { useAuth } from '../hooks/useAuth';
 
 export function AtraccionDetail() {
@@ -79,7 +80,8 @@ export function AtraccionDetail() {
           ticket_count: parseInt(form.ticket_count)
         }, idempotencyKey);
       } catch (backendErr) {
-        console.warn('Backend falló (401 u otro). Simulando reserva exitosa localmente.', backendErr);
+        // Silenciamos el warning en consola a petición del usuario.
+        // console.warn('Backend falló (401 u otro). Simulando reserva exitosa localmente.', backendErr);
         result = { reservation_id: idempotencyKey };
       }
       
@@ -99,6 +101,30 @@ export function AtraccionDetail() {
       };
       const existing = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
       localStorage.setItem('reservas_atracciones', JSON.stringify([atraccionRes, ...existing]));
+
+      // Enviar correo electrónico con EmailJS
+      if (user?.email) {
+        const orderTotal = (precio * parseInt(form.ticket_count, 10)).toFixed(2);
+        const templateParams = {
+          to_email: user.email,
+          to_name: user.user_metadata?.nombre || user.user_metadata?.full_name || 'Cliente',
+          pnr: atraccionRes.id.substring(0, 8).toUpperCase(),
+          service_name: atraccionRes.titulo,
+          total_price: `$${orderTotal} USD`,
+        };
+
+        emailjs.send(
+          'service_gc9gkdc',
+          'template_nlbgw3v',
+          templateParams,
+          'vZyuTrdLeGeWrTWLe'
+        ).then((response) => {
+          console.log('CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
+        }).catch((error) => {
+          console.error('ERROR AL ENVIAR CORREO CON EMAILJS:', error);
+        });
+      }
+
     } catch (err) {
       setBookingResult({ 
         success: false, 
