@@ -84,8 +84,20 @@ export function AtraccionDetail() {
             ticket_count: parseInt(form.ticket_count)
           }
         };
-        await savePendingReservation('atraccion', payload, idempotencyKey);
-        result = { reservation_id: idempotencyKey };
+        const templateParams = user?.email ? {
+          to_email: user.email,
+          to_name: user.user_metadata?.nombre || user.user_metadata?.full_name || user.email.split('@')[0] || 'Cliente',
+          email: user.email,
+          name: user.user_metadata?.nombre || user.user_metadata?.full_name || user.email.split('@')[0] || 'Cliente',
+          reply_to: user.email,
+          pnr: idempotencyKey.substring(0, 8).toUpperCase(),
+          service_name: atraccion?.nombre || atraccion?.name || `Tour / Atracción (${form.ticket_count} personas)`,
+          total_price: `$${(precio * parseInt(form.ticket_count, 10)).toFixed(2)} USD`,
+          message: `Reserva confirmada: ${atraccion?.nombre || atraccion?.name}. ${form.ticket_count} boleto(s). Total: $${(precio * parseInt(form.ticket_count, 10)).toFixed(2)} USD.`,
+        } : null;
+
+        await savePendingReservation('atraccion', payload, idempotencyKey, templateParams);
+        result = { reservation_id: idempotencyKey, offline: true };
       } else {
         try {
           result = await reservarAtraccion(id, {
@@ -118,8 +130,8 @@ export function AtraccionDetail() {
       const existing = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
       localStorage.setItem('reservas_atracciones', JSON.stringify([atraccionRes, ...existing]));
 
-      // Enviar correo electrónico con EmailJS
-      if (user?.email) {
+      // Enviar correo electrónico con EmailJS solo si hay conexión
+      if (user?.email && navigator.onLine) {
         const orderTotal = (precio * parseInt(form.ticket_count, 10)).toFixed(2);
         const clienteName =
           user.user_metadata?.nombre ||
@@ -470,8 +482,15 @@ export function AtraccionDetail() {
             <div className="modal-icon" style={{ width: 64, height: 64, borderRadius: '50%', background: '#e6f4ea', color: '#137333', fontSize: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px auto' }}>
               ✓
             </div>
-            <h2 style={{ marginBottom: '8px', color: '#1a1a1a' }}>¡Pago Exitoso!</h2>
-            <p style={{ color: '#595959', marginBottom: '24px' }}>Hemos enviado tu comprobante de pago electrónico al correo <strong>{user.email}</strong>.</p>
+            <h2 style={{ marginBottom: '8px', color: '#1a1a1a' }}>
+              {bookingResult.data?.offline ? 'Guardado sin conexión' : '¡Pago Exitoso!'}
+            </h2>
+            <p style={{ color: '#595959', marginBottom: '24px' }}>
+              {bookingResult.data?.offline 
+                ? 'Tu reserva se sincronizará automáticamente cuando recuperes la conexión a internet.' 
+                : `Hemos enviado tu comprobante de pago electrónico al correo `}
+              {!bookingResult.data?.offline && <strong>{user.email}</strong>}
+            </p>
             
             <div style={{ background: '#f8f9fa', padding: '16px', borderRadius: '8px', textAlign: 'left', marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>

@@ -309,44 +309,48 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         const idempotencyKey = claveIdempotencia.current ?? uuidv4();
         const fingerprint = obtenerHuellaDispositivo();
 
+        const primerPasajero = lista[0];
+        const correoDestino = primerPasajero?.email?.trim();
+        const pnrVuelo = idempotencyKey.toString().substring(0, 8).toUpperCase();
+        const totalVuelo = hold?.lockedPrice?.total
+          ? `${Number(hold.lockedPrice.total).toFixed(2)} ${hold.lockedPrice.currency || 'USD'}`
+          : 'Pendiente';
+        const nombrePasajero = `${primerPasajero?.firstName || ''} ${primerPasajero?.lastName || ''}`.trim() || 'Pasajero';
+
+        const emailParams = correoDestino ? {
+          to_email: correoDestino,
+          to_name: nombrePasajero,
+          email: correoDestino,
+          name: nombrePasajero,
+          reply_to: correoDestino,
+          pnr: pnrVuelo,
+          service_name: 'Reserva de Vuelo',
+          total_price: totalVuelo,
+          message: `Vuelo reservado. PNR: ${pnrVuelo}. Total: ${totalVuelo}.`,
+        } : null;
+
         let reserva = null;
 
         if (!navigator.onLine) {
-          await savePendingReservation('vuelo', { ...payload, fingerprint }, idempotencyKey);
-          reserva = { bookingId: idempotencyKey, pnr: idempotencyKey };
+          await savePendingReservation('vuelo', { ...payload, fingerprint }, idempotencyKey, emailParams);
+          reserva = { bookingId: idempotencyKey, pnr: idempotencyKey, offline: true };
         } else {
           reserva = await crearReserva(payload, idempotencyKey, fingerprint);
+          
+          if (emailParams) {
+            emailjs.send(
+              'service_gc9gkdc',
+              'template_nlbgw3v',
+              emailParams,
+              'vZyuTrdLeGeWrTWLe'
+            ).then((res) => {
+              console.log('✅ CORREO VUELO ENVIADO!', res.status, res.text);
+            }).catch((err) => {
+              console.error('❌ ERROR CORREO VUELO:', err);
+            });
+          }
         }
-        // Enviar correo de confirmación de vuelo con EmailJS
-        const primerPasajero = lista[0];
-        const correoDestino = primerPasajero?.email?.trim();
-        if (correoDestino) {
-          const pnrVuelo = (reserva?.bookingId || reserva?.pnr || uuidv4()).toString().substring(0, 8).toUpperCase();
-          const totalVuelo = hold?.lockedPrice?.total
-            ? `${Number(hold.lockedPrice.total).toFixed(2)} ${hold.lockedPrice.currency || 'USD'}`
-            : 'Pendiente';
-          const nombrePasajero = `${primerPasajero.firstName} ${primerPasajero.lastName}`.trim() || 'Pasajero';
-          emailjs.send(
-            'service_gc9gkdc',
-            'template_nlbgw3v',
-            {
-              to_email: correoDestino,
-              to_name: nombrePasajero,
-              email: correoDestino,
-              name: nombrePasajero,
-              reply_to: correoDestino,
-              pnr: pnrVuelo,
-              service_name: 'Reserva de Vuelo',
-              total_price: totalVuelo,
-              message: `Vuelo reservado. PNR: ${pnrVuelo}. Total: ${totalVuelo}.`,
-            },
-            'vZyuTrdLeGeWrTWLe'
-          ).then((res) => {
-            console.log('✅ CORREO VUELO ENVIADO!', res.status, res.text);
-          }).catch((err) => {
-            console.error('❌ ERROR CORREO VUELO:', err);
-          });
-        }
+
         onConfirmada?.(reserva, lista);
       } catch (fallo) {
         setErrorGeneral(

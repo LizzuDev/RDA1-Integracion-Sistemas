@@ -101,10 +101,24 @@ export function AutoDetail() {
     };
 
     let orderId = idempotencyKey;
+    const emailDestino = user?.email || 'tu correo registrado';
+    const orderTotal = (precioDiario * dias).toFixed(2);
+
+    const emailParams = user?.email ? {
+      to_email: user.email,
+      to_name: user.user_metadata?.nombre || user.user_metadata?.full_name || user.email.split('@')[0] || 'Cliente',
+      email: user.email,
+      name: user.user_metadata?.nombre || user.user_metadata?.full_name || user.email.split('@')[0] || 'Cliente',
+      reply_to: user.email,
+      pnr: orderId.substring(0, 8).toUpperCase(),
+      service_name: `Renta de ${make} ${model} (${dias} días)`,
+      total_price: `$${orderTotal} USD`,
+      message: `Reserva confirmada: Renta de ${make} ${model} por ${dias} días. Total: $${orderTotal} USD. PNR: ${orderId.substring(0, 8).toUpperCase()}`,
+    } : null;
 
     if (!navigator.onLine) {
       // Guardar localmente para sincronizar después
-      await savePendingReservation('auto', payload, idempotencyKey);
+      await savePendingReservation('auto', payload, idempotencyKey, emailParams);
     } else {
       try {
         const res = await createOrderAuto(payload, idempotencyKey);
@@ -114,43 +128,21 @@ export function AutoDetail() {
         // y simulamos éxito para que el flujo UI se complete.
         console.warn('Backend falló (probablemente por tablas faltantes). Simulando reserva exitosa localmente.', err);
       }
-    }
 
-    const emailDestino = user?.email || 'tu correo registrado';
-    const orderTotal = (precioDiario * dias).toFixed(2);
-
-    // Enviar correo electrónico con EmailJS
-    if (user?.email) {
-      const clienteName =
-        user.user_metadata?.nombre ||
-        user.user_metadata?.full_name ||
-        user.email.split('@')[0] ||
-        'Cliente';
-
-      const templateParams = {
-        // Variables para cualquier configuración del template de EmailJS
-        to_email: user.email,
-        to_name: clienteName,
-        email: user.email,        // alias alternativo
-        name: clienteName,        // alias alternativo
-        reply_to: user.email,
-        pnr: orderId.substring(0, 8).toUpperCase(),
-        service_name: `Renta de ${make} ${model} (${dias} días)`,
-        total_price: `$${orderTotal} USD`,
-        message: `Reserva confirmada: Renta de ${make} ${model} por ${dias} días. Total: $${orderTotal} USD. PNR: ${orderId.substring(0, 8).toUpperCase()}`,
-      };
-      console.log('[EmailJS] Enviando a:', user.email, 'params:', templateParams);
-
-      emailjs.send(
-        'service_gc9gkdc',
-        'template_nlbgw3v',
-        templateParams,
-        'vZyuTrdLeGeWrTWLe'
-      ).then((response) => {
-        console.log('✅ CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
-      }).catch((error) => {
-        console.error('❌ ERROR AL ENVIAR CORREO CON EMAILJS:', error);
-      });
+      // Enviar correo electrónico con EmailJS solo si hay conexión
+      if (emailParams) {
+        console.log('[EmailJS] Enviando a:', user.email, 'params:', emailParams);
+        emailjs.send(
+          'service_gc9gkdc',
+          'template_nlbgw3v',
+          emailParams,
+          'vZyuTrdLeGeWrTWLe'
+        ).then((response) => {
+          console.log('✅ CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
+        }).catch((error) => {
+          console.error('❌ ERROR AL ENVIAR CORREO CON EMAILJS:', error);
+        });
+      }
     }
 
     if (!navigator.onLine) {
