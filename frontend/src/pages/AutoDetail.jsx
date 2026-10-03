@@ -114,23 +114,29 @@ export function AutoDetail() {
 
       // Enviar correo electrónico con EmailJS
       if (user?.email) {
+        const clienteName =
+          user.user_metadata?.nombre ||
+          user.user_metadata?.full_name ||
+          user.email.split('@')[0] ||
+          'Cliente';
+
         const templateParams = {
           to_email: user.email,
-          to_name: user.nombre || 'Cliente',
+          to_name: clienteName,
           pnr: orderId.substring(0, 8).toUpperCase(),
           service_name: `Renta de ${make} ${model} (${dias} días)`,
           total_price: `$${orderTotal} USD`,
         };
 
         emailjs.send(
-          'service_gc9gkdc', // Reemplaza con tu Service ID de EmailJS
-          'template_nlbgw3v', // Reemplaza con tu Template ID de EmailJS
+          'service_gc9gkdc',
+          'template_nlbgw3v',
           templateParams,
-          'vZyuTrdLeGeWrTWLe' // Reemplaza con tu Public Key de EmailJS
+          'vZyuTrdLeGeWrTWLe'
         ).then((response) => {
-          console.log('CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
+          console.log('✅ CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
         }).catch((error) => {
-          console.error('ERROR AL ENVIAR CORREO CON EMAILJS:', error);
+          console.error('❌ ERROR AL ENVIAR CORREO CON EMAILJS:', error);
         });
       }
 

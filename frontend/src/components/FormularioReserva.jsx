@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import emailjs from '@emailjs/browser';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { crearReserva } from '../services/vuelosApi';
 import { obtenerHuellaDispositivo } from '../services/formato';
@@ -308,6 +309,31 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
           claveIdempotencia.current ?? uuidv4(),
           obtenerHuellaDispositivo(),
         );
+        // Enviar correo de confirmación de vuelo con EmailJS
+        const primerPasajero = lista[0];
+        const correoDestino = primerPasajero?.email?.trim();
+        if (correoDestino) {
+          const pnrVuelo = (reserva?.bookingId || reserva?.pnr || uuidv4()).toString().substring(0, 8).toUpperCase();
+          const totalVuelo = hold?.lockedPrice?.total
+            ? `${Number(hold.lockedPrice.total).toFixed(2)} ${hold.lockedPrice.currency || 'USD'}`
+            : 'Pendiente';
+          emailjs.send(
+            'service_gc9gkdc',
+            'template_nlbgw3v',
+            {
+              to_email: correoDestino,
+              to_name: `${primerPasajero.firstName} ${primerPasajero.lastName}`.trim() || 'Pasajero',
+              pnr: pnrVuelo,
+              service_name: 'Reserva de Vuelo',
+              total_price: totalVuelo,
+            },
+            'vZyuTrdLeGeWrTWLe'
+          ).then((res) => {
+            console.log('✅ CORREO VUELO ENVIADO!', res.status, res.text);
+          }).catch((err) => {
+            console.error('❌ ERROR CORREO VUELO:', err);
+          });
+        }
         onConfirmada?.(reserva, lista);
       } catch (fallo) {
         setErrorGeneral(
