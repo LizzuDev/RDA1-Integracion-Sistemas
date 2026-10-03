@@ -14,6 +14,44 @@ export function AutosPage() {
   
   // Search form state
   const [pickupLocation, setPickupLocation] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [pickupError, setPickupError] = useState('');
+  const [flashRed, setFlashRed] = useState(false);
+  const destinos = ['Quito', 'Guayaquil', 'Cuenca', 'Manta', 'Aeropuerto Mariscal Sucre', 'Aeropuerto José Joaquín de Olmedo', 'Loja', 'Machala'];
+
+  const triggerFlash = (msg) => {
+    setPickupError(msg);
+    setFlashRed(true);
+    setTimeout(() => setFlashRed(false), 300);
+  };
+
+  const handlePickupChange = (e) => {
+    const raw = e.target.value;
+    const hasNumbers = /[0-9]/.test(raw);
+    const hasSymbols = /[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ0-9]/.test(raw);
+    const hasMultipleSpaces = /\s{2,}/.test(raw);
+
+    if (hasNumbers) {
+      triggerFlash('No se permiten números en el destino');
+    } else if (hasSymbols) {
+      triggerFlash('Solo se permiten letras y comas');
+    } else if (hasMultipleSpaces) {
+      triggerFlash('No se permiten espacios consecutivos');
+    } else {
+      setPickupError('');
+    }
+
+    const clean = raw.replace(/[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ]/g, '').replace(/\s{2,}/g, ' ');
+    setPickupLocation(clean);
+    setShowSuggestions(clean.length > 0);
+  };
+
+  const handleSelectSuggestion = (destino) => {
+    setPickupLocation(destino);
+    setShowSuggestions(false);
+    setPickupError('');
+  };
+
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
   const [sameDropoff, setSameDropoff] = useState(false);
@@ -179,19 +217,35 @@ export function AutosPage() {
             <div style={{ background: '#febb02', padding: '4px', borderRadius: '4px', display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
               
               {/* Pickup Location */}
-              <div style={{ flex: '1.5', minWidth: '300px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px', border: '3px solid transparent', transition: 'border 0.2s', outline: 'none' }} onFocus={(e) => e.currentTarget.style.border = '3px solid #febb02'} onBlur={(e) => e.currentTarget.style.border = '3px solid transparent'}>
-                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🚗</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Lugar de recogida</span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Aeropuerto, ciudad o estación"
-                    value={pickupLocation}
-                    onChange={(e) => setPickupLocation(e.target.value)}
-                    style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
-                  />
+              <div style={{ position: 'relative', flex: '1.5', minWidth: '300px' }}>
+                <div style={{ background: flashRed ? '#fce8e6' : 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px', border: flashRed ? '3px solid #d93025' : '3px solid transparent', transition: 'border 0.2s, background-color 0.2s', outline: 'none' }} onFocus={(e) => { if(!flashRed) e.currentTarget.style.border = '3px solid #febb02'; setShowSuggestions(pickupLocation.length > 0); }} onBlur={(e) => { if(!flashRed) e.currentTarget.style.border = '3px solid transparent'; setTimeout(() => setShowSuggestions(false), 200); }}>
+                  <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🚗</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
+                    <span style={{ fontSize: '0.75rem', color: flashRed ? '#d93025' : '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Lugar de recogida</span>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Aeropuerto, ciudad o estación"
+                      value={pickupLocation}
+                      onChange={handlePickupChange}
+                      style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500', background: 'transparent' }}
+                    />
+                  </div>
                 </div>
+                {pickupError && <div style={{ position: 'absolute', top: '-25px', left: 0, color: '#d93025', fontSize: '0.8rem', fontWeight: 'bold', background: '#fce8e6', padding: '2px 8px', borderRadius: '4px' }}>{pickupError}</div>}
+                {showSuggestions && pickupLocation && (
+                  <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', listStyle: 'none', margin: 0, padding: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: '4px', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                    {destinos.filter(d => d.toLowerCase().includes(pickupLocation.toLowerCase())).length > 0 ? (
+                      destinos.filter(d => d.toLowerCase().includes(pickupLocation.toLowerCase())).map((destino, idx) => (
+                        <li key={idx} onMouseDown={() => handleSelectSuggestion(destino)} style={{ padding: '12px 16px', borderBottom: '1px solid #e7e7e7', cursor: 'pointer', fontSize: '0.95rem', color: '#333', display: 'flex', alignItems: 'center', gap: '10px' }} onMouseOver={e => e.currentTarget.style.background = '#f5f5f5'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
+                          <span style={{ color: '#666' }}>📍</span> {destino}
+                        </li>
+                      ))
+                    ) : (
+                      <li style={{ padding: '12px 16px', color: '#666', fontSize: '0.95rem' }}>No hay resultados</li>
+                    )}
+                  </ul>
+                )}
               </div>
               
               {/* Pickup Date */}

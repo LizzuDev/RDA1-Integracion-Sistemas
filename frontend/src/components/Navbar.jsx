@@ -1,15 +1,21 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useCurrency } from '../hooks/CurrencyContext';
+import { useLanguage, languages } from '../hooks/LanguageContext';
 import { supabase } from '../services/supabase';
 
 export function Navbar() {
   const location = useLocation();
   const isAutos = location.pathname.startsWith('/autos');
   const { user } = useAuth();
+  const { currency, changeCurrency } = useCurrency();
+  const { language, currentLanguage, changeLanguage } = useLanguage();
   
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
   
   // States for Profile Edit
   const [nombre, setNombre] = useState(user?.user_metadata?.nombre || '');
@@ -120,8 +126,8 @@ export function Navbar() {
           Booking<span>.com</span>
         </div>
         <div className="navbar-actions">
-          <span className="nav-currency">USD</span>
-          <span className="nav-flag">🇪🇨</span>
+          <span className="nav-currency" onClick={() => setShowCurrencyModal(true)} style={{ cursor: 'pointer' }}>{currency}</span>
+          <span className="nav-flag" onClick={() => setShowLanguageModal(true)} style={{ cursor: 'pointer' }}>{currentLanguage.flag}</span>
           <span className="nav-help">?</span>
           {user ? (
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -240,6 +246,146 @@ export function Navbar() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE MONEDA */}
+      {showCurrencyModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', width: '800px', maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+            
+            {/* Header Modal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #e7e7e7' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0, color: '#333' }}>Selecciona tu moneda</h2>
+              <button onClick={() => setShowCurrencyModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#666', lineHeight: 1 }}>×</button>
+            </div>
+            
+            {/* Contenido Modal */}
+            <div style={{ padding: '24px', overflowY: 'auto' }}>
+              <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '24px', lineHeight: '1.5' }}>
+                Cuando corresponda, los precios se convertirán y se mostrarán en la moneda que selecciones. La moneda en la que pagas puede variar en función de la reserva y es posible que se aplique un cargo de servicio.
+              </p>
+              
+              <h3 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Recomendado para ti</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '32px' }}>
+                {[
+                  { code: 'EUR', name: 'Euro' },
+                  { code: 'COP', name: 'Peso colombiano' },
+                  { code: 'CLP', name: 'Peso chileno' },
+                  { code: 'MXN', name: 'Peso mexicano' },
+                  { code: 'ARS', name: 'Peso argentino' },
+                  { code: 'GBP', name: 'Libra esterlina' }
+                ].map(moneda => (
+                  <button 
+                    key={`rec-${moneda.code}`}
+                    onClick={() => { changeCurrency(moneda.code); setShowCurrencyModal(false); }}
+                    style={{ 
+                      display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '12px 16px', 
+                      background: currency === moneda.code ? '#f0f6fd' : 'transparent', 
+                      border: currency === moneda.code ? '1px solid #006ce4' : '1px solid transparent', 
+                      borderRadius: '4px', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => { if(currency !== moneda.code) e.currentTarget.style.background = '#f5f5f5'; }}
+                    onMouseOut={(e) => { if(currency !== moneda.code) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ fontSize: '0.9rem', color: '#333' }}>{moneda.name}</span>
+                    <span style={{ fontSize: '0.85rem', color: '#666', marginTop: '4px' }}>{moneda.code}</span>
+                  </button>
+                ))}
+              </div>
+              
+              <h3 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Todas las monedas</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                {[
+                  { code: 'USD', name: 'Dólar estadounidense' },
+                  { code: 'EUR', name: 'Euro' },
+                  { code: 'COP', name: 'Peso colombiano' },
+                  { code: 'CLP', name: 'Peso chileno' },
+                  { code: 'MXN', name: 'Peso mexicano' },
+                  { code: 'ARS', name: 'Peso argentino' },
+                  { code: 'GBP', name: 'Libra esterlina' }
+                ].map(moneda => (
+                  <button 
+                    key={`all-${moneda.code}`}
+                    onClick={() => { changeCurrency(moneda.code); setShowCurrencyModal(false); }}
+                    style={{ 
+                      display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '12px 16px', 
+                      background: currency === moneda.code ? '#f0f6fd' : 'transparent', 
+                      border: currency === moneda.code ? '1px solid #006ce4' : '1px solid transparent', 
+                      borderRadius: '4px', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => { if(currency !== moneda.code) e.currentTarget.style.background = '#f5f5f5'; }}
+                    onMouseOut={(e) => { if(currency !== moneda.code) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ fontSize: '0.9rem', color: '#333' }}>{moneda.name}</span>
+                    <span style={{ fontSize: '0.85rem', color: '#666', marginTop: '4px' }}>{moneda.code}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE IDIOMA */}
+      {showLanguageModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', width: '800px', maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+            
+            {/* Header Modal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #e7e7e7' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0, color: '#333' }}>Selecciona tu idioma</h2>
+              <button onClick={() => setShowLanguageModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#666', lineHeight: 1 }}>×</button>
+            </div>
+            
+            {/* Contenido Modal */}
+            <div style={{ padding: '24px', overflowY: 'auto' }}>
+              
+              <h3 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Recomendado para ti</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '32px' }}>
+                {languages.slice(0, 5).map(lang => (
+                  <button 
+                    key={`rec-${lang.code}`}
+                    onClick={() => { changeLanguage(lang.code); setShowLanguageModal(false); }}
+                    style={{ 
+                      display: 'flex', alignItems: 'center', padding: '12px 16px', gap: '12px',
+                      background: language === lang.code ? '#f0f6fd' : 'transparent', 
+                      border: language === lang.code ? '1px solid #006ce4' : '1px solid transparent', 
+                      borderRadius: '4px', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => { if(language !== lang.code) e.currentTarget.style.background = '#f5f5f5'; }}
+                    onMouseOut={(e) => { if(language !== lang.code) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ fontSize: '1.5rem' }}>{lang.flag}</span>
+                    <span style={{ fontSize: '0.9rem', color: '#333' }}>{lang.name}</span>
+                  </button>
+                ))}
+              </div>
+              
+              <h3 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>Todos los idiomas</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                {languages.map(lang => (
+                  <button 
+                    key={`all-${lang.code}`}
+                    onClick={() => { changeLanguage(lang.code); setShowLanguageModal(false); }}
+                    style={{ 
+                      display: 'flex', alignItems: 'center', padding: '12px 16px', gap: '12px',
+                      background: language === lang.code ? '#f0f6fd' : 'transparent', 
+                      border: language === lang.code ? '1px solid #006ce4' : '1px solid transparent', 
+                      borderRadius: '4px', cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => { if(language !== lang.code) e.currentTarget.style.background = '#f5f5f5'; }}
+                    onMouseOut={(e) => { if(language !== lang.code) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ fontSize: '1.5rem' }}>{lang.flag}</span>
+                    <span style={{ fontSize: '0.9rem', color: '#333' }}>{lang.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
       )}

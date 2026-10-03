@@ -31,8 +31,6 @@ export function LoginPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (hasInvalid) {
       setErrors(prev => ({ ...prev, email: 'Caracteres inválidos para correo electrónico.' }));
-    } else if (val.length > 5 && !emailRegex.test(val)) {
-      setErrors(prev => ({ ...prev, email: 'Formato de correo electrónico incompleto o inválido.' }));
     } else {
       setErrors(prev => ({ ...prev, email: '', general: '' })); // clear general error on re-typing
     }

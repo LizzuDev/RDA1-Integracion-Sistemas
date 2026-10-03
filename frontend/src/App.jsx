@@ -31,6 +31,8 @@ import { BannerCookies } from './components/BannerCookies';
 import { OfflineBanner } from './components/OfflineBanner';
 
 import { AuthProvider } from './hooks/useAuth';
+import { CurrencyProvider } from './hooks/CurrencyContext';
+import { LanguageProvider } from './hooks/LanguageContext';
 
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -70,6 +72,8 @@ function App() {
 
   return (
     <AuthProvider>
+    <LanguageProvider>
+    <CurrencyProvider>
     <BrowserRouter>
       <a className="skip-link" href="#contenido-principal">
         Saltar al contenido
@@ -120,6 +124,8 @@ function App() {
       />
       <OfflineBanner />
     </BrowserRouter>
+    </CurrencyProvider>
+    </LanguageProvider>
     </AuthProvider>
   );
 }

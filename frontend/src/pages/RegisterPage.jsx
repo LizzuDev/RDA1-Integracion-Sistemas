@@ -223,11 +223,9 @@ export function RegisterPage() {
       errorMsg = 'Solo se permiten letras, sin números ni símbolos.';
     } else if (hasSpaces) {
       errorMsg = 'No se permiten espacios al inicio ni consecutivos.';
-    } else if (val.trim().length > 0 && val.trim().length < 3) {
-      errorMsg = 'El nombre debe tener al menos 3 letras.';
     }
 
-    setErrors(prev => ({ ...prev, nombre: errorMsg }));
+    setErrors(prev => ({ ...prev, nombre: errorMsg, general: '' }));
     if (val.length <= 50) setNombre(val);
   };
 
@@ -243,11 +241,9 @@ export function RegisterPage() {
       errorMsg = 'Solo se permiten letras, sin números ni símbolos.';
     } else if (hasSpaces) {
       errorMsg = 'No se permiten espacios al inicio ni consecutivos.';
-    } else if (val.trim().length > 0 && val.trim().length < 3) {
-      errorMsg = 'El apellido debe tener al menos 3 letras.';
     }
 
-    setErrors(prev => ({ ...prev, apellido: errorMsg }));
+    setErrors(prev => ({ ...prev, apellido: errorMsg, general: '' }));
     if (val.length <= 50) setApellido(val);
   };
 
@@ -259,13 +255,9 @@ export function RegisterPage() {
     let errorMsg = '';
     if (hasInvalid) {
       errorMsg = 'La cédula solo puede contener números.';
-    } else if (val.length > 0 && val.length < 10) {
-      errorMsg = `Te faltan ${10 - val.length} dígitos.`;
-    } else if (val.length === 10 && !validarCedulaEcuatoriana(val)) {
-      errorMsg = 'La cédula ingresada no es válida (Módulo 10).';
     }
 
-    setErrors(prev => ({ ...prev, cedula: errorMsg }));
+    setErrors(prev => ({ ...prev, cedula: errorMsg, general: '' }));
     if (val.length <= 10) setCedula(val);
   };
 
@@ -281,13 +273,9 @@ export function RegisterPage() {
       errorMsg = 'El celular debe iniciar con 09.';
     } else if (val.length > 1 && !val.startsWith('09')) {
       errorMsg = 'El celular debe iniciar con 09.';
-    } else if (val.length > 0 && val.length < 10) {
-      errorMsg = `Te faltan ${10 - val.length} dígitos.`;
-    } else if (val.length === 10 && /^09(\d)\1{7}$/.test(val)) {
-      errorMsg = 'Número de celular inválido (dígitos repetidos).';
     }
 
-    setErrors(prev => ({ ...prev, telefono: errorMsg }));
+    setErrors(prev => ({ ...prev, telefono: errorMsg, general: '' }));
     if (val.length <= 10) setTelefono(val);
   };
 
@@ -296,15 +284,12 @@ export function RegisterPage() {
     const hasInvalid = /[^a-zA-Z0-9.@_-]/.test(rawValue);
     const val = rawValue.replace(/[^a-zA-Z0-9.@_-]/g, '');
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     let errorMsg = '';
     if (hasInvalid) {
       errorMsg = 'Caracteres inválidos para correo electrónico.';
-    } else if (val.length > 5 && !emailRegex.test(val)) {
-      errorMsg = 'Formato de correo electrónico incompleto o inválido.';
     }
 
-    setErrors(prev => ({ ...prev, email: errorMsg }));
+    setErrors(prev => ({ ...prev, email: errorMsg, general: '' }));
     if (val.length <= 30) setEmail(val);
   };
 
@@ -314,9 +299,9 @@ export function RegisterPage() {
     const val = rawValue.replace(/\s/g, '');
 
     if (hasSpaces) {
-      setErrors(prev => ({ ...prev, password: 'La contraseña no puede contener espacios.' }));
+      setErrors(prev => ({ ...prev, password: 'La contraseña no puede contener espacios.', general: '' }));
     } else {
-      setErrors(prev => ({ ...prev, password: '' }));
+      setErrors(prev => ({ ...prev, password: '', general: '' }));
     }
     setPassword(val);
   };
