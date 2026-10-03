@@ -114,10 +114,10 @@ export function AtraccionDetail() {
         };
 
         emailjs.send(
-          'service_gc9gkdc',
-          'template_nlbgw3v',
+          import.meta.env.VITE_EMAILJS_SERVICE_ID,
+          import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
           templateParams,
-          'vZyuTrdLeGeWrTWLe'
+          import.meta.env.VITE_EMAILJS_PUBLIC_KEY
         ).then((response) => {
           console.log('CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
         }).catch((error) => {
