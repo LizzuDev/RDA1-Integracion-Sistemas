@@ -237,14 +237,16 @@ export function RegisterPage() {
 
     let val = rawValue.replace(/[^A-Za-záéíóúÁÉÍÓÚñÑ\s]/g, '').replace(/^\s+/, '').replace(/\s{2,}/g, ' ');
 
+    let errorMsg = '';
     if (hasInvalid) {
-      setErrors(prev => ({ ...prev, nombre: 'Solo se permiten letras, sin números ni símbolos.' }));
+      errorMsg = 'Solo se permiten letras, sin números ni símbolos.';
     } else if (hasSpaces) {
-      setErrors(prev => ({ ...prev, nombre: 'No se permiten espacios al inicio ni consecutivos.' }));
-    } else {
-      setErrors(prev => ({ ...prev, nombre: '' }));
+      errorMsg = 'No se permiten espacios al inicio ni consecutivos.';
+    } else if (val.trim().length > 0 && val.trim().length < 3) {
+      errorMsg = 'El nombre debe tener al menos 3 letras.';
     }
 
+    setErrors(prev => ({ ...prev, nombre: errorMsg }));
     if (val.length <= 50) setNombre(val);
   };
 
@@ -255,14 +257,16 @@ export function RegisterPage() {
 
     let val = rawValue.replace(/[^A-Za-záéíóúÁÉÍÓÚñÑ\s]/g, '').replace(/^\s+/, '').replace(/\s{2,}/g, ' ');
 
+    let errorMsg = '';
     if (hasInvalid) {
-      setErrors(prev => ({ ...prev, apellido: 'Solo se permiten letras, sin números ni símbolos.' }));
+      errorMsg = 'Solo se permiten letras, sin números ni símbolos.';
     } else if (hasSpaces) {
-      setErrors(prev => ({ ...prev, apellido: 'No se permiten espacios al inicio ni consecutivos.' }));
-    } else {
-      setErrors(prev => ({ ...prev, apellido: '' }));
+      errorMsg = 'No se permiten espacios al inicio ni consecutivos.';
+    } else if (val.trim().length > 0 && val.trim().length < 3) {
+      errorMsg = 'El apellido debe tener al menos 3 letras.';
     }
 
+    setErrors(prev => ({ ...prev, apellido: errorMsg }));
     if (val.length <= 50) setApellido(val);
   };
 
@@ -271,18 +275,17 @@ export function RegisterPage() {
     const hasInvalid = /\D/.test(rawValue);
     const val = rawValue.replace(/\D/g, '');
 
+    let errorMsg = '';
     if (hasInvalid) {
-      setErrors(prev => ({ ...prev, cedula: 'La cédula solo puede contener números.' }));
-    } else {
-      setErrors(prev => ({ ...prev, cedula: '' }));
+      errorMsg = 'La cédula solo puede contener números.';
+    } else if (val.length > 0 && val.length < 10) {
+      errorMsg = `Te faltan ${10 - val.length} dígitos.`;
+    } else if (val.length === 10 && !validarCedulaEcuatoriana(val)) {
+      errorMsg = 'La cédula ingresada no es válida (Módulo 10).';
     }
 
-    if (val.length <= 10) {
-      setCedula(val);
-      if (val.length === 10 && !validarCedulaEcuatoriana(val)) {
-        setErrors(prev => ({ ...prev, cedula: 'La cédula ingresada no es válida (Módulo 10).' }));
-      }
-    }
+    setErrors(prev => ({ ...prev, cedula: errorMsg }));
+    if (val.length <= 10) setCedula(val);
   };
 
   const handleTelefonoChange = (e) => {
@@ -290,24 +293,21 @@ export function RegisterPage() {
     const hasInvalid = /\D/.test(rawValue);
     const val = rawValue.replace(/\D/g, '');
 
+    let errorMsg = '';
     if (hasInvalid) {
-      setErrors(prev => ({ ...prev, telefono: 'El teléfono solo puede contener números.' }));
-    } else {
-      setErrors(prev => ({ ...prev, telefono: '' }));
+      errorMsg = 'El teléfono solo puede contener números.';
+    } else if (val.length > 0 && !val.startsWith('0')) {
+      errorMsg = 'El celular debe iniciar con 09.';
+    } else if (val.length > 1 && !val.startsWith('09')) {
+      errorMsg = 'El celular debe iniciar con 09.';
+    } else if (val.length > 0 && val.length < 10) {
+      errorMsg = `Te faltan ${10 - val.length} dígitos.`;
+    } else if (val.length === 10 && /^09(\d)\1{7}$/.test(val)) {
+      errorMsg = 'Número de celular inválido (dígitos repetidos).';
     }
 
-    if (val.length <= 10) {
-      setTelefono(val);
-      if (val.length === 10) {
-        if (!val.startsWith('09')) {
-          setErrors(prev => ({ ...prev, telefono: 'El celular debe iniciar con 09.' }));
-        } else if (/^09(\d)\1{7}$/.test(val)) {
-          setErrors(prev => ({ ...prev, telefono: 'Número de celular inválido (dígitos repetidos).' }));
-        }
-      } else if (val.length > 0 && !val.startsWith('0')) {
-        setErrors(prev => ({ ...prev, telefono: 'El celular debe iniciar con 09.' }));
-      }
-    }
+    setErrors(prev => ({ ...prev, telefono: errorMsg }));
+    if (val.length <= 10) setTelefono(val);
   };
 
   const handleEmailChange = (e) => {
@@ -315,12 +315,15 @@ export function RegisterPage() {
     const hasInvalid = /[^a-zA-Z0-9.@_-]/.test(rawValue);
     const val = rawValue.replace(/[^a-zA-Z0-9.@_-]/g, '');
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    let errorMsg = '';
     if (hasInvalid) {
-      setErrors(prev => ({ ...prev, email: 'Caracteres inválidos para correo electrónico.' }));
-    } else {
-      setErrors(prev => ({ ...prev, email: '' }));
+      errorMsg = 'Caracteres inválidos para correo electrónico.';
+    } else if (val.length > 0 && !emailRegex.test(val)) {
+      errorMsg = 'Formato de correo electrónico incompleto o inválido.';
     }
-    
+
+    setErrors(prev => ({ ...prev, email: errorMsg }));
     if (val.length <= 30) setEmail(val);
   };
 
