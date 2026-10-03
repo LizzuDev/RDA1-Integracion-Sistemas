@@ -121,12 +121,18 @@ export function AutoDetail() {
           'Cliente';
 
         const templateParams = {
+          // Variables para cualquier configuración del template de EmailJS
           to_email: user.email,
           to_name: clienteName,
+          email: user.email,        // alias alternativo
+          name: clienteName,        // alias alternativo
+          reply_to: user.email,
           pnr: orderId.substring(0, 8).toUpperCase(),
           service_name: `Renta de ${make} ${model} (${dias} días)`,
           total_price: `$${orderTotal} USD`,
+          message: `Reserva confirmada: Renta de ${make} ${model} por ${dias} días. Total: $${orderTotal} USD. PNR: ${orderId.substring(0, 8).toUpperCase()}`,
         };
+        console.log('[EmailJS] Enviando a:', user.email, 'params:', templateParams);
 
         emailjs.send(
           'service_gc9gkdc',
