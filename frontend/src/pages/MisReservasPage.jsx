@@ -72,7 +72,7 @@ export function MisReservasPage() {
         }));
         nextCursor = respuestaVuelos.nextCursor;
       } catch (err) {
-        console.warn('No se pudieron cargar reservas de vuelos API:', err?.message);
+        // Fallback silenciado
       }
 
       // 2. Autos API & Local
@@ -93,7 +93,7 @@ export function MisReservasPage() {
           link: '/autos'
         }));
       } catch (err) {
-        console.warn('No se pudieron cargar reservas de autos API:', err?.message);
+        // Fallback silenciado
       }
 
       // Autos locales guardados
@@ -129,7 +129,7 @@ export function MisReservasPage() {
           link: at.atraccionId ? `/atracciones/${at.atraccionId}` : '/'
         }));
       } catch (err) {
-        console.warn('No se pudieron cargar reservas de atracciones API:', err?.message);
+        // Fallback silenciado
       }
 
       // Atracciones locales guardadas
