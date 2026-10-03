@@ -28,8 +28,11 @@ export function LoginPage() {
     const hasInvalid = /[^a-zA-Z0-9.@_-]/.test(rawValue);
     const val = rawValue.replace(/[^a-zA-Z0-9.@_-]/g, '');
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (hasInvalid) {
       setErrors(prev => ({ ...prev, email: 'Caracteres inválidos para correo electrónico.' }));
+    } else if (val.length > 5 && !emailRegex.test(val)) {
+      setErrors(prev => ({ ...prev, email: 'Formato de correo electrónico incompleto o inválido.' }));
     } else {
       setErrors(prev => ({ ...prev, email: '', general: '' })); // clear general error on re-typing
     }
@@ -66,7 +69,7 @@ export function LoginPage() {
     if (signInError) {
       // Manejar mensajes comunes de Supabase
       if (signInError.message.includes('Invalid login credentials')) {
-         setErrors(prev => ({ ...prev, general: 'Credenciales inválidas. Verifica tu correo y contraseña.' }));
+         setErrors(prev => ({ ...prev, general: 'Correo o contraseña invalidos' }));
       } else {
          setErrors(prev => ({ ...prev, general: signInError.message }));
       }
@@ -97,8 +100,9 @@ export function LoginPage() {
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Correo electrónico</label>
+            <label htmlFor="login-email" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Correo electrónico</label>
             <input 
+              id="login-email"
               type="email" 
               required 
               maxLength={30}
@@ -109,8 +113,9 @@ export function LoginPage() {
             {errors.email && <div style={errorMsgStyle}>{errors.email}</div>}
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Contraseña</label>
+            <label htmlFor="login-password" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Contraseña</label>
             <input 
+              id="login-password"
               type="password" 
               required 
               maxLength={30}

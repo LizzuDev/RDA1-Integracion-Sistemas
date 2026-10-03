@@ -178,8 +178,8 @@ export function AtraccionDetail() {
     }
   };
 
-  if (loading) return <div className="state-container"><div className="spinner" /></div>;
-  if (error) return <div className="state-container"><div className="error-icon">⚠️</div><p className="state-subtitle">{error}</p><button className="retry-btn" onClick={() => navigate('/')}>Volver</button></div>;
+  if (loading) return <main id="contenido-principal" className="state-container"><h1 className="sr-only">Cargando atracción</h1><div className="spinner" /></main>;
+  if (error) return <main id="contenido-principal" className="state-container"><h1 className="sr-only">Error al cargar atracción</h1><div className="error-icon">⚠️</div><p className="state-subtitle">{error}</p><button className="retry-btn" onClick={() => navigate('/')}>Volver</button></main>;
   if (!atraccion) return null;
 
   const precio = parseFloat(atraccion.precio_unitario || atraccion.price?.total || atraccion.precioTicket || 55);
@@ -206,7 +206,8 @@ export function AtraccionDetail() {
                 <div className="gb-score">10</div>
                 <div className="gb-text">
                   <strong>Excepcional</strong><br/>
-                  <a href="#reviews" style={{ color: 'white', textDecoration: 'underline', cursor: 'pointer' }}>38 comentarios {'>'}</a>
+                  {/* TODO (RDA2): Añadir array de comentarios al contrato OpenAPI v1.3 - Paúl Rosero */}
+                  {/* <a href="#reviews" style={{ color: 'white', textDecoration: 'underline', cursor: 'pointer' }}>38 comentarios {'>'}</a> */}
                 </div>
               </div>
             </div>

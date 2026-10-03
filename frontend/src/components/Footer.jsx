@@ -34,7 +34,7 @@ export function Footer({ onAbrirPreferenciasCookies }) {
         © {anio} <strong>Booking Prototipo</strong> — Proyecto Integrador de
         Sistemas · Universidad
       </p>
-      <p style={{ marginTop: 8, fontSize: '.78rem', opacity: 0.5 }}>
+      <p style={{ marginTop: 8, fontSize: '.78rem', color: '#595959' }}>
         Powered by NestJS · React · PostgreSQL · Docker
       </p>
     </footer>

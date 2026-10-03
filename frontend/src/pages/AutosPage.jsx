@@ -102,7 +102,7 @@ export function AutosPage() {
   const marcasPopulares = [
     { nombre: 'Europcar', bg: '#00843D', color: 'white', label: 'Europcar' },
     { nombre: 'Alamo', bg: '#00266b', color: '#ffb700', label: 'Alamo' },
-    { nombre: 'Localiza', bg: '#00974a', color: 'white', label: 'Localiza' },
+    { nombre: 'Localiza', bg: '#006d35', color: 'white', label: 'Localiza' },
     { nombre: 'Keddy By Europcar', bg: '#6a1b9a', color: 'white', label: 'Keddy By Europcar' },
     { nombre: 'Goldcar', bg: '#fdd306', color: '#000', label: 'Goldcar' },
     { nombre: 'Sixt', bg: '#ff5f00', color: '#000', label: 'Sixt' },
@@ -167,7 +167,7 @@ export function AutosPage() {
   }
 
   return (
-    <>
+    <main id="contenido-principal">
       {/* HEADER HERO ESTILO BOOKING */}
       <section className="hero" style={{ background: '#003b95', padding: '60px 0 20px', minHeight: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'white' }}>
         <div style={{ maxWidth: '1100px', width: '100%', padding: '0 20px' }}>
@@ -217,7 +217,7 @@ export function AutosPage() {
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
                   <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Hora</span>
-                  <select style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
+                  <select aria-label="Hora de recogida" style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
                     {timeOptions.map(t => <option key={`pickup-${t}`} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -246,7 +246,7 @@ export function AutosPage() {
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
                 <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
                   <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Hora</span>
-                  <select style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
+                  <select aria-label="Hora de devolución" style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
                     {timeOptions.map(t => <option key={`dropoff-${t}`} value={t}>{t}</option>)}
                   </select>
                 </div>
@@ -283,7 +283,7 @@ export function AutosPage() {
 
       {!hasSearched && (
         <>
-          <main className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
+          <div className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
             {/* MARCAS POPULARES */}
             <section style={{ marginBottom: '40px' }}>
           <h2 style={{ fontSize: '1.4rem', marginBottom: '20px', fontWeight: 'bold', color: '#333' }}>Empresas populares de alquiler de coches</h2>
@@ -316,7 +316,7 @@ export function AutosPage() {
             </div>
           </div>
         </section>
-      </main>
+      </div>
 
       <div style={{ background: '#f5f5f5', width: '100%', padding: '40px 0', borderTop: '1px solid #e7e7e7', borderBottom: '1px solid #e7e7e7' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '30px' }}>
@@ -344,7 +344,7 @@ export function AutosPage() {
         </div>
       </div>
 
-      <main className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
+      <div className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
         
         {/* PREGUNTAS FRECUENTES */}
         <section style={{ marginBottom: '40px' }}>
@@ -409,7 +409,7 @@ export function AutosPage() {
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
               <img src="https://picsum.photos/id/10/60/60" alt="Quito" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
               <div>
-                <h4 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Quito</h4>
+                <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Quito</h3>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>15 puntos de alquiler de coches</div>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>US$57,79</strong> al día</div>
               </div>
@@ -417,7 +417,7 @@ export function AutosPage() {
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
               <img src="https://picsum.photos/id/11/60/60" alt="Cuenca" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
               <div>
-                <h4 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Cuenca</h4>
+                <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Cuenca</h3>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>3 puntos de alquiler de coches</div>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>US$46,65</strong> al día</div>
               </div>
@@ -425,7 +425,7 @@ export function AutosPage() {
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
               <img src="https://picsum.photos/id/12/60/60" alt="Guayaquil" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
               <div>
-                <h4 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Guayaquil</h4>
+                <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Guayaquil</h3>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>3 puntos de alquiler de coches</div>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>US$47,70</strong> al día</div>
               </div>
@@ -433,19 +433,19 @@ export function AutosPage() {
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
               <img src="https://picsum.photos/id/13/60/60" alt="Manta" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
               <div>
-                <h4 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Manta</h4>
+                <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Manta</h3>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>2 puntos de alquiler de coches</div>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>US$52,64</strong> al día</div>
               </div>
             </div>
           </div>
         </section>
-      </main>
+      </div>
       </>
       )}
 
       {hasSearched && (
-        <main className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
+        <div className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
           {error && (
           <div className="state-container" style={{ textAlign: 'center', padding: '40px 0' }}>
             <div className="error-icon" style={{ fontSize: '2rem' }}>⚠️</div>
@@ -527,8 +527,8 @@ export function AutosPage() {
             </div>
           </div>
         )}
-      </main>
+      </div>
       )}
-    </>
+    </main>
   );
 }

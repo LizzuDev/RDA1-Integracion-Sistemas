@@ -20,26 +20,7 @@ export function RegisterPage() {
     }
   }, [user, navigate]);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('register_form');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.nombre) setNombre(parsed.nombre);
-        if (parsed.apellido) setApellido(parsed.apellido);
-        if (parsed.cedula) setCedula(parsed.cedula);
-        if (parsed.telefono) setTelefono(parsed.telefono);
-        if (parsed.email) setEmail(parsed.email);
-      } catch (e) {}
-    }
-  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('register_form', JSON.stringify({
-      nombre, apellido, cedula, telefono, email
-    }));
-  }, [nombre, apellido, cedula, telefono, email]);
-  
   const [errors, setErrors] = useState({
     nombre: '',
     apellido: '',
@@ -217,7 +198,7 @@ export function RegisterPage() {
         setTelefono('');
         setEmail('');
         setPassword('');
-        localStorage.removeItem('register_form');
+        setLoading(false);
         setLoading(false);
         return; // Terminamos aquí sin redirigir, ya que debe confirmar
       }
@@ -319,7 +300,7 @@ export function RegisterPage() {
     let errorMsg = '';
     if (hasInvalid) {
       errorMsg = 'Caracteres inválidos para correo electrónico.';
-    } else if (val.length > 0 && !emailRegex.test(val)) {
+    } else if (val.length > 5 && !emailRegex.test(val)) {
       errorMsg = 'Formato de correo electrónico incompleto o inválido.';
     }
 
@@ -362,8 +343,9 @@ export function RegisterPage() {
 
         <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div>
-            <label style={labelStyle}>Nombre</label>
+            <label htmlFor="reg-nombre" style={labelStyle}>Nombre</label>
             <input 
+              id="reg-nombre"
               type="text" 
               required 
               value={nombre} 
@@ -375,8 +357,9 @@ export function RegisterPage() {
           </div>
           
           <div>
-            <label style={labelStyle}>Apellido</label>
+            <label htmlFor="reg-apellido" style={labelStyle}>Apellido</label>
             <input 
+              id="reg-apellido"
               type="text" 
               required 
               value={apellido} 
@@ -388,8 +371,9 @@ export function RegisterPage() {
           </div>
           
           <div>
-            <label style={labelStyle}>Cédula</label>
+            <label htmlFor="reg-cedula" style={labelStyle}>Cédula</label>
             <input 
+              id="reg-cedula"
               type="text" 
               required 
               value={cedula} 
@@ -401,8 +385,9 @@ export function RegisterPage() {
           </div>
           
           <div>
-            <label style={labelStyle}>Teléfono</label>
+            <label htmlFor="reg-telefono" style={labelStyle}>Teléfono</label>
             <input 
+              id="reg-telefono"
               type="tel" 
               required 
               maxLength={10}
@@ -415,8 +400,9 @@ export function RegisterPage() {
           </div>
           
           <div>
-            <label style={labelStyle}>Correo electrónico</label>
+            <label htmlFor="reg-email" style={labelStyle}>Correo electrónico</label>
             <input 
+              id="reg-email"
               type="email" 
               required 
               maxLength={30}
@@ -429,8 +415,9 @@ export function RegisterPage() {
           </div>
           
           <div>
-            <label style={labelStyle}>Contraseña</label>
+            <label htmlFor="reg-password" style={labelStyle}>Contraseña</label>
             <input 
+              id="reg-password"
               type="password" 
               required 
               maxLength={30}
@@ -440,11 +427,11 @@ export function RegisterPage() {
               style={{ ...inputStyle(errors.password), marginBottom: '8px' }}
             />
             <div style={{ fontSize: '0.75rem', color: '#555', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ color: reqLength ? '#1e8e3e' : '#777' }}>{reqLength ? '✓' : '○'} Al menos 8 caracteres</span>
-              <span style={{ color: reqUpper ? '#1e8e3e' : '#777' }}>{reqUpper ? '✓' : '○'} Al menos 1 mayúscula</span>
-              <span style={{ color: reqLower ? '#1e8e3e' : '#777' }}>{reqLower ? '✓' : '○'} Al menos 1 minúscula</span>
-              <span style={{ color: reqNumber ? '#1e8e3e' : '#777' }}>{reqNumber ? '✓' : '○'} Al menos 1 número</span>
-              <span style={{ color: reqSpecial ? '#1e8e3e' : '#777' }}>{reqSpecial ? '✓' : '○'} Al menos 1 símbolo especial (!@#$%^&*)</span>
+              <span style={{ color: reqLength ? '#1e8e3e' : '#595959' }}>{reqLength ? '✓' : '○'} Al menos 8 caracteres</span>
+              <span style={{ color: reqUpper ? '#1e8e3e' : '#595959' }}>{reqUpper ? '✓' : '○'} Al menos 1 mayúscula</span>
+              <span style={{ color: reqLower ? '#1e8e3e' : '#595959' }}>{reqLower ? '✓' : '○'} Al menos 1 minúscula</span>
+              <span style={{ color: reqNumber ? '#1e8e3e' : '#595959' }}>{reqNumber ? '✓' : '○'} Al menos 1 número</span>
+              <span style={{ color: reqSpecial ? '#1e8e3e' : '#595959' }}>{reqSpecial ? '✓' : '○'} Al menos 1 símbolo especial (!@#$%^&*)</span>
             </div>
             {errors.password && <div style={{...errorMsgStyle, marginTop: '8px'}}>{errors.password}</div>}
           </div>

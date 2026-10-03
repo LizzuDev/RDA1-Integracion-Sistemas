@@ -175,7 +175,7 @@ export function AutoDetail() {
   const total = (precioDiario * dias).toFixed(2);
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: '40px' }}>
+    <main id="contenido-principal" style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: '40px' }}>
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '20px' }}>
 
         {/* Breadcrumb & Header */}
@@ -330,12 +330,12 @@ export function AutoDetail() {
             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px' }}>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>Ajustar Reserva</h3>
               <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '5px' }}>Días de renta:</label>
-                <input type="number" min="1" max="30" value={dias} onChange={(e) => setDias(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={handleNumberKeyDown} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
+                <label htmlFor="auto-dias" style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '5px' }}>Días de renta:</label>
+                <input id="auto-dias" type="number" min="1" max="30" value={dias} onChange={(e) => setDias(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={handleNumberKeyDown} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '5px' }}>Edad del conductor:</label>
-                <input type="number" min="18" max="99" value={driverAge} onChange={(e) => setDriverAge(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={handleNumberKeyDown} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
+                <label htmlFor="auto-edad" style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '5px' }}>Edad del conductor:</label>
+                <input id="auto-edad" type="number" min="18" max="99" value={driverAge} onChange={(e) => setDriverAge(e.target.value.replace(/[^0-9]/g, ''))} onKeyDown={handleNumberKeyDown} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
               </div>
             </div>
 
@@ -349,6 +349,7 @@ export function AutoDetail() {
                   <div style={{ position: 'absolute', left: '-25px', top: '2px', width: '12px', height: '12px', borderRadius: '50%', border: '2px solid #666', background: 'white' }}></div>
                   <div style={{ fontSize: '0.9rem', color: '#333' }}>lun, 5 oct - 10:00</div>
                   <div style={{ fontWeight: 'bold', color: '#333', fontSize: '1rem' }}>Quito Aeropuerto</div>
+                  {/* TODO (RDA2): Añadir instrucciones de recogida (pickup_instructions) al contrato OpenAPI v1.3 - Paúl Rosero */}
                   {/* <div onClick={() => { setInstructionsType('recogida'); setShowInstructionsModal(true); }} style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', marginTop: '5px' }}>Ver instrucciones para la recogida</div> */}
                 </div>
 
@@ -356,6 +357,7 @@ export function AutoDetail() {
                   <div style={{ position: 'absolute', left: '-25px', top: '2px', width: '12px', height: '12px', borderRadius: '50%', border: '2px solid #666', background: 'white' }}></div>
                   <div style={{ fontSize: '0.9rem', color: '#333' }}>jue, 8 oct - 10:00</div>
                   <div style={{ fontWeight: 'bold', color: '#333', fontSize: '1rem' }}>Quito Aeropuerto</div>
+                  {/* TODO (RDA2): Añadir instrucciones de devolución (dropoff_instructions) al contrato OpenAPI v1.3 - Paúl Rosero */}
                   {/* <div onClick={() => { setInstructionsType('devolución'); setShowInstructionsModal(true); }} style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', marginTop: '5px' }}>Ver instrucciones para la devolución</div> */}
                 </div>
               </div>
@@ -398,8 +400,8 @@ export function AutoDetail() {
             <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '20px' }}>Total a pagar: <strong>{total} US$</strong></p>
 
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '0.9rem', color: '#333', marginBottom: '10px', fontWeight: 'bold' }}>Método de pago:</label>
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}>
+              <label htmlFor="pago-metodo" style={{ display: 'block', fontSize: '0.9rem', color: '#333', marginBottom: '10px', fontWeight: 'bold' }}>Método de pago:</label>
+              <select id="pago-metodo" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}>
                 <option value="TARJETA">Tarjeta de Crédito / Débito</option>
                 <option value="PAYPAL">PayPal</option>
                 <option value="TRANSFERENCIA">Transferencia Bancaria</option>
@@ -517,6 +519,6 @@ export function AutoDetail() {
         </div>
       )}
 
-    </div>
+    </main>
   );
 }
