@@ -73,7 +73,7 @@ export function AtraccionesPage() {
   });
 
   return (
-    <>
+    <main id="contenido-principal">
       {/* HERO SECTION */}
       <section className="hero">
         <div className="hero-content">
@@ -121,7 +121,7 @@ export function AtraccionesPage() {
         </div>
       </section>
 
-      <main className="main-content">
+      <div className="main-content">
         
         {/* RECOMENDADO GENERADO POR IA */}
         <section className="section-block">
@@ -134,7 +134,7 @@ export function AtraccionesPage() {
           </div>
 
           {loading && <div className="spinner"></div>}
-          {!loading && error && <p style={{color: 'red'}}>{error}</p>}
+          {!loading && error && <p style={{color: '#d32f2f'}}>{error}</p>}
           
           <div className="atracciones-horizontal-scroll">
             {atraccionesFiltradas.slice(0, 5).map((atraccion, idx) => (
@@ -206,21 +206,21 @@ export function AtraccionesPage() {
             <div className="feature-item">
               <span className="feature-icon">🎡</span>
               <div>
-                <h4>Descubre las principales atracciones</h4>
+                <h3>Descubre las principales atracciones</h3>
                 <p>Conoce lo mejor del destino con atracciones, tours, actividades y mucho más</p>
               </div>
             </div>
             <div className="feature-item">
               <span className="feature-icon">⏱️</span>
               <div>
-                <h4>Rápido y flexible</h4>
+                <h3>Rápido y flexible</h3>
                 <p>Puedes reservar los boletos online en pocos minutos y hay cancelación gratis en muchas atracciones</p>
               </div>
             </div>
             <div className="feature-item">
               <span className="feature-icon">🎧</span>
               <div>
-                <h4>Asistencia cuando lo necesites</h4>
+                <h3>Asistencia cuando lo necesites</h3>
                 <p>El equipo de Atención al cliente está a tu disposición para ayudarte las 24 horas, todos los días</p>
               </div>
             </div>
@@ -254,7 +254,7 @@ export function AtraccionesPage() {
               >
                 <img src={dest.img} alt={dest.nombre} />
                 <div className="ex-info">
-                  <h4>{dest.nombre}</h4>
+                  <h3>{dest.nombre}</h3>
                   <p>{dest.cosas}</p>
                 </div>
               </div>
@@ -262,7 +262,7 @@ export function AtraccionesPage() {
           </div>
         </section>
 
-      </main>
-    </>
+      </div>
+    </main>
   );
 }
