@@ -37,6 +37,44 @@ export function AtraccionesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busqueda, setBusqueda] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [flashRed, setFlashRed] = useState(false);
+  const destinos = ['Quito', 'Guayaquil', 'Cuenca', 'Baños', 'Galápagos', 'Mindo', 'Mitad del Mundo', 'Otavalo'];
+
+  const triggerFlash = (msg) => {
+    setSearchError(msg);
+    setFlashRed(true);
+    setTimeout(() => setFlashRed(false), 300);
+  };
+
+  const handleSearchChange = (e) => {
+    const raw = e.target.value;
+    const hasNumbers = /[0-9]/.test(raw);
+    const hasSymbols = /[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ0-9]/.test(raw);
+    const hasMultipleSpaces = /\s{2,}/.test(raw);
+
+    if (hasNumbers) {
+      triggerFlash('No se permiten números en el destino');
+    } else if (hasSymbols) {
+      triggerFlash('Solo se permiten letras y comas');
+    } else if (hasMultipleSpaces) {
+      triggerFlash('No se permiten espacios consecutivos');
+    } else {
+      setSearchError('');
+    }
+
+    const clean = raw.replace(/[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ]/g, '').replace(/\s{2,}/g, ' ');
+    setBusqueda(clean);
+    setShowSuggestions(clean.length > 0);
+  };
+
+  const handleSelectSuggestion = (destino) => {
+    setBusqueda(destino);
+    setShowSuggestions(false);
+    setSearchError('');
+  };
+
   const [tabActivo, setTabActivo] = useState('Pichincha');
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
@@ -82,18 +120,35 @@ export function AtraccionesPage() {
         </div>
         
         <div className="search-box">
-          <div className="search-input-group">
-            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="search-input-group" style={{ position: 'relative', background: flashRed ? '#fce8e6' : 'white', border: flashRed ? '3px solid #d93025' : '3px solid transparent', transition: 'background-color 0.2s, border 0.2s' }}>
+            <svg width="24" height="24" fill="none" stroke={flashRed ? '#d93025' : 'currentColor'} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
-            <div className="input-text-wrapper">
+            <div className="input-text-wrapper" style={{ width: '100%' }}>
               <input
                 type="text"
                 placeholder="Destino o ¿A dónde vas?"
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
+                onChange={handleSearchChange}
+                onFocus={() => setShowSuggestions(busqueda.length > 0)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                style={{ background: 'transparent' }}
               />
             </div>
+            {searchError && <div style={{ position: 'absolute', top: '-25px', left: 0, color: '#d93025', fontSize: '0.8rem', fontWeight: 'bold', background: '#fce8e6', padding: '2px 8px', borderRadius: '4px' }}>{searchError}</div>}
+            {showSuggestions && busqueda && (
+              <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', listStyle: 'none', margin: 0, padding: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: '4px', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                {destinos.filter(d => d.toLowerCase().includes(busqueda.toLowerCase())).length > 0 ? (
+                  destinos.filter(d => d.toLowerCase().includes(busqueda.toLowerCase())).map((destino, idx) => (
+                    <li key={idx} onMouseDown={() => handleSelectSuggestion(destino)} style={{ padding: '12px 16px', borderBottom: '1px solid #e7e7e7', cursor: 'pointer', fontSize: '0.95rem', color: '#333', display: 'flex', alignItems: 'center', gap: '10px' }} onMouseOver={e => e.currentTarget.style.background = '#f5f5f5'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
+                      <span style={{ color: '#666' }}>📍</span> {destino}
+                    </li>
+                  ))
+                ) : (
+                  <li style={{ padding: '12px 16px', color: '#666', fontSize: '0.95rem' }}>No hay resultados</li>
+                )}
+              </ul>
+            )}
           </div>
           
           <div className="search-input-group date-group">
