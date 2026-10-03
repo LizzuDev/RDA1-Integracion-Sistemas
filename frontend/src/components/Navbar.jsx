@@ -32,7 +32,7 @@ export function Navbar() {
     setProfileError('');
     
     try {
-      const cleanEmail = email.trim();
+      const cleanEmail = email.trim().toLowerCase();
       let hadErrors = false;
       let errorMsg = '';
       
@@ -42,7 +42,7 @@ export function Navbar() {
       });
       if (metaError) {
         hadErrors = true;
-        errorMsg += `Error al guardar datos: ${metaError.message}. `;
+        errorMsg += `Error al guardar datos de perfil: ${metaError.message}. `;
       }
 
       // 2. Actualizar Contraseña (si se solicita)
@@ -52,7 +52,6 @@ export function Navbar() {
            return;
         }
         
-        // Re-autenticación
         const { error: authError } = await supabase.auth.signInWithPassword({
           email: user.email,
           password: currentPassword
@@ -74,28 +73,45 @@ export function Navbar() {
       }
       
       // 3. Actualizar Correo (si cambió)
-      if (cleanEmail !== user.email && !hadErrors) {
+      if (cleanEmail && cleanEmail !== user.email && !hadErrors) {
+        // Validar formato básico antes de llamar a Supabase
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(cleanEmail)) {
+          setProfileError('El correo que ingresaste no tiene un formato válido (ej: tucorreo@gmail.com).');
+          return;
+        }
+
         const { error: emailError } = await supabase.auth.updateUser({ email: cleanEmail });
         if (emailError) {
           hadErrors = true;
-          if (emailError.message.includes('invalid')) {
-            errorMsg += 'El correo ingresado tiene un formato inválido o está bloqueado por Supabase. ';
+          if (emailError.status === 429 || emailError.message?.includes('rate')) {
+            errorMsg += 'Supabase bloqueó temporalmente los cambios de correo por demasiados intentos. Espera unos minutos e inténtalo de nuevo. ';
+          } else if (emailError.message?.includes('invalid') || emailError.message?.includes('format')) {
+            errorMsg += `El correo "${cleanEmail}" no es válido o está bloqueado. `;
+          } else if (emailError.message?.includes('already')) {
+            errorMsg += 'Ese correo ya está en uso por otra cuenta. ';
           } else {
-            errorMsg += `Error en correo: ${emailError.message}. `;
+            errorMsg += `Error al cambiar correo: ${emailError.message}. `;
           }
+        } else {
+          // Correo actualizado: refrescar la sesión para que user.email se actualice en la UI
+          await supabase.auth.refreshSession();
+          setProfileMsg('¡Perfil actualizado con éxito! Si cambiaste tu correo, inicia sesión nuevamente con el nuevo correo.');
+          setEmail(cleanEmail);
         }
       }
       
       if (hadErrors) {
-        setProfileError(errorMsg || 'Ocurrió un error parcial al actualizar.');
-      } else {
+        setProfileError(errorMsg || 'Ocurrió un error al actualizar el perfil.');
+      } else if (!profileMsg) {
         setProfileMsg('¡Perfil actualizado con éxito!');
       }
       
     } catch (err) {
-      setProfileError(err.message);
+      setProfileError(`Error inesperado: ${err.message}`);
     }
   };
+
 
   return (
     <nav className="navbar">
