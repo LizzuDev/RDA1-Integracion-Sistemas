@@ -329,16 +329,16 @@ export function AtraccionDetail() {
                   <span className="muted">Basado en opiniones reales</span>
                 </div>
               </div>
-              {atraccion.local_ratings_breakdown && (
+              {/* atraccion.local_ratings_breakdown && (
                 <div className="rs-bars">
                   <div className="bar-row"><span>Limpieza</span> <strong>{atraccion.local_ratings_breakdown.limpieza?.toFixed(1)}</strong></div>
                   <div className="bar-row"><span>Servicio y Atención</span> <strong>{atraccion.local_ratings_breakdown.servicio?.toFixed(1)}</strong></div>
                   <div className="bar-row"><span>Calidad General</span> <strong>{atraccion.local_ratings_breakdown.calidad?.toFixed(1)}</strong></div>
                 </div>
-              )}
+              ) */}
             </div>
 
-            {atraccion.local_reviews && atraccion.local_reviews.length > 0 && (
+            {/* atraccion.local_reviews && atraccion.local_reviews.length > 0 && (
               <>
                 <h3 style={{marginTop: 24, marginBottom: 16}}>Lo que más gustó a los clientes</h3>
                 <div className="customer-likes-carousel">
@@ -353,7 +353,7 @@ export function AtraccionDetail() {
                   ))}
                 </div>
               </>
-            )}
+            ) */}
             </div>
 
           <div className="detail-section faq-section">

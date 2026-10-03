@@ -228,7 +228,7 @@ export function AutoDetail() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.9rem', color: '#333', marginBottom: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>👤</span> {seats} plazas</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>⚙️</span> {transmission}</div>
+                    {/* <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>⚙️</span> {transmission}</div> */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>💼</span> {bag_capacity} pieza de equipaje</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>🛣️</span> Kilometraje ilimitado</div>
                   </div>
@@ -252,7 +252,7 @@ export function AutoDetail() {
               </div>
             </div>
 
-            {/* Buena eleccion */}
+            {/* Buena eleccion 
             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>¡Muy buena elección!</h3>
@@ -265,8 +265,9 @@ export function AutoDetail() {
               </div>
               <div style={{ fontSize: '4rem' }}>🔑</div>
             </div>
+            */}
 
-            {/* Incluido en el precio */}
+            {/* Incluido en el precio 
             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px' }}>
               <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>Incluido en el precio</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '0.9rem', color: '#333' }}>
@@ -276,8 +277,9 @@ export function AutoDetail() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Kilometraje ilimitado</div>
               </div>
             </div>
+            */}
 
-            {/* Lo imprescindible */}
+            {/* Lo imprescindible 
             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7' }}>
               <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', padding: '20px 20px 10px 20px', margin: 0 }}>Lo imprescindible para la recogida</h3>
               <div style={{ display: 'flex', borderBottom: '1px solid #e7e7e7' }}>
@@ -306,6 +308,7 @@ export function AutoDetail() {
                 Esta no es la lista completa; consulta el <span style={{ color: '#006ce4', cursor: 'pointer' }}>contrato de alquiler</span> para ver todo lo que necesitas.
               </div>
             </div>
+            */}
 
             {/* Error y Exito */}
             {error && <div style={{ color: '#d93025', background: '#fce8e6', padding: '12px', borderRadius: '4px' }}>{error}</div>}
