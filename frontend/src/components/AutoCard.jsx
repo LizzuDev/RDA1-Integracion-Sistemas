@@ -20,7 +20,7 @@ export function AutoCard({ auto }) {
   const supplierInfo = suppliersMap[supplierId] || suppliersMap[1];
 
   return (
-    <div onClick={() => navigate(`/autos/${id}`)} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', padding: '16px', display: 'flex', background: 'white', marginBottom: '15px', cursor: 'pointer', transition: 'box-shadow 0.2s' }} onMouseOver={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'} onMouseOut={e => e.currentTarget.style.boxShadow = 'none'}>
+    <div onClick={() => navigate(`/autos/${id}`, { state: { auto } })} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', padding: '16px', display: 'flex', background: 'white', marginBottom: '15px', cursor: 'pointer', transition: 'box-shadow 0.2s' }} onMouseOver={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'} onMouseOut={e => e.currentTarget.style.boxShadow = 'none'}>
       {/* Left: Car image & Supplier */}
       <div style={{ width: '250px', paddingRight: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <img 

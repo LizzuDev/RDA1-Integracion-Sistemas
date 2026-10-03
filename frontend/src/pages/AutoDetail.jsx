@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { createOrderAuto } from '../services/autosApi';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,14 +9,28 @@ export function AutoDetail() {
   const navigate = useNavigate();
   const auto = location.state?.auto || {};
 
-  const precioDiario = auto.price || 35.5;
-  const info = auto.vehicle_info || {};
+  const precioDiario = auto.price || 35.50;
+  const make = auto.make || 'Chevrolet';
+  const model = auto.model || 'Spark';
+  const seats = auto.seats || 5;
+  const doors = auto.doors || 4;
+  const bag_capacity = auto.bag_capacity || 1;
+  const transmission = auto.transmission || 'Manual';
+  const supplierId = auto.supplier_id || 1;
+
+  const suppliersMap = {
+    1: { bg: '#00843D', color: 'white', label: 'Europcar', score: '8.2', scoreText: 'Aceptable', reviews: '300+' },
+    2: { bg: '#00266b', color: '#ffb700', label: 'Alamo', score: '8.5', scoreText: 'Excelente', reviews: '450+' },
+    3: { bg: '#006600', color: 'white', label: 'Enterprise', score: '9.1', scoreText: 'Excepcional', reviews: '800+' }
+  };
+  const supplierInfo = suppliersMap[supplierId] || suppliersMap[1];
 
   const [dias, setDias] = useState(3);
   const [driverAge, setDriverAge] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [activeTab, setActiveTab] = useState('puntual');
 
   useEffect(() => {
     if (id) {
@@ -63,7 +77,7 @@ export function AutoDetail() {
         id: res.order_id || idempotencyKey,
         orderId: res.order_id || idempotencyKey,
         tipo: 'auto',
-        titulo: `Renta de ${info.category || 'Auto'} ${info.type || 'Standard'} (${dias} días)`,
+        titulo: `Renta de ${make} ${model} (${dias} días)`,
         date: new Date().toISOString().split('T')[0],
         dias: parseInt(dias, 10),
         status: 'CONFIRMED',
@@ -82,86 +96,207 @@ export function AutoDetail() {
     }
   };
 
-  return (
-    <div className="detail-container">
-      <button className="back-btn" onClick={() => navigate('/autos')}>
-        ← Volver a Autos
-      </button>
+  const total = (precioDiario * dias).toFixed(2);
 
-      <div className="detail-content">
-        <div className="detail-image-col">
-          <img 
-            src={auto.images && auto.images.length > 0 ? auto.images[0] : 'https://via.placeholder.com/600x400?text=Auto'} 
-            alt="Auto" 
-            className="detail-main-image"
-            style={{ borderRadius: '12px', width: '100%', objectFit: 'cover' }}
-          />
-          <div style={{ marginTop: '1rem', background: '#f8f9fa', padding: '1rem', borderRadius: '8px' }}>
-            <h3>Características</h3>
-            <ul>
-              <li><strong>Categoría:</strong> {info.category}</li>
-              <li><strong>Transmisión:</strong> {info.transmission}</li>
-              <li><strong>Puertas:</strong> {info.doors}</li>
-              <li><strong>Combustible:</strong> {info.fuel}</li>
-            </ul>
+  return (
+    <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: '40px' }}>
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '20px' }}>
+        
+        {/* Breadcrumb & Header */}
+        <div style={{ marginBottom: '20px' }}>
+          <span onClick={() => navigate('/autos')} style={{ color: '#006ce4', cursor: 'pointer', fontSize: '0.9rem' }}>Volver a los resultados de búsqueda</span>
+          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#333', margin: '10px 0 5px 0' }}>Tu oferta</h1>
+          <p style={{ color: '#666', fontSize: '0.9rem', margin: 0 }}>Siguiente: Añade los extras</p>
+          <div style={{ display: 'flex', gap: '5px', marginTop: '15px' }}>
+             <div style={{ flex: 1, height: '4px', background: '#006ce4' }}></div>
+             <div style={{ flex: 1, height: '4px', background: '#e7e7e7' }}></div>
+             <div style={{ flex: 1, height: '4px', background: '#e7e7e7' }}></div>
+             <div style={{ flex: 1, height: '4px', background: '#e7e7e7' }}></div>
           </div>
         </div>
 
-        <div className="detail-info-col">
-          <span className="badge" style={{ background: '#34a853', color: 'white', padding: '4px 8px', borderRadius: '4px' }}>
-            Disponible
-          </span>
-          <h1 className="detail-title">{info.category || 'Auto'} {info.type || 'Standard'}</h1>
-          <p className="detail-price" style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0d652d' }}>
-            ${precioDiario.toFixed(2)} <span className="price-unit" style={{ fontSize: '1rem', color: '#666' }}>/ día</span>
-          </p>
-
-          <form className="booking-form" onSubmit={handleBooking} style={{ marginTop: '2rem' }}>
-            <h3 className="form-title">Reserva tu Vehículo</h3>
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+          
+          {/* LEFT COLUMN */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
             
-            <div className="form-group">
-              <label>Días de renta:</label>
-              <input 
-                type="number" 
-                min="1" 
-                max="30" 
-                value={dias} 
-                onChange={(e) => setDias(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="form-group">
-              <label>Edad del Conductor:</label>
-              <input 
-                type="number" 
-                min="18" 
-                max="99" 
-                value={driverAge} 
-                onChange={(e) => setDriverAge(e.target.value)}
-                required
-              />
+            {/* Cancellation Box */}
+            <div style={{ border: '1px solid #008009', borderRadius: '4px', padding: '12px 16px', background: '#f2fcf5', color: '#008009', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '500' }}>
+              <span style={{ fontSize: '1.2rem' }}>✓</span> Cancelación gratuita hasta 48 horas antes de la recogida
             </div>
 
-            <div className="total-calculation" style={{ margin: '1rem 0', padding: '1rem', background: '#e8f5e9', borderRadius: '8px' }}>
-              <div className="calc-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span>Tarifa Diaria x {dias} días</span>
-                <span>${(precioDiario * dias).toFixed(2)}</span>
+            {/* Car Details */}
+            <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px' }}>
+              <div style={{ display: 'flex', gap: '20px' }}>
+                <div style={{ width: '250px' }}>
+                  <img 
+                    src={auto.images && auto.images.length > 0 ? auto.images[0] : 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=300&q=80'} 
+                    alt={`${make} ${model}`} 
+                    style={{ width: '100%', borderRadius: '4px' }}
+                  />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>{make} {model} <span style={{ fontSize: '0.9rem', color: '#006ce4', fontWeight: 'normal' }}>o un coche pequeño similar ℹ️</span></h2>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.9rem', color: '#333', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>👤</span> {seats} plazas</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>⚙️</span> {transmission}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>💼</span> {bag_capacity} pieza de equipaje</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>🛣️</span> Kilometraje ilimitado</div>
+                  </div>
+
+                  <div style={{ fontSize: '0.9rem', color: '#333' }}>
+                    <strong>Quito Aeropuerto</strong><br/>
+                    <span style={{ color: '#666' }}>En el aeropuerto</span>
+                  </div>
+                </div>
               </div>
-              <div className="calc-row total" style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', borderTop: '1px solid #ccc', paddingTop: '8px' }}>
-                <span>Total a Pagar</span>
-                <span style={{ fontSize: '1.2rem', color: '#0d652d' }}>${(precioDiario * dias).toFixed(2)}</span>
+              
+              <div style={{ borderTop: '1px solid #e7e7e7', marginTop: '20px', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ background: supplierInfo.bg, color: supplierInfo.color, padding: '4px 8px', borderRadius: '2px', fontWeight: 'bold', fontSize: '0.8rem', letterSpacing: '-0.5px' }}>{supplierInfo.label}</div>
+                  <div style={{ background: '#003b95', color: 'white', padding: '6px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.9rem' }}>{supplierInfo.score}</div>
+                  <div style={{ fontSize: '0.85rem', color: '#333', lineHeight: '1.2' }}><b>{supplierInfo.scoreText}</b><br/><span style={{color: '#666'}}>{supplierInfo.reviews} opiniones</span></div>
+                </div>
+                <div style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span>ℹ️</span> Información importante
+                </div>
               </div>
             </div>
 
-            {error && <div className="alert error" style={{ color: 'red', marginBottom: '1rem' }}>{error}</div>}
-            {success && <div className="alert success" style={{ color: 'green', marginBottom: '1rem' }}>{success}</div>}
+            {/* Buena eleccion */}
+            <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <div>
+                  <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>¡Muy buena elección!</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '0.9rem', color: '#333' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Valoración de los usuarios: {supplierInfo.score} / 10</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Mostrador dentro de la terminal</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Opción de combustible más solicitada</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Cancelación gratuita</div>
+                  </div>
+               </div>
+               <div style={{ fontSize: '4rem' }}>🔑</div>
+            </div>
 
-            <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', padding: '12px', background: '#0d652d', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-              {loading ? 'Procesando Pago Síncrono...' : 'Confirmar Reserva (Pago Síncrono)'}
-            </button>
-          </form>
+            {/* Incluido en el precio */}
+            <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px' }}>
+               <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>Incluido en el precio</h3>
+               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '0.9rem', color: '#333' }}>
+                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Cancelación gratuita hasta 48 horas antes de la recogida</div>
+                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Cobertura parcial por colisión con franquicia de 2.000 US$</div>
+                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Cobertura en caso de robo con franquicia de 2.000 US$</div>
+                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Kilometraje ilimitado</div>
+               </div>
+            </div>
+
+            {/* Lo imprescindible */}
+            <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7' }}>
+               <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', padding: '20px 20px 10px 20px', margin: 0 }}>Lo imprescindible para la recogida</h3>
+               <div style={{ display: 'flex', borderBottom: '1px solid #e7e7e7' }}>
+                 <div onClick={() => setActiveTab('puntual')} style={{ flex: 1, textAlign: 'center', padding: '15px', cursor: 'pointer', borderBottom: activeTab === 'puntual' ? '2px solid #006ce4' : 'none', color: activeTab === 'puntual' ? '#006ce4' : '#666', fontWeight: activeTab === 'puntual' ? 'bold' : 'normal' }}>
+                   Sé puntual
+                 </div>
+                 <div onClick={() => setActiveTab('llevar')} style={{ flex: 1, textAlign: 'center', padding: '15px', cursor: 'pointer', borderBottom: activeTab === 'llevar' ? '2px solid #006ce4' : 'none', color: activeTab === 'llevar' ? '#006ce4' : '#666', fontWeight: activeTab === 'llevar' ? 'bold' : 'normal' }}>
+                   Qué llevar contigo
+                 </div>
+                 <div onClick={() => setActiveTab('deposito')} style={{ flex: 1, textAlign: 'center', padding: '15px', cursor: 'pointer', borderBottom: activeTab === 'deposito' ? '2px solid #006ce4' : 'none', color: activeTab === 'deposito' ? '#006ce4' : '#666', fontWeight: activeTab === 'deposito' ? 'bold' : 'normal' }}>
+                   Depósito reembolsable
+                 </div>
+               </div>
+               <div style={{ padding: '20px', fontSize: '0.95rem', color: '#333', lineHeight: '1.5' }}>
+                 {activeTab === 'puntual' && (
+                   <p>Las empresas de alquiler solo te dan las llaves a la hora de recogida asignada. Normalmente, te reservarán el coche durante un tiempo limitado una vez transcurrida la hora prevista para recogerlo. Después, es probable que se lo alquilen a otro cliente.<br/><br/><strong>Tu hora de recogida: 10:00 AM</strong></p>
+                 )}
+                 {activeTab === 'llevar' && (
+                   <p>Deberás presentar tu pasaporte, una tarjeta de crédito a nombre del conductor principal y un permiso de conducir válido en el mostrador. Asegúrate de tener saldo suficiente en la tarjeta para el depósito de seguridad.</p>
+                 )}
+                 {activeTab === 'deposito' && (
+                   <p>Al recoger el coche, el proveedor retendrá un depósito en tu tarjeta de crédito (suele ser de unos 2000 US$). Esto se liberará tras la devolución del coche, siempre y cuando no haya daños adicionales.</p>
+                 )}
+               </div>
+               <div style={{ padding: '0 20px 20px', fontSize: '0.85rem', color: '#666' }}>
+                 Esta no es la lista completa; consulta el <span style={{ color: '#006ce4', cursor: 'pointer' }}>contrato de alquiler</span> para ver todo lo que necesitas.
+               </div>
+            </div>
+
+            {/* Error y Exito */}
+            {error && <div style={{ color: '#d93025', background: '#fce8e6', padding: '12px', borderRadius: '4px' }}>{error}</div>}
+            {success && <div style={{ color: '#137333', background: '#e6f4ea', padding: '12px', borderRadius: '4px' }}>{success}</div>}
+
+            {/* Continuar button form */}
+            <form onSubmit={handleBooking} style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <button type="submit" disabled={loading} style={{ background: '#006ce4', color: 'white', border: 'none', padding: '12px 24px', fontSize: '1rem', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer' }}>
+                {loading ? 'Procesando...' : 'Continuar'}
+              </button>
+            </form>
+
+          </div>
+
+          {/* RIGHT COLUMN */}
+          <div style={{ width: '320px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+             
+             {/* Edit parameters quickly */}
+             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>Ajustar Reserva</h3>
+                <div style={{ marginBottom: '15px' }}>
+                  <label style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '5px' }}>Días de renta:</label>
+                  <input type="number" min="1" max="30" value={dias} onChange={(e) => setDias(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '5px' }}>Edad del conductor:</label>
+                  <input type="number" min="18" max="99" value={driverAge} onChange={(e) => setDriverAge(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
+                </div>
+             </div>
+
+             {/* Recogida y devolucion */}
+             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px' }}>
+               <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>Recogida y devolución</h3>
+               <div style={{ position: 'relative', paddingLeft: '20px' }}>
+                 <div style={{ position: 'absolute', left: '0', top: '5px', bottom: '5px', width: '2px', background: '#ccc' }}></div>
+                 
+                 <div style={{ marginBottom: '20px', position: 'relative' }}>
+                   <div style={{ position: 'absolute', left: '-25px', top: '2px', width: '12px', height: '12px', borderRadius: '50%', border: '2px solid #666', background: 'white' }}></div>
+                   <div style={{ fontSize: '0.9rem', color: '#333' }}>lun, 5 oct - 10:00</div>
+                   <div style={{ fontWeight: 'bold', color: '#333', fontSize: '1rem' }}>Quito Aeropuerto</div>
+                   <div style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', marginTop: '5px' }}>Ver instrucciones para la recogida</div>
+                 </div>
+
+                 <div style={{ position: 'relative' }}>
+                   <div style={{ position: 'absolute', left: '-25px', top: '2px', width: '12px', height: '12px', borderRadius: '50%', border: '2px solid #666', background: 'white' }}></div>
+                   <div style={{ fontSize: '0.9rem', color: '#333' }}>jue, 8 oct - 10:00</div>
+                   <div style={{ fontWeight: 'bold', color: '#333', fontSize: '1rem' }}>Quito Aeropuerto</div>
+                   <div style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', marginTop: '5px' }}>Ver instrucciones para la devolución</div>
+                 </div>
+               </div>
+             </div>
+
+             {/* Desglose */}
+             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>Desglose del precio del coche</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: '#333', marginBottom: '20px' }}>
+                  <span>Precio del alquiler ({dias} días)</span>
+                  <span>{total} US$</span>
+                </div>
+                <div style={{ borderTop: '1px solid #e7e7e7', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#333' }}>Total</span>
+                  <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333' }}>{total} US$</span>
+                </div>
+                <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '15px', lineHeight: '1.4' }}>
+                  Si pagas con una tarjeta ecuatoriana, el proveedor te cobrará un cargo adicional, de acuerdo con la legislación fiscal de Ecuador.
+                </p>
+             </div>
+
+             {/* Promo */}
+             <div style={{ border: '1px solid #008009', borderRadius: '4px', padding: '20px', background: '#f2fcf5' }}>
+               <h4 style={{ color: '#008009', fontSize: '1rem', fontWeight: 'bold', margin: '0 0 10px 0' }}>Este vehículo cuesta tan solo {total} US$, ¡una verdadera ganga!</h4>
+               <p style={{ color: '#008009', fontSize: '0.9rem', margin: 0 }}>
+                 En esta época del año, un coche pequeño en Quito Aeropuerto suele costar {(precioDiario * dias * 1.4).toFixed(2)} US$.
+               </p>
+             </div>
+
+          </div>
         </div>
+
       </div>
     </div>
   );
