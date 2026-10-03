@@ -31,6 +31,7 @@ export function MisReservasPage() {
   const [cursor, setCursor] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedReserva, setSelectedReserva] = useState(null);
 
   // Filtros
   const [servicio, setServicio] = useState('');
@@ -338,7 +339,13 @@ export function MisReservasPage() {
           <ul className="lista-reservas">
             {reservas.slice(0, pcr).map((r) => (
               <li key={r.id}>
-                <Link className="tarjeta-reserva" to={r.link} style={{ gridTemplateColumns: '120px 90px 130px minmax(0, 1fr) 130px 110px' }}>
+                <div 
+                  className="tarjeta-reserva" 
+                  onClick={() => setSelectedReserva(r)} 
+                  style={{ gridTemplateColumns: '120px 90px 130px minmax(0, 1fr) 130px 110px', cursor: 'pointer', outline: 'none' }}
+                  tabIndex="0"
+                  onKeyDown={(e) => { if (e.key === 'Enter') setSelectedReserva(r); }}
+                >
                   <span style={{ fontWeight: '700', color: '#006ce4', fontSize: '0.85rem' }}>
                     {r.icono} {r.servicioTexto}
                   </span>
@@ -355,12 +362,70 @@ export function MisReservasPage() {
                   <span className="tarjeta-reserva-total">
                     {r.total}
                   </span>
-                </Link>
+                </div>
               </li>
             ))}
           </ul>
         </>
       )}
+
+      {/* MODAL DETALLES Y CÓDIGO QR */}
+      {selectedReserva && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', width: '500px', maxWidth: '100%', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+            
+            <div style={{ background: '#006ce4', padding: '20px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>{selectedReserva.icono} Detalles de la Reserva</h2>
+              <button onClick={() => setSelectedReserva(null)} style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+
+            <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333', marginBottom: '5px' }}>{selectedReserva.titulo}</h3>
+                <span className={`estado-pill estado-${(selectedReserva.status || '').toLowerCase()}`}>
+                    {ESTADOS_ES[selectedReserva.status] ?? selectedReserva.status}
+                </span>
+              </div>
+
+              <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '15px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Código de Confirmación (PNR)</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333' }}>{selectedReserva.pnr}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Fecha</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333' }}>{selectedReserva.fecha}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>ID Interno</div>
+                  <div style={{ fontSize: '0.9rem', color: '#333', wordBreak: 'break-all' }}>{selectedReserva.id}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Total Pagado</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#008009' }}>{selectedReserva.total}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                <div style={{ fontSize: '0.85rem', color: '#555', fontWeight: '500' }}>Escanea este código al llegar:</div>
+                <div style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '8px', background: 'white' }}>
+                   {/* Imagen QR simulada (API pública de códigos QR) */}
+                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(selectedReserva.pnr + '|' + selectedReserva.id)}`} alt="Código QR de la reserva" style={{ width: '150px', height: '150px', display: 'block' }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
+                <button onClick={() => { alert('Generando y descargando PDF...'); }} style={{ flex: 1, background: '#006ce4', color: 'white', border: 'none', padding: '12px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Descargar PDF
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
