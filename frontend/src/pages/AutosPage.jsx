@@ -181,8 +181,8 @@ export function AutosPage() {
               {/* Pickup Location */}
               <div style={{ flex: '1.5', minWidth: '300px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px', border: '3px solid transparent', transition: 'border 0.2s', outline: 'none' }} onFocus={(e) => e.currentTarget.style.border = '3px solid #febb02'} onBlur={(e) => e.currentTarget.style.border = '3px solid transparent'}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🚗</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Lugar de recogida</span>
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Lugar de recogida</span>
                   <input
                     type="text"
                     required
@@ -197,8 +197,8 @@ export function AutosPage() {
               {/* Pickup Date */}
               <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>📅</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Fecha de recogida</span>
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Fecha de recogida</span>
                   <div style={{ width: '100%' }}>
                     <DatePicker
                       selected={startDate}
@@ -215,8 +215,8 @@ export function AutosPage() {
               {/* Pickup Time */}
               <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Hora</span>
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Hora</span>
                   <select style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
                     {timeOptions.map(t => <option key={`pickup-${t}`} value={t}>{t}</option>)}
                   </select>
@@ -226,8 +226,8 @@ export function AutosPage() {
               {/* Dropoff Date */}
               <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>📅</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Fecha de devolución</span>
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Fecha de devolución</span>
                   <div style={{ width: '100%' }}>
                     <DatePicker
                       selected={endDate}
@@ -244,8 +244,8 @@ export function AutosPage() {
               {/* Dropoff Time */}
               <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
                 <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px' }}>Hora</span>
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Hora</span>
                   <select style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
                     {timeOptions.map(t => <option key={`dropoff-${t}`} value={t}>{t}</option>)}
                   </select>
