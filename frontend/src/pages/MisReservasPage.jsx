@@ -4,7 +4,8 @@ import { jsPDF } from 'jspdf';
 import { listarReservas as listarReservasVuelos } from '../services/vuelosApi';
 import { getOrdersAuto } from '../services/autosApi';
 import { getReservas as getReservasAtracciones } from '../services/atraccionesApi';
-import { formatearFecha, formatearMoneda } from '../services/formato';
+import { formatearFecha } from '../services/formato';
+import { useCurrency } from '../hooks/CurrencyContext';
 
 const ESTADOS_ES = {
   PENDING: 'Pendiente',
@@ -34,6 +35,7 @@ export function MisReservasPage() {
   const [error, setError] = useState(null);
   const [selectedReserva, setSelectedReserva] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const { convertPrice } = useCurrency();
 
   // Filtros
   const [servicio, setServicio] = useState('');
@@ -67,7 +69,7 @@ export function MisReservasPage() {
           titulo: r.origin && r.destination ? `${r.origin} → ${r.destination}` : 'Itinerario de Vuelo',
           fecha: r.departureDate ? formatearFecha(r.departureDate) : '—',
           status: r.status || 'CONFIRMED',
-          total: formatearMoneda(r.grandTotal?.total, r.grandTotal?.currency),
+          totalRaw: r.grandTotal?.total || 106.50,
           link: `/vuelos/reservas/${r.bookingId}`
         }));
         nextCursor = respuestaVuelos.nextCursor;
@@ -89,7 +91,7 @@ export function MisReservasPage() {
           titulo: a.autoId ? `Renta de Vehículo (${a.diasRenta || 3} días)` : 'Renta de Auto Chevrolet Sail',
           fecha: a.createdAt ? formatearFecha(a.createdAt) : '2026-10-05',
           status: a.status || 'CONFIRMED',
-          total: formatearMoneda(a.totalPrice?.total || 106.50, a.totalPrice?.currency || 'USD'),
+          totalRaw: a.totalPrice?.total || 106.50,
           link: '/autos'
         }));
       } catch (err) {
@@ -107,7 +109,7 @@ export function MisReservasPage() {
         titulo: a.titulo || 'Renta de Auto Chevrolet Sail (3 días)',
         fecha: a.date ? formatearFecha(a.date) : '2026-10-05',
         status: a.status || 'CONFIRMED',
-        total: formatearMoneda(a.totalPrice?.total || a.total || 106.50, 'USD'),
+        totalRaw: a.totalPrice?.total || a.total || 106.50,
         link: '/autos'
       }));
 
@@ -126,7 +128,7 @@ export function MisReservasPage() {
           fecha: at.date ? formatearFecha(at.date) : '2026-10-10',
           hora: at.time || '10:00 a.m.',
           status: at.status || 'CONFIRMED',
-          total: formatearMoneda(at.total_price?.total || at.total_price || 55.00, 'USD'),
+          totalRaw: at.total_price?.total || at.total_price || 55.00,
           link: at.atraccionId ? `/atracciones/${at.atraccionId}` : '/'
         }));
       } catch (err) {
@@ -144,7 +146,7 @@ export function MisReservasPage() {
         fecha: at.date ? formatearFecha(at.date) : '2026-10-10',
         hora: at.time || '10:00 a.m.',
         status: at.status || 'CONFIRMED',
-        total: formatearMoneda(at.totalPrice?.total || at.total || 55.00, 'USD'),
+        totalRaw: at.totalPrice?.total || at.total || 55.00,
         link: '/'
       }));
 
@@ -170,7 +172,7 @@ export function MisReservasPage() {
         titulo: al.titulo || 'Hotel Hilton Colón - 3 Noches',
         fecha: al.fecha ? formatearFecha(al.fecha) : '2026-10-15',
         status: al.status || 'CONFIRMED',
-        total: formatearMoneda(al.total || 245.00, 'USD'),
+        totalRaw: al.total || 245.00,
         link: '/'
       }));
 
@@ -270,7 +272,7 @@ export function MisReservasPage() {
         doc.text(`Total pagado:`, 25, 125);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 128, 9); // Verde Booking
-        doc.text(`${reserva.total}`, 70, 125);
+        doc.text(`${convertPrice(reserva.totalRaw)}`, 70, 125);
         
         doc.setTextColor(150, 150, 150);
         doc.setFontSize(10);
@@ -431,7 +433,7 @@ export function MisReservasPage() {
                     {r.fecha}
                   </span>
                   <span className="tarjeta-reserva-total">
-                    {r.total}
+                    {convertPrice(r.totalRaw)}
                   </span>
                 </div>
               </li>
@@ -473,7 +475,7 @@ export function MisReservasPage() {
                 </div>
                 <div>
                   <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Total Pagado</div>
-                  <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#008009' }}>{selectedReserva.total}</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#008009' }}>{convertPrice(selectedReserva.totalRaw)}</div>
                 </div>
               </div>
 

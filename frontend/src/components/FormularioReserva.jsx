@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import emailjs from '@emailjs/browser';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { crearReserva } from '../services/vuelosApi';
-import { obtenerHuellaDispositivo } from '../services/formato';
+import { obtenerHuellaDispositivo, formatearMoneda } from '../services/formato';
 import { savePendingReservation } from '../services/offlineSync';
 
 const COUNTRIES = [
@@ -313,7 +313,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         const correoDestino = primerPasajero?.email?.trim();
         const pnrVuelo = idempotencyKey.toString().substring(0, 8).toUpperCase();
         const totalVuelo = hold?.lockedPrice?.total
-          ? `${Number(hold.lockedPrice.total).toFixed(2)} ${hold.lockedPrice.currency || 'USD'}`
+          ? formatearMoneda(hold.lockedPrice.total, hold.lockedPrice.currency)
           : 'Pendiente';
         const nombrePasajero = `${primerPasajero?.firstName || ''} ${primerPasajero?.lastName || ''}`.trim() || 'Pasajero';
 
@@ -727,7 +727,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
             <div className="paso-pago" style={{ marginTop: '20px' }}>
               <h3 className="modal-title-secundario" style={{ fontSize: '1.25rem', marginBottom: '10px' }}>Pago Simulado</h3>
               <p className="modal-nota-bloque">
-                El total a pagar es de <strong>{(Number(hold.lockedPrice?.total)).toFixed(2)} {hold.lockedPrice?.currency}</strong>.
+                El total a pagar es de <strong>{formatearMoneda(hold.lockedPrice?.total, hold.lockedPrice?.currency)}</strong>.
               </p>
               
               <div className="tarjeta-simulada" style={{ background: '#f5f7f9', padding: '20px', borderRadius: '12px', border: '1px solid #e1e4e8', marginTop: '20px' }}>
@@ -760,7 +760,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
           <div className="modal-precio">
               <span className="modal-precio-etiqueta">Total a pagar</span>
               <span className="modal-precio-valor">
-                {(Number(hold.lockedPrice?.total)).toFixed(2)} {hold.lockedPrice?.currency}
+                {formatearMoneda(hold.lockedPrice?.total, hold.lockedPrice?.currency)}
               </span>
             </div>
           <div className="modal-acciones">

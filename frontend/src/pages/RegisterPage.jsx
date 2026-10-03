@@ -327,12 +327,15 @@ export function RegisterPage() {
         {errors.general && <div style={{ color: '#d93025', marginBottom: '1rem', textAlign: 'center', backgroundColor: '#fce8e6', padding: '10px', borderRadius: '4px', fontWeight: '500' }}>{errors.general}</div>}
 
         <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <legend className="sr-only">Datos personales</legend>
           <div>
             <label htmlFor="reg-nombre" style={labelStyle}>Nombre</label>
             <input 
               id="reg-nombre"
               type="text" 
               required 
+              autoComplete="given-name"
               value={nombre} 
               onChange={handleNombreChange}
               placeholder="Ej. Juan"
@@ -347,6 +350,7 @@ export function RegisterPage() {
               id="reg-apellido"
               type="text" 
               required 
+              autoComplete="family-name"
               value={apellido} 
               onChange={handleApellidoChange}
               placeholder="Ej. Pérez"
@@ -361,6 +365,7 @@ export function RegisterPage() {
               id="reg-cedula"
               type="text" 
               required 
+              autoComplete="off"
               value={cedula} 
               onChange={handleCedulaChange}
               placeholder="10 dígitos"
@@ -375,6 +380,7 @@ export function RegisterPage() {
               id="reg-telefono"
               type="tel" 
               required 
+              autoComplete="tel-national"
               maxLength={10}
               value={telefono} 
               onChange={handleTelefonoChange}
@@ -390,6 +396,7 @@ export function RegisterPage() {
               id="reg-email"
               type="email" 
               required 
+              autoComplete="email"
               maxLength={30}
               value={email} 
               onChange={handleEmailChange}
@@ -405,6 +412,7 @@ export function RegisterPage() {
               id="reg-password"
               type="password" 
               required 
+              autoComplete="new-password"
               maxLength={30}
               value={password} 
               onChange={handlePasswordChange}
@@ -429,6 +437,7 @@ export function RegisterPage() {
           >
             {loading ? 'Registrando...' : 'Crear cuenta'}
           </button>
+          </fieldset>
         </form>
 
         <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.9rem' }}>
