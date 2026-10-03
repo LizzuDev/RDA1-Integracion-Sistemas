@@ -105,23 +105,28 @@ export function AtraccionDetail() {
       // Enviar correo electrónico con EmailJS
       if (user?.email) {
         const orderTotal = (precio * parseInt(form.ticket_count, 10)).toFixed(2);
+        const clienteName =
+          user.user_metadata?.nombre ||
+          user.user_metadata?.full_name ||
+          user.email.split('@')[0] ||
+          'Cliente';
         const templateParams = {
           to_email: user.email,
-          to_name: user.user_metadata?.nombre || user.user_metadata?.full_name || 'Cliente',
+          to_name: clienteName,
           pnr: atraccionRes.id.substring(0, 8).toUpperCase(),
           service_name: atraccionRes.titulo,
           total_price: `$${orderTotal} USD`,
         };
 
         emailjs.send(
-          import.meta.env.VITE_EMAILJS_SERVICE_ID,
-          import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+          'service_gc9gkdc',
+          'template_nlbgw3v',
           templateParams,
-          import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+          'vZyuTrdLeGeWrTWLe'
         ).then((response) => {
-          console.log('CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
+          console.log('✅ CORREO ATRACCION ENVIADO!', response.status, response.text);
         }).catch((error) => {
-          console.error('ERROR AL ENVIAR CORREO CON EMAILJS:', error);
+          console.error('❌ ERROR CORREO ATRACCION:', error);
         });
       }
 
