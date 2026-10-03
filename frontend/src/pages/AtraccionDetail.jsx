@@ -4,6 +4,7 @@ import { getAtraccion, reservarAtraccion } from '../services/atraccionesApi';
 import { v4 as uuidv4 } from 'uuid';
 import emailjs from '@emailjs/browser';
 import { useAuth } from '../hooks/useAuth';
+import { savePendingReservation } from '../services/offlineSync';
 
 export function AtraccionDetail() {
   const { id } = useParams();
@@ -72,17 +73,32 @@ export function AtraccionDetail() {
     const idempotencyKey = uuidv4();
     try {
       let result = null;
-      try {
-        result = await reservarAtraccion(id, {
-          ...form,
-          customer_name: user.user_metadata?.full_name || user.email.split('@')[0],
-          customer_email: user.email,
-          ticket_count: parseInt(form.ticket_count)
-        }, idempotencyKey);
-      } catch (backendErr) {
-        // Silenciamos el warning en consola a petición del usuario.
-        // console.warn('Backend falló (401 u otro). Simulando reserva exitosa localmente.', backendErr);
+
+      if (!navigator.onLine) {
+        const payload = {
+          atraccionId: id,
+          data: {
+            ...form,
+            customer_name: user.user_metadata?.full_name || user.email.split('@')[0],
+            customer_email: user.email,
+            ticket_count: parseInt(form.ticket_count)
+          }
+        };
+        await savePendingReservation('atraccion', payload, idempotencyKey);
         result = { reservation_id: idempotencyKey };
+      } else {
+        try {
+          result = await reservarAtraccion(id, {
+            ...form,
+            customer_name: user.user_metadata?.full_name || user.email.split('@')[0],
+            customer_email: user.email,
+            ticket_count: parseInt(form.ticket_count)
+          }, idempotencyKey);
+        } catch (backendErr) {
+          // Silenciamos el warning en consola a petición del usuario.
+          // console.warn('Backend falló (401 u otro). Simulando reserva exitosa localmente.', backendErr);
+          result = { reservation_id: idempotencyKey };
+        }
       }
       
       setBookingResult({ success: true, data: result });

@@ -4,6 +4,7 @@ import emailjs from '@emailjs/browser';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { crearReserva } from '../services/vuelosApi';
 import { obtenerHuellaDispositivo } from '../services/formato';
+import { savePendingReservation } from '../services/offlineSync';
 
 const COUNTRIES = [
   { code: 'ECU', name: 'Ecuador' },
@@ -288,27 +289,34 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         // Simulando pasarela de pagos
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        const reserva = await crearReserva(
-          {
-            holdId: hold.holdId,
-            passengers: lista.map((p) => ({
-              passengerId: p.passengerId,
-              passengerType: p.passengerType,
-              ...(p.passengerType === 'INFANT' ? { associatedAdultId: p.associatedAdultId } : {}),
-              firstName: p.firstName.trim(),
-              lastName: p.lastName.trim(),
-              documentType: p.documentType,
-              documentNumber: p.documentNumber.trim(),
-              nationality: p.nationality.trim(),
-              birthDate: p.birthDate,
-              gender: p.gender,
-              contact: { email: p.email.trim(), phone: p.phone.trim() },
-            })),
-            payment: { paymentReference: `pay_${uuidv4().slice(0, 18)}` },
-          },
-          claveIdempotencia.current ?? uuidv4(),
-          obtenerHuellaDispositivo(),
-        );
+        const payload = {
+          holdId: hold.holdId,
+          passengers: lista.map((p) => ({
+            passengerId: p.passengerId,
+            passengerType: p.passengerType,
+            ...(p.passengerType === 'INFANT' ? { associatedAdultId: p.associatedAdultId } : {}),
+            firstName: p.firstName.trim(),
+            lastName: p.lastName.trim(),
+            documentType: p.documentType,
+            documentNumber: p.documentNumber.trim(),
+            nationality: p.nationality.trim(),
+            birthDate: p.birthDate,
+            gender: p.gender,
+            contact: { email: p.email.trim(), phone: p.phone.trim() },
+          })),
+          payment: { paymentReference: `pay_${uuidv4().slice(0, 18)}` },
+        };
+        const idempotencyKey = claveIdempotencia.current ?? uuidv4();
+        const fingerprint = obtenerHuellaDispositivo();
+
+        let reserva = null;
+
+        if (!navigator.onLine) {
+          await savePendingReservation('vuelo', { ...payload, fingerprint }, idempotencyKey);
+          reserva = { bookingId: idempotencyKey, pnr: idempotencyKey };
+        } else {
+          reserva = await crearReserva(payload, idempotencyKey, fingerprint);
+        }
         // Enviar correo de confirmación de vuelo con EmailJS
         const primerPasajero = lista[0];
         const correoDestino = primerPasajero?.email?.trim();

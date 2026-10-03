@@ -27,6 +27,9 @@ import { NotFoundPage } from './pages/NotFoundPage';
 // --- Banner global de consentimiento (Fase 2) ---
 import { BannerCookies } from './components/BannerCookies';
 
+// --- Estado Offline ---
+import { OfflineBanner } from './components/OfflineBanner';
+
 import { AuthProvider } from './hooks/useAuth';
 
 import { Navbar } from './components/Navbar';
@@ -115,6 +118,7 @@ function App() {
         abiertoExternamente={preferenciasCookies}
         onCerrarExterno={cerrarPreferencias}
       />
+      <OfflineBanner />
     </BrowserRouter>
     </AuthProvider>
   );

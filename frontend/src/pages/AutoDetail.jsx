@@ -4,6 +4,7 @@ import { createOrderAuto } from '../services/autosApi';
 import { v4 as uuidv4 } from 'uuid';
 import emailjs from '@emailjs/browser';
 import { useAuth } from '../hooks/useAuth';
+import { savePendingReservation } from '../services/offlineSync';
 
 export function AutoDetail() {
   const { id } = useParams();
@@ -101,69 +102,78 @@ export function AutoDetail() {
 
     let orderId = idempotencyKey;
 
-    try {
-      const res = await createOrderAuto(payload, idempotencyKey);
-      if (res && res.order_id) orderId = res.order_id;
-    } catch (err) {
-      // Si el backend lanza 500 porque las tablas no existen, lo capturamos
-      // y simulamos éxito para que el flujo UI se complete.
-      console.warn('Backend falló (probablemente por tablas faltantes). Simulando reserva exitosa localmente.', err);
-    } finally {
-      const emailDestino = user?.email || 'tu correo registrado';
-      const orderTotal = (precioDiario * dias).toFixed(2);
-
-      // Enviar correo electrónico con EmailJS
-      if (user?.email) {
-        const clienteName =
-          user.user_metadata?.nombre ||
-          user.user_metadata?.full_name ||
-          user.email.split('@')[0] ||
-          'Cliente';
-
-        const templateParams = {
-          // Variables para cualquier configuración del template de EmailJS
-          to_email: user.email,
-          to_name: clienteName,
-          email: user.email,        // alias alternativo
-          name: clienteName,        // alias alternativo
-          reply_to: user.email,
-          pnr: orderId.substring(0, 8).toUpperCase(),
-          service_name: `Renta de ${make} ${model} (${dias} días)`,
-          total_price: `$${orderTotal} USD`,
-          message: `Reserva confirmada: Renta de ${make} ${model} por ${dias} días. Total: $${orderTotal} USD. PNR: ${orderId.substring(0, 8).toUpperCase()}`,
-        };
-        console.log('[EmailJS] Enviando a:', user.email, 'params:', templateParams);
-
-        emailjs.send(
-          'service_gc9gkdc',
-          'template_nlbgw3v',
-          templateParams,
-          'vZyuTrdLeGeWrTWLe'
-        ).then((response) => {
-          console.log('✅ CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
-        }).catch((error) => {
-          console.error('❌ ERROR AL ENVIAR CORREO CON EMAILJS:', error);
-        });
+    if (!navigator.onLine) {
+      // Guardar localmente para sincronizar después
+      await savePendingReservation('auto', payload, idempotencyKey);
+    } else {
+      try {
+        const res = await createOrderAuto(payload, idempotencyKey);
+        if (res && res.order_id) orderId = res.order_id;
+      } catch (err) {
+        // Si el backend lanza 500 porque las tablas no existen, lo capturamos
+        // y simulamos éxito para que el flujo UI se complete.
+        console.warn('Backend falló (probablemente por tablas faltantes). Simulando reserva exitosa localmente.', err);
       }
-
-      setSuccess(`Reserva exitosa (ID: ${orderId.substring(0, 8).toUpperCase()}). ¡Comprobante enviado por EmailJS a ${emailDestino}!`);
-      setShowPaymentModal(false);
-
-      const autoRes = {
-        id: orderId,
-        orderId: orderId,
-        tipo: 'auto',
-        titulo: `Renta de ${make} ${model} (${dias} días)`,
-        date: new Date().toISOString().split('T')[0],
-        dias: parseInt(dias, 10),
-        status: 'CONFIRMED',
-        totalPrice: { currency: 'USD', total: (precioDiario * dias).toFixed(2) }
-      };
-      const existing = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
-      localStorage.setItem('reservas_autos', JSON.stringify([autoRes, ...existing]));
-
-      setLoading(false);
     }
+
+    const emailDestino = user?.email || 'tu correo registrado';
+    const orderTotal = (precioDiario * dias).toFixed(2);
+
+    // Enviar correo electrónico con EmailJS
+    if (user?.email) {
+      const clienteName =
+        user.user_metadata?.nombre ||
+        user.user_metadata?.full_name ||
+        user.email.split('@')[0] ||
+        'Cliente';
+
+      const templateParams = {
+        // Variables para cualquier configuración del template de EmailJS
+        to_email: user.email,
+        to_name: clienteName,
+        email: user.email,        // alias alternativo
+        name: clienteName,        // alias alternativo
+        reply_to: user.email,
+        pnr: orderId.substring(0, 8).toUpperCase(),
+        service_name: `Renta de ${make} ${model} (${dias} días)`,
+        total_price: `$${orderTotal} USD`,
+        message: `Reserva confirmada: Renta de ${make} ${model} por ${dias} días. Total: $${orderTotal} USD. PNR: ${orderId.substring(0, 8).toUpperCase()}`,
+      };
+      console.log('[EmailJS] Enviando a:', user.email, 'params:', templateParams);
+
+      emailjs.send(
+        'service_gc9gkdc',
+        'template_nlbgw3v',
+        templateParams,
+        'vZyuTrdLeGeWrTWLe'
+      ).then((response) => {
+        console.log('✅ CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
+      }).catch((error) => {
+        console.error('❌ ERROR AL ENVIAR CORREO CON EMAILJS:', error);
+      });
+    }
+
+    if (!navigator.onLine) {
+      setSuccess(`Guardado sin conexión (ID: ${orderId.substring(0, 8).toUpperCase()}). Se sincronizará automáticamente al conectarte.`);
+    } else {
+      setSuccess(`Reserva exitosa (ID: ${orderId.substring(0, 8).toUpperCase()}). ¡Comprobante enviado por EmailJS a ${emailDestino}!`);
+    }
+    setShowPaymentModal(false);
+
+    const autoRes = {
+      id: orderId,
+      orderId: orderId,
+      tipo: 'auto',
+      titulo: `Renta de ${make} ${model} (${dias} días)`,
+      date: new Date().toISOString().split('T')[0],
+      dias: parseInt(dias, 10),
+      status: 'CONFIRMED',
+      totalPrice: { currency: 'USD', total: (precioDiario * dias).toFixed(2) }
+    };
+    const existing = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
+    localStorage.setItem('reservas_autos', JSON.stringify([autoRes, ...existing]));
+
+    setLoading(false);
   };
 
   const total = (precioDiario * dias).toFixed(2);
