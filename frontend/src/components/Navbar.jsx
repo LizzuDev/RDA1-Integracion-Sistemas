@@ -31,29 +31,44 @@ export function Navbar() {
     setProfileMsg('');
     setProfileError('');
     
-    // Validar contraseña actual si quiere cambiar clave o email (Supabase requiere confirmación por default para clave, pero podemos hacer un re-auth mock aquí)
-    // Para propósitos del prototipo, validaremos lo básico
-    
     try {
-      const updates = { data: { nombre, apellido, telefono } };
+      const cleanEmail = email.trim();
+      const updates = { data: { nombre: nombre.trim(), apellido: apellido.trim(), telefono: telefono.trim() } };
       
-      // Si cambia el correo o la contraseña, Supabase lo maneja diferente
-      if (email !== user.email) {
-        updates.email = email;
+      // Si cambia el correo
+      if (cleanEmail !== user.email) {
+        updates.email = cleanEmail;
       }
+      
+      // Si quiere cambiar contraseña, exigimos re-autenticar con la actual
       if (newPassword) {
         if (!currentPassword) {
-           setProfileError('Debes ingresar tu contraseña actual para cambiar la contraseña.');
+           setProfileError('Debes ingresar tu contraseña actual para poder cambiarla.');
            return;
         }
-        // En una app real de Supabase, cambiar la contraseña si el user está logueado es updateUser({password: newPassword}). 
-        // No te pide la actual a menos que implementes un re-auth, pero aquí pedimos que la llene como UX
+        
+        // Re-autenticación por seguridad
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword
+        });
+        
+        if (authError) {
+          throw new Error('La contraseña actual que ingresaste es incorrecta.');
+        }
+        
         updates.password = newPassword;
       }
       
       const { data, error } = await supabase.auth.updateUser(updates);
       
-      if (error) throw error;
+      if (error) {
+        // Mejorar los mensajes de error comunes de Supabase
+        if (error.message.includes('Email address') && error.message.includes('invalid')) {
+          throw new Error('El correo ingresado tiene un formato inválido o no está permitido por el servidor.');
+        }
+        throw error;
+      }
       
       setProfileMsg('¡Perfil actualizado con éxito!');
       setCurrentPassword('');
