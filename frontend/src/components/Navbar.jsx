@@ -33,46 +33,65 @@ export function Navbar() {
     
     try {
       const cleanEmail = email.trim();
-      const updates = { data: { nombre: nombre.trim(), apellido: apellido.trim(), telefono: telefono.trim() } };
+      let hadErrors = false;
+      let errorMsg = '';
       
-      // Si cambia el correo
-      if (cleanEmail !== user.email) {
-        updates.email = cleanEmail;
+      // 1. Actualizar Datos de Perfil (metadata) SIEMPRE
+      const { error: metaError } = await supabase.auth.updateUser({
+        data: { nombre: nombre.trim(), apellido: apellido.trim(), telefono: telefono.trim() }
+      });
+      if (metaError) {
+        hadErrors = true;
+        errorMsg += `Error al guardar datos: ${metaError.message}. `;
       }
-      
-      // Si quiere cambiar contraseña, exigimos re-autenticar con la actual
-      if (newPassword) {
+
+      // 2. Actualizar Contraseña (si se solicita)
+      if (newPassword && !hadErrors) {
         if (!currentPassword) {
            setProfileError('Debes ingresar tu contraseña actual para poder cambiarla.');
            return;
         }
         
-        // Re-autenticación por seguridad
+        // Re-autenticación
         const { error: authError } = await supabase.auth.signInWithPassword({
           email: user.email,
           password: currentPassword
         });
         
         if (authError) {
-          throw new Error('La contraseña actual que ingresaste es incorrecta.');
+          setProfileError('La contraseña actual que ingresaste es incorrecta.');
+          return;
         }
         
-        updates.password = newPassword;
-      }
-      
-      const { data, error } = await supabase.auth.updateUser(updates);
-      
-      if (error) {
-        // Mejorar los mensajes de error comunes de Supabase
-        if (error.message.includes('Email address') && error.message.includes('invalid')) {
-          throw new Error('El correo ingresado tiene un formato inválido o no está permitido por el servidor.');
+        const { error: passError } = await supabase.auth.updateUser({ password: newPassword });
+        if (passError) {
+          hadErrors = true;
+          errorMsg += `Error en contraseña: ${passError.message}. `;
+        } else {
+          setCurrentPassword('');
+          setNewPassword('');
         }
-        throw error;
       }
       
-      setProfileMsg('¡Perfil actualizado con éxito!');
-      setCurrentPassword('');
-      setNewPassword('');
+      // 3. Actualizar Correo (si cambió)
+      if (cleanEmail !== user.email && !hadErrors) {
+        const { error: emailError } = await supabase.auth.updateUser({ email: cleanEmail });
+        if (emailError) {
+          hadErrors = true;
+          if (emailError.message.includes('invalid')) {
+            errorMsg += 'El correo ingresado tiene un formato inválido o está bloqueado por Supabase. ';
+          } else {
+            errorMsg += `Error en correo: ${emailError.message}. `;
+          }
+        }
+      }
+      
+      if (hadErrors) {
+        setProfileError(errorMsg || 'Ocurrió un error parcial al actualizar.');
+      } else {
+        setProfileMsg('¡Perfil actualizado con éxito!');
+      }
+      
     } catch (err) {
       setProfileError(err.message);
     }
