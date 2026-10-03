@@ -495,7 +495,7 @@ export function AtraccionDetail() {
                   <input type="radio" checked readOnly />
                   <div>
                     <strong>Boletos ({form.ticket_count} personas)</strong><br/>
-                    <span className="muted">US${(precio * form.ticket_count).toFixed(2)} subtotal</span>
+                    <span className="muted">{convertPrice(precio * form.ticket_count)} subtotal</span>
                   </div>
                 </div>
 
