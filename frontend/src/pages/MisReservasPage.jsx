@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
 import { listarReservas as listarReservasVuelos } from '../services/vuelosApi';
 import { getOrdersAuto } from '../services/autosApi';
 import { getReservas as getReservasAtracciones } from '../services/atraccionesApi';
@@ -32,6 +33,7 @@ export function MisReservasPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [selectedReserva, setSelectedReserva] = useState(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Filtros
   const [servicio, setServicio] = useState('');
@@ -214,6 +216,71 @@ export function MisReservasPage() {
   useEffect(() => {
     cargarTodasLasReservas();
   }, [cargarTodasLasReservas]);
+
+  const descargarPDF = (reserva) => {
+    setIsDownloading(true);
+    
+    setTimeout(() => {
+      try {
+        const doc = new jsPDF();
+        
+        // Colores y Fuentes
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(0, 108, 228); // Azul Booking
+        doc.text('Confirmación de Reserva', 20, 30);
+        
+        doc.setFontSize(14);
+        doc.setTextColor(51, 51, 51);
+        doc.text(`Servicio: ${reserva.servicioTexto} ${reserva.icono}`, 20, 50);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        doc.text(`Nombre de reserva: ${reserva.titulo}`, 20, 60);
+        
+        // Bloque de datos
+        doc.setDrawColor(200, 200, 200);
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(20, 70, 170, 60, 3, 3, 'FD');
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('Detalles del Pago y Fechas', 25, 80);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Código (PNR):`, 25, 95);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${reserva.pnr}`, 70, 95);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Fecha del servicio:`, 25, 105);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${reserva.fecha}`, 70, 105);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Estado actual:`, 25, 115);
+        doc.setFont('helvetica', 'bold');
+        const estadoTexto = ESTADOS_ES[reserva.status] ?? reserva.status;
+        doc.text(`${estadoTexto}`, 70, 115);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Total pagado:`, 25, 125);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 128, 9); // Verde Booking
+        doc.text(`${reserva.total}`, 70, 125);
+        
+        doc.setTextColor(150, 150, 150);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'italic');
+        doc.text(`Generado automáticamente el ${new Date().toLocaleDateString()}`, 20, 280);
+
+        doc.save(`Reserva_${reserva.pnr}.pdf`);
+      } catch (err) {
+        console.error('Error al generar PDF:', err);
+      } finally {
+        setIsDownloading(false);
+      }
+    }, 800); // Simulamos un breve tiempo de generación para feedback visual
+  };
 
   useEffect(() => {
     document.title = 'Mis reservas · Booking Prototipo';
@@ -406,18 +473,23 @@ export function MisReservasPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                <div style={{ fontSize: '0.85rem', color: '#555', fontWeight: '500' }}>Escanea este código al llegar:</div>
-                <div style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '8px', background: 'white' }}>
-                   {/* Imagen QR simulada (API pública de códigos QR) */}
-                   <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(selectedReserva.pnr + '|' + selectedReserva.id)}`} alt="Código QR de la reserva" style={{ width: '150px', height: '150px', display: 'block' }} />
-                </div>
-              </div>
-
               <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
-                <button onClick={() => { alert('Generando y descargando PDF...'); }} style={{ flex: 1, background: '#006ce4', color: 'white', border: 'none', padding: '12px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  Descargar PDF
+                <button 
+                  disabled={isDownloading}
+                  onClick={() => descargarPDF(selectedReserva)} 
+                  style={{ flex: 1, background: isDownloading ? '#b0c4de' : '#006ce4', color: 'white', border: 'none', padding: '12px', borderRadius: '4px', fontWeight: 'bold', cursor: isDownloading ? 'wait' : 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                >
+                  {isDownloading ? (
+                    <>
+                      <span className="spinner" style={{ width: '16px', height: '16px', border: '2px solid white', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></span>
+                      Generando PDF...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                      Descargar PDF
+                    </>
+                  )}
                 </button>
               </div>
 
