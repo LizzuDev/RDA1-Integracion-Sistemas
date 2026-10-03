@@ -39,6 +39,8 @@ export function AutoDetail() {
   const [paymentMethod, setPaymentMethod] = useState('TARJETA');
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [instructionsType, setInstructionsType] = useState('recogida');
+  const [showSimilarModal, setShowSimilarModal] = useState(false);
+  const [showImportantInfoModal, setShowImportantInfoModal] = useState(false);
 
   // Sanitizar entradas para permitir solo números
   const handleNumberKeyDown = (e) => {
@@ -210,11 +212,23 @@ export function AutoDetail() {
                   />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>{make} {model} <span style={{ fontSize: '0.9rem', color: '#006ce4', fontWeight: 'normal' }}>o un coche pequeño similar ℹ️</span></h2>
+                  <h2 style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>
+                    {make} {model}{' '}
+                    <span style={{ position: 'relative', cursor: 'pointer', fontSize: '0.9rem', color: '#006ce4', fontWeight: 'normal' }} onClick={() => setShowSimilarModal(!showSimilarModal)}>
+                      o un coche pequeño similar ℹ️
+                      {showSimilarModal && (
+                        <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '10px', background: '#222', color: 'white', padding: '15px', borderRadius: '4px', width: '300px', zIndex: 10, fontSize: '0.9rem', lineHeight: '1.4', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', fontWeight: 'normal', textAlign: 'left' }}>
+                          <div style={{ position: 'absolute', top: '-6px', left: '20px', width: '0', height: '0', borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #222' }}></div>
+                          <strong style={{ display: 'block', marginBottom: '8px', fontSize: '1rem' }}>¿Qué significa "o similar"?</strong>
+                          El modelo exacto puede variar, pero siempre tendrás un coche de la misma categoría y tamaño, con el mismo número de puertas, tipo de cambio y características. Esto es habitual en la mayoría de las empresas de alquiler de coches.
+                        </div>
+                      )}
+                    </span>
+                  </h2>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.9rem', color: '#333', marginBottom: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>👤</span> {seats} plazas</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>⚙️</span> {transmission}</div>
+                    {/* <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>⚙️</span> {transmission}</div> */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>💼</span> {bag_capacity} pieza de equipaje</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span>🛣️</span> Kilometraje ilimitado</div>
                   </div>
@@ -232,13 +246,13 @@ export function AutoDetail() {
                   <div style={{ background: '#003b95', color: 'white', padding: '6px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.9rem' }}>{supplierInfo.score}</div>
                   <div style={{ fontSize: '0.85rem', color: '#333', lineHeight: '1.2' }}><b>{supplierInfo.scoreText}</b><br /><span style={{ color: '#666' }}>{supplierInfo.reviews} opiniones</span></div>
                 </div>
-                <div style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div onClick={() => setShowImportantInfoModal(true)} style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <span>ℹ️</span> Información importante
                 </div>
               </div>
             </div>
 
-            {/* Buena eleccion */}
+            {/* Buena eleccion 
             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>¡Muy buena elección!</h3>
@@ -251,8 +265,9 @@ export function AutoDetail() {
               </div>
               <div style={{ fontSize: '4rem' }}>🔑</div>
             </div>
+            */}
 
-            {/* Incluido en el precio */}
+            {/* Incluido en el precio 
             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7', padding: '20px' }}>
               <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>Incluido en el precio</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '0.9rem', color: '#333' }}>
@@ -262,8 +277,9 @@ export function AutoDetail() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}><span style={{ color: '#008009' }}>✓</span> Kilometraje ilimitado</div>
               </div>
             </div>
+            */}
 
-            {/* Lo imprescindible */}
+            {/* Lo imprescindible 
             <div style={{ background: 'white', borderRadius: '4px', border: '1px solid #e7e7e7' }}>
               <h3 style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#333', padding: '20px 20px 10px 20px', margin: 0 }}>Lo imprescindible para la recogida</h3>
               <div style={{ display: 'flex', borderBottom: '1px solid #e7e7e7' }}>
@@ -292,6 +308,7 @@ export function AutoDetail() {
                 Esta no es la lista completa; consulta el <span style={{ color: '#006ce4', cursor: 'pointer' }}>contrato de alquiler</span> para ver todo lo que necesitas.
               </div>
             </div>
+            */}
 
             {/* Error y Exito */}
             {error && <div style={{ color: '#d93025', background: '#fce8e6', padding: '12px', borderRadius: '4px' }}>{error}</div>}
@@ -429,6 +446,72 @@ export function AutoDetail() {
               <div style={{ position: 'absolute', bottom: '20px', left: '0', right: '0', textAlign: 'center', pointerEvents: 'none' }}>
                 <span style={{ background: 'white', color: '#006ce4', padding: '6px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>📍 Mostrar en el Mapa</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImportantInfoModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowImportantInfoModal(false)}>
+          <div style={{ background: 'white', padding: '0', borderRadius: '8px', maxWidth: '700px', width: '90%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <div style={{ position: 'sticky', top: 0, background: 'white', padding: '20px 30px', borderBottom: '1px solid #e7e7e7', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 2 }}>
+              <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>Información importante</h2>
+              <button onClick={() => setShowImportantInfoModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#666' }}>&times;</button>
+            </div>
+            
+            <div style={{ padding: '30px' }}>
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+                <div style={{ width: '150px', fontWeight: 'bold', fontSize: '0.95rem' }}>👤 Documentación necesaria</div>
+                <div style={{ flex: 1, fontSize: '0.9rem', color: '#333' }}>
+                  <p style={{ margin: '0 0 10px 0' }}>A la hora de recoger el vehículo, necesitarás:</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}><span style={{ color: '#006ce4' }}>✓</span> Pasaporte o documento nacional de identidad</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}><span style={{ color: '#006ce4' }}>✓</span> Permiso de conducir</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ color: '#006ce4' }}>✓</span> Tarjeta de crédito</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '30px', borderTop: '1px solid #e7e7e7', paddingTop: '20px' }}>
+                <div style={{ width: '150px', fontWeight: 'bold', fontSize: '0.95rem' }}>💳 Depósito de seguridad<br/><span style={{ fontWeight: 'normal', fontSize: '0.85rem', color: '#666' }}>1750,00 US$</span></div>
+                <div style={{ flex: 1, fontSize: '0.9rem', color: '#333' }}>
+                  <p style={{ margin: '0 0 15px 0' }}>En el momento de la recogida, el conductor principal dejará un depósito de seguridad reembolsable de 1750,00 US$ en su tarjeta de crédito. No se acepta efectivo ni tarjetas de débito. El personal del mostrador confirmará cuánto será.</p>
+                  <strong>Tarjetas aceptadas</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+                     <span style={{ border: '1px solid #ccc', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>MasterCard</span>
+                     <span style={{ border: '1px solid #ccc', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', color: '#1a1f71' }}>VISA</span>
+                     <span style={{ border: '1px solid #ccc', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold', color: '#006fcf' }}>AMEX</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '30px', borderTop: '1px solid #e7e7e7', paddingTop: '20px' }}>
+                <div style={{ width: '150px', fontWeight: 'bold', fontSize: '0.95rem' }}>🚗 Franquicia por daños<br/><span style={{ fontWeight: 'normal', fontSize: '0.85rem', color: '#666' }}>2000,00 US$</span></div>
+                <div style={{ flex: 1, fontSize: '0.9rem', color: '#333' }}>
+                  Si se daña la carrocería del coche, lo máximo que pagarás por las reparaciones cubiertas por la cobertura parcial por colisión es la franquicia por daños (2000,00 US$). La cobertura solo será válida si se cumplen las condiciones del contrato de alquiler.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '30px', borderTop: '1px solid #e7e7e7', paddingTop: '20px' }}>
+                <div style={{ width: '150px', fontWeight: 'bold', fontSize: '0.95rem' }}>🛣️ Kilometraje<br/><span style={{ fontWeight: 'normal', fontSize: '0.85rem', color: '#666' }}>Ilimitado</span></div>
+                <div style={{ flex: 1, fontSize: '0.9rem', color: '#333' }}>
+                  El alquiler incluye kilómetro sin límites gratis.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '30px', borderTop: '1px solid #e7e7e7', paddingTop: '20px' }}>
+                <div style={{ width: '150px', fontWeight: 'bold', fontSize: '0.95rem' }}>🌍 Cruce de fronteras</div>
+                <div style={{ flex: 1, fontSize: '0.9rem', color: '#333' }}>
+                  Esta compañía de alquiler no permite los viajes transfronterizos.
+                </div>
+              </div>
+              
+              <div style={{ borderTop: '1px solid #e7e7e7', paddingTop: '20px', fontSize: '0.85rem', color: '#666', lineHeight: '1.5' }}>
+                Aquí abajo puedes consultar los términos y condiciones completos del Proveedor de servicios, que incluyen el nombre completo y el domicilio social del Proveedor de servicios, así como información y cargos de los productos y servicios extra que se pueden adquirir en el mostrador o derivados del uso que hagas del alquiler, como el cruce de fronteras y, si los hubiera, los periodos de gracia de recogida y devolución.
+              </div>
+            </div>
+            
+            <div style={{ borderTop: '1px solid #e7e7e7', padding: '20px 30px', background: '#f9f9f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontWeight: 'bold' }}>
+              <span>Términos completos del alquiler</span>
+              <span style={{ fontSize: '1.2rem' }}>⌄</span>
             </div>
           </div>
         </div>

@@ -329,16 +329,16 @@ export function AtraccionDetail() {
                   <span className="muted">Basado en opiniones reales</span>
                 </div>
               </div>
-              {atraccion.local_ratings_breakdown && (
+              {/* atraccion.local_ratings_breakdown && (
                 <div className="rs-bars">
                   <div className="bar-row"><span>Limpieza</span> <strong>{atraccion.local_ratings_breakdown.limpieza?.toFixed(1)}</strong></div>
                   <div className="bar-row"><span>Servicio y Atención</span> <strong>{atraccion.local_ratings_breakdown.servicio?.toFixed(1)}</strong></div>
                   <div className="bar-row"><span>Calidad General</span> <strong>{atraccion.local_ratings_breakdown.calidad?.toFixed(1)}</strong></div>
                 </div>
-              )}
+              ) */}
             </div>
 
-            {atraccion.local_reviews && atraccion.local_reviews.length > 0 && (
+            {/* atraccion.local_reviews && atraccion.local_reviews.length > 0 && (
               <>
                 <h3 style={{marginTop: 24, marginBottom: 16}}>Lo que más gustó a los clientes</h3>
                 <div className="customer-likes-carousel">
@@ -353,7 +353,7 @@ export function AtraccionDetail() {
                   ))}
                 </div>
               </>
-            )}
+            ) */}
             </div>
 
           <div className="detail-section faq-section">
@@ -426,22 +426,25 @@ export function AtraccionDetail() {
               </div>
             ) : (
               <div className="date-selector">
-                <div className={`date-box ${form.date === '2026-10-01' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-10-01'})}>
-                  <span className="day-name">jue</span>
-                  <span className="day-num">1</span>
-                  <span className="month">oct</span>
-                </div>
-                <div className={`date-box ${form.date === '2026-10-02' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-10-02'})}>
-                  <span className="day-name">vie</span>
-                  <span className="day-num">2</span>
-                  <span className="month">oct</span>
-                </div>
-                <div className={`date-box ${form.date === '2026-10-03' ? 'active' : ''}`} onClick={() => setForm({...form, date: '2026-10-03'})}>
-                  <span className="day-name">sáb</span>
-                  <span className="day-num">3</span>
-                  <span className="month">oct</span>
-                  <span className="badge-hoy">Mejor Precio</span>
-                </div>
+                {[-1, 0, 1].map(offset => {
+                  const d = new Date(form.date + 'T00:00:00');
+                  d.setDate(d.getDate() + offset);
+                  const dateStr = d.toISOString().split('T')[0];
+                  const dayName = d.toLocaleDateString('es-ES', { weekday: 'short' });
+                  const dayNum = d.getDate();
+                  const monthName = d.toLocaleDateString('es-ES', { month: 'short' });
+                  const isActive = form.date === dateStr;
+                  const isBestPrice = dateStr === '2026-10-03';
+
+                  return (
+                    <div key={dateStr} className={`date-box ${isActive ? 'active' : ''}`} onClick={() => setForm({...form, date: dateStr})}>
+                      <span className="day-name">{dayName}</span>
+                      <span className="day-num">{dayNum}</span>
+                      <span className="month">{monthName}</span>
+                      {isBestPrice && <span className="badge-hoy">Mejor Precio</span>}
+                    </div>
+                  );
+                })}
               </div>
             )}
             
