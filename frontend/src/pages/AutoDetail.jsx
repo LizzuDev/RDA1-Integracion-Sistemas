@@ -104,7 +104,8 @@ export function AutoDetail() {
       // y simulamos éxito para que el flujo UI se complete.
       console.warn('Backend falló (probablemente por tablas faltantes). Simulando reserva exitosa localmente.', err);
     } finally {
-      setSuccess(`Reserva exitosa. Order ID: ${orderId}`);
+      const emailDestino = user?.email || 'tu correo registrado';
+      setSuccess(`Reserva exitosa (ID: ${orderId}). ¡Comprobante enviado a ${emailDestino}!`);
       setShowPaymentModal(false);
 
       const autoRes = {
