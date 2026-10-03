@@ -1,3 +1,6 @@
+npm run test:api:clientes
+
+
 Tips✮ ⋆ ˚｡𖦹 ⋆｡°✩𓆝
 fechaೃ 𓈒ॱ⬭ᩙ
 

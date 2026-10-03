@@ -1,0 +1,175 @@
+openapi: 3.0.0
+info:
+  title: Booking Prototipo API - Gestión de Clientes
+  version: 1.0.0
+  description: API RESTful versionada para la gestión de clientes del proyecto Booking Prototipo. Soporta HATEOAS y validación estricta de seguridad.
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Servidor Local
+  - url: https://api.booking-prototipo.com/api/v1
+    description: Servidor de Producción
+paths:
+  /clientes:
+    get:
+      summary: Listar clientes con paginación
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Número de página
+        - in: query
+          name: nombre
+          schema:
+            type: string
+          description: Filtro por nombre
+      responses:
+        '200':
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Cliente'
+    post:
+      summary: Crear un nuevo cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClienteRequest'
+      responses:
+        '201':
+          description: Cliente creado exitosamente
+  /clientes/{id}:
+    get:
+      summary: Obtener cliente por ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalles del cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cliente'
+        '404':
+          description: Cliente no encontrado (RFC 7807 Problem Details)
+    put:
+      summary: Actualizar cliente completo
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClienteRequest'
+      responses:
+        '200':
+          description: Cliente actualizado
+    patch:
+      summary: Actualización parcial de cliente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                telefono:
+                  type: string
+      responses:
+        '200':
+          description: Cliente actualizado
+    delete:
+      summary: Eliminar cliente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cliente eliminado sin contenido
+  /clientes/{id}/estado:
+    patch:
+      summary: Activar o desactivar cliente
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                activo:
+                  type: boolean
+      responses:
+        '200':
+          description: Estado del cliente actualizado
+components:
+  schemas:
+    ClienteRequest:
+      type: object
+      required:
+        - nombre
+        - apellido
+        - email
+        - cedula
+      properties:
+        nombre:
+          type: string
+        apellido:
+          type: string
+        email:
+          type: string
+          format: email
+        cedula:
+          type: string
+        telefono:
+          type: string
+    Cliente:
+      allOf:
+        - $ref: '#/components/schemas/ClienteRequest'
+        - type: object
+          properties:
+            id:
+              type: string
+            _links:
+              type: object
+              properties:
+                self:
+                  type: string
+                  example: /api/v1/clientes/1
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []

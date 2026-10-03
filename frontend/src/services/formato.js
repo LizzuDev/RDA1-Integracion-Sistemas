@@ -12,8 +12,10 @@
  * numerica, de modo que "1234.50" jamas pasa a ser 1234.4999999999999.
  */
 
+import { exchangeRates } from '../hooks/CurrencyContext';
+
 /** Simbolo por moneda ISO-4217. Solo para presentation. */
-const SIMBOLOS = { USD: '$', EUR: '\u20ac', GBP: '\u00a3' };
+const SIMBOLOS = { USD: '$', EUR: '€', GBP: '£' };
 
 /**
  * Formatea un importe monetario recibido como string del contrato.
@@ -21,25 +23,22 @@ const SIMBOLOS = { USD: '$', EUR: '\u20ac', GBP: '\u00a3' };
  * @param {string} [moneda]     p. ej. "USD" (ISO-4217)
  * @returns {string}            p. ej. "$1,234.50"
  */
-export function formatearMoneda(valor, moneda) {
+export function formatearMoneda(valor, monedaOriginal) {
   if (valor === null || valor === undefined || valor === '') return '--';
 
-  const bruto = String(valor);
-  const simbolo = SIMBOLOS[moneda] ?? '';
+  const targetCurrency = localStorage.getItem('booking_currency') || 'USD';
+  const original = (monedaOriginal && exchangeRates[monedaOriginal]) ? monedaOriginal : 'USD';
+  
+  const valorNumerico = parseFloat(valor);
+  if (isNaN(valorNumerico)) return valor;
 
-  // Se separa parte entera y decimal sobre el string, no sobre un numero.
-  const negativo = bruto.trim().startsWith('-');
-  const sinSigno = negativo ? bruto.trim().slice(1) : bruto.trim();
-  const [entero, decimal] = sinSigno.split('.');
+  const inUSD = original === 'USD' ? valorNumerico : (valorNumerico / exchangeRates[original]);
+  const converted = inUSD * (exchangeRates[targetCurrency] || 1);
 
-  const enteroConSeparadores = (entero || '0').replace(
-    /\B(?=(\d{3})+(?!\d))/g,
-    ',',
-  );
-  const decimales = (decimal ?? '00').slice(0, 2).padEnd(2, '0');
-
-  const monto = `${simbolo}${enteroConSeparadores}.${decimales}`;
-  return negativo ? `-${monto}` : monto;
+  if (['COP', 'CLP', 'ARS'].includes(targetCurrency)) {
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: targetCurrency, maximumFractionDigits: 0 }).format(converted);
+  }
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: targetCurrency }).format(converted);
 }
 
 /**

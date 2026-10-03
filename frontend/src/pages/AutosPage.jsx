@@ -4,6 +4,8 @@ import { searchAutos } from '../services/autosApi';
 import { AutoCard } from '../components/AutoCard';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { useCurrency } from '../hooks/CurrencyContext';
+import { formatearMoneda } from '../services/formato';
 
 export function AutosPage() {
   const navigate = useNavigate();
@@ -11,6 +13,7 @@ export function AutosPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const { convertPrice, currency } = useCurrency();
   
   // Search form state
   const [pickupLocation, setPickupLocation] = useState('');
@@ -406,10 +409,10 @@ export function AutosPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
-                {q: '¿Cuánto cuesta alquilar un coche en Ecuador durante una semana?', a: 'En promedio, alquilar un coche en Ecuador cuesta alrededor de US$350 a US$450 por semana, dependiendo de la ciudad y el tipo de vehículo.'}, 
-                {q: '¿Cuánto cuesta alquilar un coche en Ecuador durante un mes?', a: 'El costo mensual suele ser más económico en promedio diario, rondando los US$1,200 a US$1,500.'}, 
+                {q: '¿Cuánto cuesta alquilar un coche en Ecuador durante una semana?', a: `En promedio, alquilar un coche en Ecuador cuesta alrededor de ${formatearMoneda(350, 'USD')} a ${formatearMoneda(450, 'USD')} por semana, dependiendo de la ciudad y el tipo de vehículo.`}, 
+                {q: '¿Cuánto cuesta alquilar un coche en Ecuador durante un mes?', a: `El costo mensual suele ser más económico en promedio diario, rondando los ${formatearMoneda(1200, 'USD')} a ${formatearMoneda(1500, 'USD')}.`}, 
                 {q: '¿Cuál es el coche que más se alquila en Ecuador?', a: 'Los vehículos SUV y los compactos económicos son los más populares debido a la topografía del país y el tráfico en las ciudades.'}, 
-                {q: '¿Cuánto cuesta alquilar un vehículo del tipo "SUV" en Ecuador?', a: 'Un SUV estándar puede costar entre US$60 y US$90 al día, ideal para viajes largos o terrenos irregulares.'}
+                {q: '¿Cuánto cuesta alquilar un vehículo del tipo "SUV" en Ecuador?', a: `Un SUV estándar puede costar entre ${formatearMoneda(60, 'USD')} y ${formatearMoneda(90, 'USD')} al día, ideal para viajes largos o terrenos irregulares.`}
               ].map((faq, i) => (
                 <div key={`faq1-${i}`} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', background: 'white', overflow: 'hidden' }}>
                   <div onClick={() => toggleFaq(`l-${i}`)} style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', background: 'white' }}>
@@ -465,7 +468,7 @@ export function AutosPage() {
               <div>
                 <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Quito</h3>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>15 puntos de alquiler de coches</div>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>US$57,79</strong> al día</div>
+                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(57.79, 'USD')}</strong> al día</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
@@ -473,7 +476,7 @@ export function AutosPage() {
               <div>
                 <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Cuenca</h3>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>3 puntos de alquiler de coches</div>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>US$46,65</strong> al día</div>
+                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(46.65, 'USD')}</strong> al día</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
@@ -481,7 +484,7 @@ export function AutosPage() {
               <div>
                 <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Guayaquil</h3>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>3 puntos de alquiler de coches</div>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>US$47,70</strong> al día</div>
+                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(47.70, 'USD')}</strong> al día</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
@@ -489,7 +492,7 @@ export function AutosPage() {
               <div>
                 <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Manta</h3>
                 <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>2 puntos de alquiler de coches</div>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>US$52,64</strong> al día</div>
+                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(52.64, 'USD')}</strong> al día</div>
               </div>
             </div>
           </div>
@@ -547,7 +550,7 @@ export function AutosPage() {
 
                 <div style={{ marginBottom: '20px' }}>
                   <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Precio por día</h4>
-                  {['0 US$ - 50 US$', '50 US$ - 100 US$', '100 US$ - 150 US$'].map((p, idx) => (
+                  {[`0 ${currency} - ${convertPrice(50)}`, `${convertPrice(50)} - ${convertPrice(100)}`, `${convertPrice(100)} - ${convertPrice(150)}`].map((p, idx) => (
                      <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
                        <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {p}
                      </label>

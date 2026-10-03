@@ -5,12 +5,14 @@ import { v4 as uuidv4 } from 'uuid';
 import emailjs from '@emailjs/browser';
 import { useAuth } from '../hooks/useAuth';
 import { savePendingReservation } from '../services/offlineSync';
+import { useCurrency } from '../hooks/CurrencyContext';
 
 export function AtraccionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const isLoggedIn = !!user;
+  const { convertPrice } = useCurrency();
   
   const [atraccion, setAtraccion] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -95,8 +97,8 @@ export function AtraccionDetail() {
           service_name: atraccion?.nombre || atraccion?.name || `Tour / Atracción (${form.ticket_count} personas)`,
           date: form.date,
           time: form.time,
-          total_price: `$${(precio * parseInt(form.ticket_count, 10)).toFixed(2)} USD`,
-          message: `Reserva confirmada: ${atraccion?.nombre || atraccion?.name}. Fecha: ${form.date}. Hora: ${form.time}. Total: $${(precio * parseInt(form.ticket_count, 10)).toFixed(2)} USD.`,
+          total_price: convertPrice(precio * parseInt(form.ticket_count, 10)),
+          message: `Reserva confirmada: ${atraccion?.nombre || atraccion?.name}. Fecha: ${form.date}. Hora: ${form.time}. Total: ${convertPrice(precio * parseInt(form.ticket_count, 10))}.`,
         } : null;
 
         await savePendingReservation('atraccion', payload, idempotencyKey, templateParams);
@@ -152,8 +154,8 @@ export function AtraccionDetail() {
           service_name: atraccionRes.titulo,
           date: form.date,
           time: form.time,
-          total_price: `$${orderTotal} USD`,
-          message: `Reserva confirmada: ${atraccionRes.titulo}. Fecha: ${form.date}. Hora: ${form.time}. Total: $${orderTotal} USD.`,
+          total_price: convertPrice(orderTotal),
+          message: `Reserva confirmada: ${atraccionRes.titulo}. Fecha: ${form.date}. Hora: ${form.time}. Total: ${convertPrice(orderTotal)}.`,
         };
         console.log('[EmailJS] Enviando a:', user.email, 'params:', templateParams);
         emailjs.send(
@@ -422,7 +424,7 @@ export function AtraccionDetail() {
                   })}
                 </div>
                 <p className="muted" style={{fontSize: '0.85rem', marginTop: 24, borderTop: '1px solid #ddd', paddingTop: 16}}>
-                  La primera fecha en la que se ofrece el precio más bajo <strong>(US${precio})</strong> es el 3 oct
+                  La primera fecha en la que se ofrece el precio más bajo <strong>({convertPrice(precio)})</strong> es el 3 oct
                 </p>
               </div>
             ) : (
@@ -450,7 +452,7 @@ export function AtraccionDetail() {
             )}
             
             {!showCalendar && (
-              <p className="muted" style={{fontSize: '0.85rem', marginBottom: 20}}>La primera fecha en la que este precio más bajo <strong>(US${precio})</strong> está disponible es el 3 oct.</p>
+              <p className="muted" style={{fontSize: '0.85rem', marginBottom: 20}}>La primera fecha en la que este precio más bajo <strong>({convertPrice(precio)})</strong> está disponible es el 3 oct.</p>
             )}
 
             <p><strong>Seleccionar hora</strong></p>
@@ -493,7 +495,7 @@ export function AtraccionDetail() {
                   <input type="radio" checked readOnly />
                   <div>
                     <strong>Grupo (máx. 10 personas)</strong><br/>
-                    <span className="muted">US${precio}</span>
+                    <span className="muted">{convertPrice(precio)}</span>
                   </div>
                 </div>
 
@@ -507,7 +509,7 @@ export function AtraccionDetail() {
                     </select>
 
                     <div className="total-price-box">
-                      <div className="total-text">Total <strong>US${precio * form.ticket_count}</strong><br/><span>Incluye impuestos y cargos</span></div>
+                      <div className="total-text">Total <strong>{convertPrice(precio * form.ticket_count)}</strong><br/><span>Incluye impuestos y cargos</span></div>
                       <button className="search-btn" style={{width: '100%', padding: '12px', fontSize: '1rem', marginTop: 16}} onClick={handleBooking} disabled={isBooking}>
                         {isBooking ? 'Procesando Pago Seguro...' : 'Pagar y Confirmar'}
                       </button>
@@ -575,7 +577,7 @@ export function AtraccionDetail() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ color: '#595959' }}>Total Pagado:</span>
-                <strong>US${precio * form.ticket_count}</strong>
+                <strong>{convertPrice(precio * form.ticket_count)}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#595959' }}>Método:</span>

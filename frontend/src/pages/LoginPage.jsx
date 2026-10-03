@@ -97,12 +97,15 @@ export function LoginPage() {
         {errors.general && <div style={{ color: '#d93025', marginBottom: '1rem', textAlign: 'center', backgroundColor: '#fce8e6', padding: '10px', borderRadius: '4px', fontWeight: '500' }}>{errors.general}</div>}
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <legend className="sr-only">Credenciales de acceso</legend>
           <div>
             <label htmlFor="login-email" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Correo electrónico</label>
             <input 
               id="login-email"
               type="email" 
               required 
+              autoComplete="email"
               maxLength={30}
               value={email} 
               onChange={handleEmailChange}
@@ -116,6 +119,7 @@ export function LoginPage() {
               id="login-password"
               type="password" 
               required 
+              autoComplete="current-password"
               maxLength={30}
               value={password} 
               onChange={handlePasswordChange}
@@ -131,6 +135,7 @@ export function LoginPage() {
           >
             {loading ? 'Iniciando...' : 'Iniciar sesión'}
           </button>
+          </fieldset>
         </form>
 
         <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.9rem' }}>

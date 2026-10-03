@@ -5,12 +5,14 @@ import { v4 as uuidv4 } from 'uuid';
 import emailjs from '@emailjs/browser';
 import { useAuth } from '../hooks/useAuth';
 import { savePendingReservation } from '../services/offlineSync';
+import { useCurrency } from '../hooks/CurrencyContext';
 
 export function AutoDetail() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { convertPrice } = useCurrency();
   const auto = location.state?.auto || {};
 
   const precioDiario = auto.price || 35.50;
@@ -116,8 +118,8 @@ export function AutoDetail() {
       reply_to: user.email,
       pnr: orderId.substring(0, 8).toUpperCase(),
       service_name: `Renta de ${make} ${model} (${dias} días)`,
-      total_price: `$${orderTotal} USD`,
-      message: `Reserva confirmada: Renta de ${make} ${model} por ${dias} días. Total: $${orderTotal} USD. PNR: ${orderId.substring(0, 8).toUpperCase()}`,
+      total_price: convertPrice(orderTotal),
+      message: `Reserva confirmada: Renta de ${make} ${model} por ${dias} días. Total: ${convertPrice(orderTotal)}. PNR: ${orderId.substring(0, 8).toUpperCase()}`,
     } : null;
 
     if (!navigator.onLine) {
@@ -172,7 +174,7 @@ export function AutoDetail() {
     setLoading(false);
   };
 
-  const total = (precioDiario * dias).toFixed(2);
+  const total = convertPrice(precioDiario * dias);
 
   return (
     <main id="contenido-principal" style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: '40px' }}>
@@ -368,11 +370,11 @@ export function AutoDetail() {
               <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>Desglose del precio del coche</h3>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: '#333', marginBottom: '20px' }}>
                 <span>Precio del alquiler ({dias} días)</span>
-                <span>{total} US$</span>
+                <span>{total}</span>
               </div>
               <div style={{ borderTop: '1px solid #e7e7e7', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#333' }}>Total</span>
-                <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333' }}>{total} US$</span>
+                <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333' }}>{total}</span>
               </div>
               <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '15px', lineHeight: '1.4' }}>
                 Si pagas con una tarjeta ecuatoriana, el proveedor te cobrará un cargo adicional, de acuerdo con la legislación fiscal de Ecuador.
@@ -381,9 +383,9 @@ export function AutoDetail() {
 
             {/* Promo */}
             <div style={{ border: '1px solid #008009', borderRadius: '4px', padding: '20px', background: '#f2fcf5' }}>
-              <h4 style={{ color: '#008009', fontSize: '1rem', fontWeight: 'bold', margin: '0 0 10px 0' }}>Este vehículo cuesta tan solo {total} US$, ¡una verdadera ganga!</h4>
+              <h4 style={{ color: '#008009', fontSize: '1rem', fontWeight: 'bold', margin: '0 0 10px 0' }}>Este vehículo cuesta tan solo {total}, ¡una verdadera ganga!</h4>
               <p style={{ color: '#008009', fontSize: '0.9rem', margin: 0 }}>
-                En esta época del año, un coche pequeño en Quito Aeropuerto suele costar {(precioDiario * dias * 1.4).toFixed(2)} US$.
+                En esta época del año, un coche pequeño en Quito Aeropuerto suele costar {convertPrice(precioDiario * dias * 1.4)}.
               </p>
             </div>
 
@@ -397,7 +399,7 @@ export function AutoDetail() {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: 'white', borderRadius: '8px', padding: '30px', width: '400px', maxWidth: '90%', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '20px', color: '#333' }}>Pasarela de Pago</h2>
-            <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '20px' }}>Total a pagar: <strong>{total} US$</strong></p>
+            <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '20px' }}>Total a pagar: <strong>{total}</strong></p>
 
             <div style={{ marginBottom: '20px' }}>
               <label htmlFor="pago-metodo" style={{ display: 'block', fontSize: '0.9rem', color: '#333', marginBottom: '10px', fontWeight: 'bold' }}>Método de pago:</label>

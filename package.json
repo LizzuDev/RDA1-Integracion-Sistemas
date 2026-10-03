@@ -23,7 +23,8 @@
     "prueba:datos": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js",
     "prueba:datos:purga": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js --purge",
     "prueba:gestion": "npm run build && node dist/modules/vuelos/pruebas/prueba-gestion.js",
-    "prueba:db": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js && node dist/modules/vuelos/pruebas/prueba-gestion.js"
+    "prueba:db": "npm run build && node dist/modules/vuelos/pruebas/prueba-datos.js && node dist/modules/vuelos/pruebas/prueba-gestion.js",
+    "test:api:clientes": "node run_api_tests.js"
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.3.7",
