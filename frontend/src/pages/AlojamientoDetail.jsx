@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { savePendingReservation } from '../services/offlineSync';
 import { formatearFecha } from '../services/formato';
-import emailjs from '@emailjs/browser';
+import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { jsPDF } from 'jspdf';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -283,15 +283,18 @@ export function AlojamientoDetail() {
     };
 
     const codigoReservaPnr = `BKG-${uuidv4().substring(0, 6).toUpperCase()}`;
-    const emailParams = {
-      to_email: customerEmail,
-      to_name: customerName,
-      email: customerEmail,
+    const datosFactura = {
+      tipo: 'alojamiento',
       pnr: codigoReservaPnr,
-      service_name: `${alojamiento?.nombre || 'Alojamiento'} (${rooms} hab, ${nightsCount} noches)`,
-      date: `${checkin} al ${checkout}`,
-      time: 'Check-in: 15:00 - 23:00',
-      total_price: `${currency} ${convertPrice(totalPrice)}`,
+      titulo: `${alojamiento?.nombre || 'Alojamiento'} (${nightsCount} noches)`,
+      total: totalPrice,
+      pasajeros: [
+        {
+          firstName: customerName || user?.user_metadata?.nombre || 'Huésped',
+          lastName: user?.user_metadata?.apellido || '',
+          documentNumber: user?.user_metadata?.cedula || '',
+        },
+      ],
     };
 
     // Offline flow
@@ -300,7 +303,7 @@ export function AlojamientoDetail() {
         'alojamiento',
         { alojamientoId: id, data: payload },
         idempotencyKey,
-        emailParams
+        datosFactura
       );
 
       const localBooking = {
@@ -331,10 +334,11 @@ export function AlojamientoDetail() {
       const res = await reservarAlojamiento(id, payload, idempotencyKey);
       const reservationCode = res.codigo_reserva || res.codigoReserva || res.reservation_id || codigoReservaPnr;
 
-      try {
-        await emailjs.send('service_gc9gkdc', 'template_nlbgw3v', { ...emailParams, pnr: reservationCode }, 'vZyuTrdLeGeWrTWLe');
-      } catch (err) {
-        console.warn('Email warning:', err);
+      if (navigator.onLine) {
+        enviarFacturaTrasCompra({
+          ...datosFactura,
+          pnr: String(reservationCode).substring(0, 8).toUpperCase(),
+        });
       }
 
       const confirmedBooking = {
