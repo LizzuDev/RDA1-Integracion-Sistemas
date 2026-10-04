@@ -96,7 +96,7 @@ export const api = axios.create({
   //
   // El interceptor de peticion lo DESACTIVA para las rutas publicas, que no lo
   // necesitan y sufferirian con el modo "credentialed".
-  withCredentials: true,
+  withCredentials: false,
 });
 
 // ---------------------------------------------------------------------------

@@ -171,23 +171,21 @@ export function BoardingPass({ ticket, pase }) {
         ) : (
           <>
             <span className="boarding-dato-etiqueta">Butaca</span>
-            <span className="boarding-dato-valor">
-              Se asigna al hacer el check-in
+            <span className="boarding-dato-valor boarding-dato-pendiente">
+              —
             </span>
           </>
         )}
       </div>
 
       {/* El talón: separacion punteada, como en un pasaje real. */}
-      <div className="boarding-talon">
-        <span className="boarding-talon-texto">
-          {!emitido
-            ? 'El número de boleto y el cupón aparecerán aquí cuando se complete la emisión.'
-            : conPase
-              ? 'Preséntese en el aeropuerto con este pasaje y su documento de viaje.'
-              : 'Haga el check-in para obtener la butaca y el código de barras de este pasaje.'}
-        </span>
-      </div>
+      {emitido && conPase && (
+        <div className="boarding-talon">
+          <span className="boarding-talon-texto">
+            Preséntese en el aeropuerto con este pasaje y su documento de viaje.
+          </span>
+        </div>
+      )}
     </article>
   );
 }

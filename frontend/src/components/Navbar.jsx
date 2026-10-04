@@ -8,9 +8,12 @@ import { supabase } from '../services/supabase';
 export function Navbar() {
   const location = useLocation();
   const isAutos = location.pathname.startsWith('/autos');
+  const isVuelos = location.pathname.startsWith('/vuelos');
+  const isAtracciones = location.pathname === '/' || location.pathname.startsWith('/search') || location.pathname.startsWith('/atracciones');
+  const isHospedaje = location.pathname.startsWith('/hospedaje');
   const { user } = useAuth();
   const { currency, changeCurrency } = useCurrency();
-  const { language, currentLanguage, changeLanguage } = useLanguage();
+  const { language, currentLanguage, changeLanguage, t } = useLanguage();
   
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -119,6 +122,8 @@ export function Navbar() {
   };
 
 
+  const isAdmin = user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin';
+
   return (
     <nav className="navbar">
       <div className="navbar-inner">
@@ -126,12 +131,18 @@ export function Navbar() {
           Booking<span>.com</span>
         </div>
         <div className="navbar-actions">
-          <span className="nav-currency" onClick={() => setShowCurrencyModal(true)} style={{ cursor: 'pointer' }}>{currency}</span>
-          <span className="nav-flag" onClick={() => setShowLanguageModal(true)} style={{ cursor: 'pointer' }}>{currentLanguage.flag}</span>
-          <span className="nav-help">?</span>
+          <span className="nav-currency" onClick={() => setShowCurrencyModal(true)} style={{ cursor: 'pointer', padding: '8px 12px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {currency} 
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+          </span>
+          <span className="nav-flag" onClick={() => setShowLanguageModal(true)} style={{ cursor: 'pointer', padding: '8px 12px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}>
+            <img src={`https://flagcdn.com/w40/${currentLanguage.countryCode}.png`} alt={currentLanguage.name} style={{ width: '24px', borderRadius: '2px' }} />
+          </span>
           {user ? (
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <Link to="/mis-reservas" className="navbar-btn outline" style={{textDecoration: 'none', marginRight: '10px'}}>Mis reservas</Link>
+              {!isAdmin && (
+                <Link to="/mis-reservas" className="navbar-btn outline" style={{textDecoration: 'none', marginRight: '10px'}}>{t('nav.my_bookings')}</Link>
+              )}
               
               <div 
                 onClick={() => setShowDropdown(!showDropdown)}
@@ -161,33 +172,44 @@ export function Navbar() {
                     onMouseOver={(e) => e.currentTarget.style.background = '#f5f5f5'}
                     onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <span>👤</span> Editar cuenta
+                    <span>👤</span> {t('nav.edit_account')}
                   </div>
+                  {(user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin') && (
+                    <Link 
+                      to="/admin"
+                      onClick={() => setShowDropdown(false)}
+                      style={{ padding: '12px 15px', color: '#333', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}
+                      onMouseOver={(e) => e.currentTarget.style.background = '#f5f5f5'}
+                      onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span>⚙️</span> Panel Admin
+                    </Link>
+                  )}
                   <div 
                     onClick={handleLogout}
                     style={{ padding: '12px 15px', color: '#d32f2f', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', borderTop: '1px solid #eee' }}
                     onMouseOver={(e) => e.currentTarget.style.background = '#f5f5f5'}
                     onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <span>🚪</span> Cerrar sesión
+                    <span>🚪</span> {t('nav.logout')}
                   </div>
                 </div>
               )}
             </div>
           ) : (
             <>
-              <Link to="/register" className="navbar-btn outline" style={{textDecoration: 'none'}}>Regístrate</Link>
-              <Link to="/login" className="navbar-btn solid" style={{textDecoration: 'none'}}>Iniciar sesión</Link>
+              <Link to="/register" className="navbar-btn outline" style={{textDecoration: 'none'}}>{t('nav.register')}</Link>
+              <Link to="/login" className="navbar-btn solid" style={{textDecoration: 'none'}}>{t('nav.login')}</Link>
             </>
           )}
         </div>
       </div>
       <div className="navbar-secondary">
         <div className="navbar-links">
-          <Link to="/">🛏️ Hospedajes</Link>
-          <Link to="/vuelos">✈️ Vuelos</Link>
-          <Link to="/autos" className={isAutos ? 'active' : ''}>🚗 Renta de autos</Link>
-          <Link to="/" className={!isAutos ? 'active' : ''}>🎡 Atracciones</Link>
+          <Link to="/hospedaje" className={isHospedaje ? 'active' : ''}>🛏️ {t('nav.stays')}</Link>
+          <Link to="/vuelos" className={isVuelos ? 'active' : ''}>✈️ {t('nav.flights')}</Link>
+          <Link to="/autos" className={isAutos ? 'active' : ''}>🚗 {t('nav.cars')}</Link>
+          <Link to="/" className={isAtracciones ? 'active' : ''}>🎡 {t('nav.attractions')}</Link>
         </div>
       </div>
 
@@ -358,7 +380,7 @@ export function Navbar() {
                     onMouseOver={(e) => { if(language !== lang.code) e.currentTarget.style.background = '#f5f5f5'; }}
                     onMouseOut={(e) => { if(language !== lang.code) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <span style={{ fontSize: '1.5rem' }}>{lang.flag}</span>
+                    <img src={`https://flagcdn.com/w40/${lang.countryCode}.png`} alt={lang.name} style={{ width: '32px', borderRadius: '2px' }} />
                     <span style={{ fontSize: '0.9rem', color: '#333' }}>{lang.name}</span>
                   </button>
                 ))}
@@ -379,7 +401,7 @@ export function Navbar() {
                     onMouseOver={(e) => { if(language !== lang.code) e.currentTarget.style.background = '#f5f5f5'; }}
                     onMouseOut={(e) => { if(language !== lang.code) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <span style={{ fontSize: '1.5rem' }}>{lang.flag}</span>
+                    <img src={`https://flagcdn.com/w40/${lang.countryCode}.png`} alt={lang.name} style={{ width: '32px', borderRadius: '2px' }} />
                     <span style={{ fontSize: '0.9rem', color: '#333' }}>{lang.name}</span>
                   </button>
                 ))}

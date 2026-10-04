@@ -3,8 +3,24 @@ import { createClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
-  private supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  private supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+  /**
+   * Se leen las tres convenciones porque el proyecto tiene las variables con
+   * nombres distintos segun donde vive cada despliegue: el `.env` del BACKEND usa
+   * `SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY` (los nombres nuevos de Supabase,
+   * `sb_publishable_...`), mientras que el frontend las expone como `VITE_*`.
+   *
+   * Antes solo se aceptaban `VITE_*` y `SUPABASE_KEY`, y en el backend ninguna de
+   * las dos existe: el guard caia en `placeholder`, `getUser` fallaba SIEMPRE y
+   * toda ruta protegida devolvia 401. Se aniaden los nombres que el `.env` real
+   * usa, y el orden pone primero los `VITE_*` para no cambiar el comportamiento
+   * si estan definidos.
+   */
+  private supabaseUrl =
+    process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  private supabaseKey =
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_KEY;
   private supabase;
 
   constructor() {

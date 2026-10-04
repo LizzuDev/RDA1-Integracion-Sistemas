@@ -26,6 +26,7 @@ export function CurrencyProvider({ children }) {
     if (exchangeRates[newCurrency]) {
       setCurrency(newCurrency);
       localStorage.setItem('booking_currency', newCurrency);
+      window.location.reload();
     }
   };
 

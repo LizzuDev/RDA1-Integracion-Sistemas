@@ -5,7 +5,7 @@ const C = {
   blue: '#006ce4', darkBlue: '#003b95', lightBlue: '#ebf3ff',
   yellow: '#febb02', green: '#008009', red: '#d32f2f',
   orange: '#e8650a', gray: '#6b6b6b', border: '#e7e7e7',
-  bg: '#f5f5f5', white: '#ffffff', text: '#1a1a1a',
+  bg: '#f5f5f5', white: '#ffffff', text: '#1a1a1a', cyan: '#00bcd4',
 };
 
 const TABS = [
@@ -101,8 +101,9 @@ function ObservabilidadTab({stats,loadingStats,serviceHealth}) {
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))',gap:12}}>
         <KpiCard icon="🎫" label="Total Reservas" value={k.totalReservas??0} color={C.blue}/>
         <KpiCard icon="✈️" label="Vuelos" value={k.reservasVuelos??0} sub="reservas" color={C.darkBlue}/>
-        <KpiCard icon="🚗" label="Autos" value={k.reservasAutos??0} sub="reservas" color={C.orange}/>
+        <KpiCard icon="🚗" label="Autos" value={k.reservasAutos??0} sub="reservas" color={C.cyan}/>
         <KpiCard icon="🎡" label="Atracciones" value={k.reservasAtracciones??0} sub="reservas" color={C.green}/>
+        <KpiCard icon="🏨" label="Hospedajes" value={k.reservasHospedaje??0} sub="reservas" color={'#8e44ad'}/>
         <KpiCard icon="💵" label="Ingresos Totales" value={`$${fmt(k.ingresosTotal)}`} sub="USD" color={C.green}/>
       </div>
       <SectionTitle>🔌 Estado de Servicios</SectionTitle>
@@ -124,6 +125,10 @@ function ObservabilidadTab({stats,loadingStats,serviceHealth}) {
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
           <div style={{fontSize:'0.85rem',color:C.text}}>🎡 Atracciones</div>
           <div style={{fontSize:'1.6rem',fontWeight:700,color:C.green}}>{stats?.trafficByVertical?.atracciones || 0}</div>
+        </div>
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
+          <div style={{fontSize:'0.85rem',color:C.text}}>🏨 Hospedaje</div>
+          <div style={{fontSize:'1.6rem',fontWeight:700,color:'#8e44ad'}}>{stats?.kpis?.reservasHospedaje || 0}</div>
         </div>
       </div>
       {stats?.estadosVuelos && Object.keys(stats.estadosVuelos).length>0 && (
@@ -169,7 +174,7 @@ function ObservabilidadTab({stats,loadingStats,serviceHealth}) {
             {(stats?.ultimasReservas||[]).map((r,i)=>(
               <tr key={r.id||i} style={{borderTop:`1px solid ${C.border}`}}>
                 <td style={{padding:'9px 14px'}}>
-                  <span>{r.tipo==='vuelo'?'✈️':r.tipo==='auto'?'🚗':'🎡'}</span>
+                  <span>{r.tipo==='vuelo'?'✈️':r.tipo==='auto'?'🚗':r.tipo==='hospedaje'?'🏨':'🎡'}</span>
                   <span style={{marginLeft:6,textTransform:'capitalize'}}>{r.tipo}</span>
                 </td>
                 <td style={{padding:'9px 14px',fontFamily:'monospace',fontWeight:600}}>{r.pnr||'—'}</td>
@@ -312,12 +317,55 @@ function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
   };
 
   const handleReservaAction = async (tipo, id, action) => {
-    try {
-      if (action === 'cancelar') await api.put(`/admin/reservas/${tipo}/${id}/cancelar`);
-      if (action === 'reenviar') await api.put(`/admin/reservas/${tipo}/${id}/reenviar`);
+    if (tipo === 'hospedaje') {
+      if (action === 'cancelar') {
+        let locales = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+        locales = locales.map(r => r.id === id ? { ...r, status: 'CANCELLED' } : r);
+        localStorage.setItem('reservas_alojamientos', JSON.stringify(locales));
+      }
+      if (action === 'reenviar') alert(`Comprobante de hospedaje ${id} reenviado virtualmente`);
       alert(`Acción de ${action} ejecutada exitosamente.`);
       onRefresh();
-    } catch(e) { alert('Error al ejecutar la acción'); }
+      return;
+    }
+    
+    // Check if it's a local auto or atraccion
+    if (tipo === 'auto' || tipo === 'autos') {
+      let locales = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
+      let index = locales.findIndex(r => (r.id === id || r.orderId === id));
+      if (index !== -1) {
+        if (action === 'cancelar') {
+          locales[index].status = 'CANCELLED';
+          localStorage.setItem('reservas_autos', JSON.stringify(locales));
+        }
+        if (action === 'reenviar') alert(`Comprobante de auto ${id} reenviado virtualmente`);
+        alert(`Acción de ${action} ejecutada exitosamente.`);
+        onRefresh();
+        return;
+      }
+    }
+
+    if (tipo === 'atraccion' || tipo === 'atracciones') {
+      let locales = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
+      let index = locales.findIndex(r => (r.id === id || r.reservation_id === id));
+      if (index !== -1) {
+        if (action === 'cancelar') {
+          locales[index].status = 'CANCELLED';
+          localStorage.setItem('reservas_atracciones', JSON.stringify(locales));
+        }
+        if (action === 'reenviar') alert(`Comprobante de atracción ${id} reenviado virtualmente`);
+        alert(`Acción de ${action} ejecutada exitosamente.`);
+        onRefresh();
+        return;
+      }
+    }
+
+    try {
+      if (action === 'cancelar') await api.put(`/admin/reservas/${tipo}/${id}/cancelar`);
+      if (action === 'reenviar') await api.put(`/admin/reservas/${tipo}/${id}/reenviar`); // Revertido a PUT
+      alert(`Acción de ${action} ejecutada exitosamente.`);
+      onRefresh();
+    } catch(e) { alert('Error al ejecutar la acción en el backend'); }
   };
 
   const viewHistorial = async (id, email) => {
@@ -328,11 +376,37 @@ function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
   };
 
   const viewDetalles = async (tipo, id) => {
+    if (tipo === 'hospedaje') {
+      const localesAloj = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+      const reservaLocal = localesAloj.find(r => r.id === id);
+      setModal({ type: 'detalles', data: reservaLocal || { mensaje: 'No encontrada localmente' }, title: `Detalles Técnicos - ${tipo} ${id}` });
+      return;
+    }
+    
+    // Check if it's a local auto or atraccion
+    if (tipo === 'auto' || tipo === 'autos') {
+      const localesAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
+      const reservaLocal = localesAutos.find(r => (r.id === id || r.orderId === id));
+      if (reservaLocal) {
+        setModal({ type: 'detalles', data: reservaLocal, title: `Detalles Técnicos (Local) - ${tipo} ${id}` });
+        return;
+      }
+    }
+
+    if (tipo === 'atraccion' || tipo === 'atracciones') {
+      const localesAtracciones = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
+      const reservaLocal = localesAtracciones.find(r => (r.id === id || r.reservation_id === id));
+      if (reservaLocal) {
+        setModal({ type: 'detalles', data: reservaLocal, title: `Detalles Técnicos (Local) - ${tipo} ${id}` });
+        return;
+      }
+    }
+
     try {
       const { data } = await api.get(`/admin/reservas/${tipo}/${id}/detalles`);
-      setModal({ type: 'detalles', data: data.data, title: `Detalles Técnicos - ${tipo} ${id}` });
+      setModal({ type: 'detalles', data: data.data || { mensaje: 'Sin detalles en el backend' }, title: `Detalles Técnicos - ${tipo} ${id}` });
     } catch (e) {
-      alert('Error al obtener detalles');
+      alert('Error al obtener detalles del backend');
     }
   };
   const VISTAS=[
@@ -513,7 +587,72 @@ export function AdminDashboard() {
 
   const fetchStats=useCallback(async(silent=false)=>{
     if(!silent) setLoadingStats(true);
-    try{const{data}=await api.get('/admin/stats');setStats(data);}
+    try{
+      const{data}=await api.get('/admin/stats');
+      
+      const localesAloj = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+      const hospedajeList = localesAloj.map(al => ({
+        id: al.id,
+        tipo: 'hospedaje',
+        pnr: (al.id || 'HOTEL').substring(0, 6).toUpperCase(),
+        estado: al.status || 'CONFIRMED',
+        total: al.total || 0,
+        moneda: 'USD',
+        createdAt: al.createdAt || al.fecha || new Date().toISOString().split('T')[0],
+      }));
+
+      const localesAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
+      const autosList = localesAutos.map(au => ({
+        id: au.id || au.orderId,
+        tipo: 'auto',
+        pnr: (au.id || au.orderId || 'AUTO').substring(0, 6).toUpperCase(),
+        estado: au.status || 'CONFIRMED',
+        total: au.totalPrice?.total || au.total || 0,
+        moneda: 'USD',
+        createdAt: au.createdAt || au.date || new Date().toISOString().split('T')[0],
+      }));
+
+      const localesAtracciones = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
+      const atraccionesList = localesAtracciones.map(at => ({
+        id: at.id || at.reservation_id,
+        tipo: 'atraccion',
+        pnr: (at.id || at.reservation_id || 'ATRAC').substring(0, 6).toUpperCase(),
+        estado: at.status || 'CONFIRMED',
+        total: at.totalPrice?.total || at.total || 0,
+        moneda: 'USD',
+        createdAt: at.createdAt || at.date || new Date().toISOString().split('T')[0],
+      }));
+      
+      const kpis = data.kpis || {};
+      const statsHospedaje = localesAloj.length;
+      const ingresosHospedaje = localesAloj.reduce((acc, curr) => acc + Number(curr.total || 0), 0);
+      
+      const statsAutosLocales = localesAutos.length;
+      const ingresosAutosLocales = localesAutos.reduce((acc, curr) => acc + Number(curr.totalPrice?.total || curr.total || 0), 0);
+
+      const statsAtraccionesLocales = localesAtracciones.length;
+      const ingresosAtraccionesLocales = localesAtracciones.reduce((acc, curr) => acc + Number(curr.totalPrice?.total || curr.total || 0), 0);
+      
+      let ultimasReservas = [...(data.ultimasReservas || []), ...hospedajeList, ...autosList, ...atraccionesList]
+        .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0,10);
+        
+      setStats({
+        ...data,
+        kpis: {
+          ...kpis,
+          reservasHospedaje: statsHospedaje,
+          ingresosHospedaje: ingresosHospedaje,
+          reservasAutos: (kpis.reservasAutos || 0) + statsAutosLocales,
+          ingresosAutos: (kpis.ingresosAutos || 0) + ingresosAutosLocales,
+          reservasAtracciones: (kpis.reservasAtracciones || 0) + statsAtraccionesLocales,
+          ingresosAtracciones: (kpis.ingresosAtracciones || 0) + ingresosAtraccionesLocales,
+          totalReservas: (kpis.totalReservas || 0) + statsHospedaje + statsAutosLocales + statsAtraccionesLocales,
+          ingresosTotal: (kpis.ingresosTotal || 0) + ingresosHospedaje + ingresosAutosLocales + ingresosAtraccionesLocales
+        },
+        ultimasReservas
+      });
+    }
     catch{setStats({kpis:{},ultimasReservas:[],estadosVuelos:{}});}
     finally{if(!silent) setLoadingStats(false);setLastRefresh(new Date());}
   },[]);
@@ -527,7 +666,49 @@ export function AdminDashboard() {
 
   const fetchReservas=useCallback(async(silent=false)=>{
     if(!silent) setLoadingReservas(true);
-    try{const{data}=await api.get('/admin/reservas');setReservas(data||{vuelos:[],autos:[],atracciones:[],hospedaje:[]});}
+    try{
+      const{data}=await api.get('/admin/reservas');
+      
+      const localesAloj = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+      const hospedajeList = localesAloj.map(al => ({
+        id: al.id,
+        tipo: 'hospedaje',
+        pnr: (al.id || 'HOTEL').substring(0, 6).toUpperCase(),
+        estado: al.status || 'CONFIRMED',
+        total: al.total || 0,
+        moneda: 'USD',
+        createdAt: al.createdAt || al.fecha || new Date().toISOString().split('T')[0],
+      }));
+
+      const localesAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
+      const autosList = localesAutos.map(au => ({
+        id: au.id || au.orderId,
+        tipo: 'auto',
+        pnr: (au.id || au.orderId || 'AUTO').substring(0, 6).toUpperCase(),
+        estado: au.status || 'CONFIRMED',
+        total: au.totalPrice?.total || au.total || 0,
+        moneda: 'USD',
+        createdAt: au.createdAt || au.date || new Date().toISOString().split('T')[0],
+      }));
+
+      const localesAtracciones = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
+      const atraccionesList = localesAtracciones.map(at => ({
+        id: at.id || at.reservation_id,
+        tipo: 'atraccion',
+        pnr: (at.id || at.reservation_id || 'ATRAC').substring(0, 6).toUpperCase(),
+        estado: at.status || 'CONFIRMED',
+        total: at.totalPrice?.total || at.total || 0,
+        moneda: 'USD',
+        createdAt: at.createdAt || at.date || new Date().toISOString().split('T')[0],
+      }));
+
+      setReservas({
+        ...data, 
+        hospedaje: hospedajeList,
+        autos: [...(data.autos || []), ...autosList],
+        atracciones: [...(data.atracciones || []), ...atraccionesList]
+      });
+    }
     catch{setReservas({vuelos:[],autos:[],atracciones:[],hospedaje:[]});}
     finally{if(!silent) setLoadingReservas(false);}
   },[]);

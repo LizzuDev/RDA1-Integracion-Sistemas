@@ -5,7 +5,7 @@ export class OrderAuto {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'varchar', length: 50 })
   autoId: string;
 
   @Column({ type: 'uuid', unique: true })
@@ -31,7 +31,4 @@ export class OrderAuto {
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamp' })
-  updatedAt: Date;
 }

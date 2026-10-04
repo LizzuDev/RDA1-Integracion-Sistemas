@@ -28,9 +28,9 @@ export class AdminService {
     this.logger.log('Admin: consultando estadísticas globales...');
 
     const [vuelos, autos, atracciones] = await Promise.all([
-      this.reservaRepo.find().catch(() => [] as Reserva[]),
-      this.orderAutoRepo.find().catch(() => [] as OrderAuto[]),
-      this.reservaAtraccionRepo.find().catch(() => [] as ReservaAtraccion[]),
+      this.reservaRepo.find().catch((e) => { this.logger.error('Error vuelos:', e); return [] as Reserva[]; }),
+      this.orderAutoRepo.find().catch((e) => { this.logger.error('Error autos:', e); return [] as OrderAuto[]; }),
+      this.reservaAtraccionRepo.find().catch((e) => { this.logger.error('Error atracciones:', e); return [] as ReservaAtraccion[]; }),
     ]);
 
     const { data: telemetry } = await this.supabase.from('telemetry_events').select('event_name, session_id, vertical');
@@ -264,6 +264,13 @@ export class AdminService {
           where: { idReserva: id },
           relations: ['pasajeros', 'itinerarios', 'tarifas', 'boletos', 'checkin']
         });
+        if (data) {
+          if (data.pasajeros) data.pasajeros.forEach(p => delete p.reserva);
+          if (data.itinerarios) data.itinerarios.forEach(i => delete i.reserva);
+          if (data.tarifas) data.tarifas.forEach(t => delete t.reserva);
+          if (data.boletos) data.boletos.forEach(b => delete b.reserva);
+          if (data.checkin) delete data.checkin.reserva;
+        }
       } else if (tipo === 'autos') {
         data = await this.orderAutoRepo.findOneBy({ id });
       } else if (tipo === 'atracciones') {

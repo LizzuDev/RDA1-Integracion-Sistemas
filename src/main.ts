@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
+import { ExpressAdapter, NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { BadRequestException, ValidationError, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -83,8 +83,48 @@ function factoryDeValidacion(errores: ValidationError[]): BadRequestException {
   });
 }
 
+/**
+ * Limite del cuerpo JSON, en bytes.
+ *
+ * MEDIDO con el layout real (`prueba-tamano-pdf.mjs`): la factura pesa 12.6 KB y
+ * su Base64 17 KB, o sea un JSON de ~17 KB. El limite por defecto de
+ * `body-parser` (100 KB) alcanzaria de sobra HOY.
+ *
+ * Se sube a 5 MB por margen, no por necesidad inmediata: el PDF es TEXTO y no
+ * tiene imagenes, pero en cuanto se le meta el logo, un QR o un sello, jsPDF
+ * deja de comprimir igual y el Base64 (que infla un 33%) se dispara. El dia que
+ * eso ocurra, un 413 aparece ANTES de llegar al controlador y el mensaje que ve
+ * el usuario no tiene nada que ver con su correo.
+ *
+ * 5 MB no convierte el endpoint en una via de subida arbitraria porque el limite
+ * real de UNA factura lo impone `@MaxLength(2_500_000)` en `EnviarFacturaDto`: un
+ * payload entre 2.5 MB y 5 MB pasa el parser y muere en la validacion, con un 400
+ * que si explica el motivo.
+ *
+ * ── Por que `bodyParser: false` + `useBodyParser` y no solo `useBodyParser` ──
+ * `app.useBodyParser()` ANADE un parser con el limite nuevo, pero Nest tambien
+ * registra los suyos durante `init()` con el limite de 100 KB. Como Express
+ * ejecuta los middleware en orden de registro, el de 100 KB CORTA la peticion
+ * antes de que llegue al que se acaba de añadir.
+ *
+ * `bodyParser: false` desactiva los automaticos, y `useBodyParser` monta
+ * entonces solo los dos de aqui, ya con el limite correcto. Se usa
+ * `useBodyParser` y no importar `json`/`urlencoded` de `express` porque `express`
+ * no es dependencia directa de este proyecto: llega anidada bajo
+ * `@nestjs/platform-express` y un `import` desde aqui falla en tiempo de
+ * ejecucion aunque compile. `useBodyParser` es la API pública de Nest para esto.
+ */
+const LIMITE_CUERPO = '5mb';
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, new ExpressAdapter());
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule,
+    new ExpressAdapter(),
+    { bodyParser: false },
+  );
+
+  app.useBodyParser('json', { limit: LIMITE_CUERPO });
+  app.useBodyParser('urlencoded', { limit: LIMITE_CUERPO, extended: true });
 
   // Habilita CORS para que el frontend pueda llamar al backend.
   //

@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { createOrderAuto } from '../services/autosApi';
 import { v4 as uuidv4 } from 'uuid';
-import emailjs from '@emailjs/browser';
 import { useAuth } from '../hooks/useAuth';
 import { savePendingReservation } from '../services/offlineSync';
+import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { useCurrency } from '../hooks/CurrencyContext';
 
 export function AutoDetail() {
@@ -13,6 +13,7 @@ export function AutoDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { convertPrice } = useCurrency();
+  const isAdmin = user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin';
   const auto = location.state?.auto || {};
 
   const precioDiario = auto.price || 35.50;
@@ -107,24 +108,28 @@ export function AutoDetail() {
     };
 
     let orderId = idempotencyKey;
-    const emailDestino = user?.email || 'tu correo registrado';
     const orderTotal = (precioDiario * dias).toFixed(2);
+    const tituloReserva = `Renta de ${make} ${model} (${dias} días)`;
 
-    const emailParams = user?.email ? {
-      to_email: user.email,
-      to_name: user.user_metadata?.nombre || user.user_metadata?.full_name || user.email.split('@')[0] || 'Cliente',
-      email: user.email,
-      name: user.user_metadata?.nombre || user.user_metadata?.full_name || user.email.split('@')[0] || 'Cliente',
-      reply_to: user.email,
+    // Datos de la factura. El `pnr` se deja como la clave de idempotencia y se
+    // sustituye por el `order_id` real si la orden se crea en el backend.
+    const datosFactura = {
+      tipo: 'auto',
       pnr: orderId.substring(0, 8).toUpperCase(),
-      service_name: `Renta de ${make} ${model} (${dias} días)`,
-      total_price: convertPrice(orderTotal),
-      message: `Reserva confirmada: Renta de ${make} ${model} por ${dias} días. Total: ${convertPrice(orderTotal)}. PNR: ${orderId.substring(0, 8).toUpperCase()}`,
-    } : null;
+      titulo: tituloReserva,
+      total: orderTotal,
+      pasajeros: [
+        {
+          firstName: user?.user_metadata?.nombre || user?.user_metadata?.full_name || '',
+          lastName: user?.user_metadata?.apellido || '',
+          documentNumber: user?.user_metadata?.cedula || '',
+        },
+      ],
+    };
 
     if (!navigator.onLine) {
       // Guardar localmente para sincronizar después
-      await savePendingReservation('auto', payload, idempotencyKey, emailParams);
+      await savePendingReservation('auto', payload, idempotencyKey, datosFactura);
     } else {
       try {
         const res = await createOrderAuto(payload, idempotencyKey);
@@ -135,26 +140,19 @@ export function AutoDetail() {
         console.warn('Backend falló (probablemente por tablas faltantes). Simulando reserva exitosa localmente.', err);
       }
 
-      // Enviar correo electrónico con EmailJS solo si hay conexión
-      if (emailParams) {
-        console.log('[EmailJS] Enviando a:', user.email, 'params:', emailParams);
-        emailjs.send(
-          'service_gc9gkdc',
-          'template_nlbgw3v',
-          emailParams,
-          'vZyuTrdLeGeWrTWLe'
-        ).then((response) => {
-          console.log('✅ CORREO ENVIADO CORRECTAMENTE!', response.status, response.text);
-        }).catch((error) => {
-          console.error('❌ ERROR AL ENVIAR CORREO CON EMAILJS:', error);
-        });
-      }
+      enviarFacturaTrasCompra({
+        ...datosFactura,
+        pnr: orderId.substring(0, 8).toUpperCase(),
+      });
     }
 
     if (!navigator.onLine) {
       setSuccess(`Guardado sin conexión (ID: ${orderId.substring(0, 8).toUpperCase()}). Se sincronizará automáticamente al conectarte.`);
     } else {
-      setSuccess(`Reserva exitosa (ID: ${orderId.substring(0, 8).toUpperCase()}). ¡Comprobante enviado por EmailJS a ${emailDestino}!`);
+      setSuccess(
+        `Reserva exitosa (ID: ${orderId.substring(0, 8).toUpperCase()}). ` +
+          `Te enviamos la factura a ${user?.email ?? 'tu correo registrado'}.`
+      );
     }
     setShowPaymentModal(false);
 
@@ -414,9 +412,15 @@ export function AutoDetail() {
               <button onClick={() => setShowPaymentModal(false)} style={{ background: 'transparent', color: '#666', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
                 Cancelar
               </button>
-              <button onClick={procesarPagoYReserva} disabled={loading} style={{ background: '#006ce4', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
-                {loading ? 'Procesando...' : 'Pagar y Reservar'}
-              </button>
+              {isAdmin ? (
+                <div style={{ padding: '10px', background: '#f8d7da', color: '#721c24', borderRadius: '4px', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                  Los administradores no pueden pagar.
+                </div>
+              ) : (
+                <button onClick={procesarPagoYReserva} disabled={loading} style={{ background: '#006ce4', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  {loading ? 'Procesando...' : 'Pagar y Reservar'}
+                </button>
+              )}
             </div>
           </div>
         </div>

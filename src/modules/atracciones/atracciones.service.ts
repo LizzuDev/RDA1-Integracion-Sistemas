@@ -354,9 +354,10 @@ export class AtraccionesService {
     return this.buildReservaResponse(reserva);
   }
 
-  async getReservas(): Promise<any> {
-    this.logger.log('Consultando historial de reservas del usuario (local DB)');
-    const reservas = await this.reservaRepo.find();
+  async getReservas(email?: string): Promise<any> {
+    this.logger.log(`Consultando historial de reservas del usuario (local DB) ${email ? 'para ' + email : ''}`);
+    const whereClause = email ? { customerEmail: email } : {};
+    const reservas = await this.reservaRepo.find({ where: whereClause });
     return reservas.map(r => this.buildReservaResponse(r));
   }
 
@@ -373,6 +374,10 @@ export class AtraccionesService {
       status: reserva.status,
       ticket_count: reserva.ticketCount,
       total_price: reserva.totalPrice,
+      createdAt: reserva.createdAt,
+      date: reserva.date,
+      time: reserva.time,
+      customerEmail: reserva.customerEmail,
       _links: {
         self: { href: `/api/v1/atracciones/reservations/${reserva.id}`, type: 'GET' },
         cancelar: { href: `/api/v1/atracciones/reservations/${reserva.id}/cancel`, type: 'POST' },

@@ -11,22 +11,25 @@ import { Link } from 'react-router-dom';
  * preferencias) y no navega a otra ruta; un <a> sin href no es enfocable con
  * teclado ni lo anuncian los lectores de pantalla.
  */
+import { useLanguage } from '../hooks/LanguageContext';
+
 export function Footer({ onAbrirPreferenciasCookies }) {
+  const { t } = useLanguage();
   const anio = new Date().getFullYear();
 
   return (
     <footer className="footer">
       <nav className="footer-links" aria-label="Enlaces legales">
-        <Link to="/privacidad">Politica de Privacidad</Link>
+        <Link to="/privacidad">{t('footer.privacy')}</Link>
         <span aria-hidden="true">·</span>
-        <Link to="/terminos">Terminos de Uso</Link>
+        <Link to="/terminos">{t('footer.terms')}</Link>
         <span aria-hidden="true">·</span>
         <button
           type="button"
           className="footer-link-btn"
           onClick={onAbrirPreferenciasCookies}
         >
-          Preferencias de cookies
+          {t('footer.cookies')}
         </button>
       </nav>
 
@@ -34,7 +37,7 @@ export function Footer({ onAbrirPreferenciasCookies }) {
         © {anio} <strong>Booking Prototipo</strong> — Proyecto Integrador de
         Sistemas · Universidad
       </p>
-      <p style={{ marginTop: 8, fontSize: '.78rem', color: '#595959' }}>
+      <p style={{ marginTop: 8, fontSize: '.78rem' }}>
         Powered by NestJS · React · PostgreSQL · Docker
       </p>
     </footer>

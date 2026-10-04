@@ -3,23 +3,26 @@ import { v4 as uuidv4 } from 'uuid';
 import { createOrderAuto } from './autosApi';
 import { reservarAtraccion } from './atraccionesApi';
 import { crearReserva as crearReservaVuelo } from './vuelosApi';
+import { enviarFacturaTrasCompra } from './envioFactura';
 
 const PENDING_RESERVATIONS_KEY = 'pending_reservations';
 
 /**
  * Guarda una reserva en IndexedDB para procesarla cuando vuelva la conexión.
+ *
  * @param {string} tipo 'auto' | 'atraccion' | 'vuelo' | 'alojamiento'
  * @param {object} payload Datos necesarios para la API
  * @param {string} idempotencyKey Clave de idempotencia
- * @param {object} emailParams Opcional: Parámetros para enviar correo con EmailJS al recuperar red
+ * @param {object} datosFactura Opcional: datos de la factura que se enviará por
+ *   correo cuando la reserva se sincronice (ver `enviarFacturaTrasCompra`).
  */
-export async function savePendingReservation(tipo, payload, idempotencyKey = uuidv4(), emailParams = null) {
+export async function savePendingReservation(tipo, payload, idempotencyKey = uuidv4(), datosFactura = null) {
   const newTask = {
     id: uuidv4(),
     tipo,
     payload,
     idempotencyKey,
-    emailParams,
+    datosFactura,
     timestamp: Date.now(),
   };
 
@@ -57,21 +60,12 @@ export async function syncPendingReservations() {
       
       console.log(`[Offline Sync] ✅ Sincronización exitosa para reserva de ${task.tipo} (${task.id})`);
 
-      // Si había un correo pendiente de enviar
-      if (task.emailParams) {
-        // Usa require dinámico o asume que emailjs está disponible para evitar importaciones cíclicas si ocurre
-        import('@emailjs/browser').then((emailjs) => {
-          emailjs.send(
-            'service_gc9gkdc',
-            'template_nlbgw3v',
-            task.emailParams,
-            'vZyuTrdLeGeWrTWLe'
-          ).then((res) => {
-            console.log(`[Offline Sync] ✅ Correo enviado para reserva de ${task.tipo}`, res.status);
-          }).catch((err) => {
-            console.error(`[Offline Sync] ❌ Error enviando correo para reserva de ${task.tipo}:`, err);
-          });
-        });
+      // La factura se envía ahora que hay conexión y la reserva existe en el
+      // servidor. `enviarFacturaTrasCompra` no lanza, así que un fallo de SMTP no
+      // mete esta tarea de vuelta en la cola (que reintentaría la RESERVA, no el
+      // correo, y la reserva ya está confirmada: solo generaría duplicados).
+      if (task.datosFactura) {
+        await enviarFacturaTrasCompra(task.datosFactura);
       }
 
     } catch (error) {

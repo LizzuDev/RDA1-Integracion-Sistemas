@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AtraccionesPage } from './pages/AtraccionesPage';
 import { AtraccionesSearchPage } from './pages/AtraccionesSearchPage';
 import { AtraccionDetail } from './pages/AtraccionDetail';
+import { HospedajePage } from './pages/HospedajePage';
 import { AutosPage } from './pages/AutosPage';
 import { AutoDetail } from './pages/AutoDetail';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -30,12 +31,16 @@ import { BannerCookies } from './components/BannerCookies';
 // --- Estado Offline ---
 import { OfflineBanner } from './components/OfflineBanner';
 
+// --- Chatbot informativo (flotante, global, solo lectura) ---
+import { ChatbotFlotante } from './components/ChatbotFlotante';
+
 import { AuthProvider } from './hooks/useAuth';
 import { CurrencyProvider } from './hooks/CurrencyContext';
 import { LanguageProvider } from './hooks/LanguageContext';
 
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
+import { AdminGuard } from './components/AdminGuard';
 import './index.css';
 import './vuelos.css';
 import { useParams } from 'react-router-dom';
@@ -83,11 +88,16 @@ function App() {
         <Navbar />
         <Routes>
           <Route path="/" element={<AtraccionesPage />} />
+          <Route path="/hospedaje" element={<HospedajePage />} />
           <Route path="/search" element={<AtraccionesSearchPage />} />
           <Route path="/atracciones/:id" element={<AtraccionDetail />} />
           <Route path="/autos" element={<AutosPage />} />
           <Route path="/autos/:id" element={<AutoDetail />} />
-          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin" element={
+            <AdminGuard>
+              <AdminDashboard />
+            </AdminGuard>
+          } />
           {/* Modulo de Vuelos */}
           <Route path="/vuelos" element={<VuelosPage />} />
           <Route path="/vuelos/busqueda" element={<VuelosPage />} />
@@ -123,6 +133,12 @@ function App() {
         onCerrarExterno={cerrarPreferencias}
       />
       <OfflineBanner />
+      {/* Chatbot: global y fuera del `app-wrapper`, igual que los banners.
+          Montarlo dentro de una Ruta lo haría desaparecer al navegar, y el
+          requisito es que esté en TODAS las pantallas. Va después de
+          `OfflineBanner` para que en el DOM quede por encima si coincidieran,
+          cosa que no ocurre porque `OfflineBanner` devuelve `null` con conexión. */}
+      <ChatbotFlotante />
     </BrowserRouter>
     </CurrencyProvider>
     </LanguageProvider>
