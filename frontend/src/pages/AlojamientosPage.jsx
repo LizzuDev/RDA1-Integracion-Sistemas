@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAlojamientos, searchAlojamientos } from '../services/alojamientosApi';
 import { AlojamientoCard } from '../components/AlojamientoCard';
+import { useCurrency } from '../hooks/CurrencyContext';
+import { useLanguage } from '../hooks/LanguageContext';
 
 // Tipos de propiedades en español
 const PROPERTY_TYPES = [
@@ -68,6 +70,8 @@ const TRENDING_DESTINATIONS = [
 
 export function AlojamientosPage() {
   const navigate = useNavigate();
+  const { currency } = useCurrency();
+  const { currentLanguage } = useLanguage();
 
   // Estados de datos
   const [alojamientos, setAlojamientos] = useState([]);

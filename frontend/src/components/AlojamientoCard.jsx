@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
+import { useCurrency } from '../hooks/CurrencyContext';
 
 export function AlojamientoCard({ alojamiento }) {
   const navigate = useNavigate();
+  const { convertPrice, currency } = useCurrency();
   const id = alojamiento.id;
 
   const precio = parseFloat(alojamiento.precioPorNoche || alojamiento.price?.total || alojamiento.price || 120);
@@ -73,7 +75,7 @@ export function AlojamientoCard({ alojamiento }) {
 
         <div className="card-footer" style={{ borderTop: '1px solid #f3f4f6', paddingTop: '10px' }}>
           <div className="card-price">
-            ${precio.toFixed(2)}
+            {convertPrice(precio)} {currency}
             <span> / noche</span>
             <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 400 }}>+ impuestos y cargos</div>
           </div>

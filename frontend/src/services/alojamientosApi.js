@@ -49,3 +49,19 @@ export async function getReservasAlojamientos() {
   const { data } = await api.get('/alojamientos/reservations');
   return data;
 }
+
+export async function crearAlojamiento(alojamientoData) {
+  const { data } = await api.post('/alojamientos', alojamientoData);
+  return data;
+}
+
+export async function actualizarAlojamiento(id, partialData) {
+  const { data } = await api.patch(`/alojamientos/${id}`, partialData);
+  return data;
+}
+
+export async function eliminarAlojamiento(id) {
+  const { data } = await api.delete(`/alojamientos/${id}`);
+  return data;
+}
+

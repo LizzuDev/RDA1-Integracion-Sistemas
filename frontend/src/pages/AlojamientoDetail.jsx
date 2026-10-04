@@ -2,12 +2,19 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getAlojamiento, reservarAlojamiento, getDisponibilidadAlojamiento } from '../services/alojamientosApi';
 import { useAuth } from '../hooks/useAuth';
+import { useCurrency } from '../hooks/CurrencyContext';
+import { useLanguage } from '../hooks/LanguageContext';
+import { savePendingReservation } from '../services/offlineSync';
+import emailjs from '@emailjs/browser';
+import { jsPDF } from 'jspdf';
 import { v4 as uuidv4 } from 'uuid';
 
 export function AlojamientoDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currency, convertPrice } = useCurrency();
+  const { currentLanguage } = useLanguage();
 
   const [alojamiento, setAlojamiento] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -22,6 +29,7 @@ export function AlojamientoDetail() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(null);
   const [bookingError, setBookingError] = useState(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // Autocompletar datos del usuario si ha iniciado sesión
   useEffect(() => {
@@ -34,7 +42,6 @@ export function AlojamientoDetail() {
       }
     }
   }, [user]);
-
 
   useEffect(() => {
     async function loadData() {
@@ -58,8 +65,8 @@ export function AlojamientoDetail() {
   const diffTime = Math.max(86400000, date2 - date1);
   const nights = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)));
 
-  const precioNoche = parseFloat(alojamiento?.precioPorNoche || alojamiento?.price?.total || 120);
-  const totalEstimado = precioNoche * nights * habitaciones;
+  const precioNocheBase = parseFloat(alojamiento?.precioPorNoche || alojamiento?.price?.total || 120);
+  const totalEstimadoBase = precioNocheBase * nights * habitaciones;
 
   const handleBooking = async (e) => {
     e.preventDefault();
@@ -86,14 +93,96 @@ export function AlojamientoDetail() {
       customer_email: customerEmail,
     };
 
+    const codigoReservaPnr = `BKG-${uuidv4().substring(0, 6).toUpperCase()}`;
+    const emailParams = {
+      to_email: customerEmail,
+      to_name: customerName,
+      email: customerEmail,
+      name: customerName,
+      reply_to: customerEmail,
+      pnr: codigoReservaPnr,
+      service_name: `${alojamiento?.nombre || 'Alojamiento'} (${habitaciones} hab, ${nights} noche(s))`,
+      date: `${checkin} al ${checkout}`,
+      time: 'Check-in: 14:00',
+      total_price: `${convertPrice(totalEstimadoBase)} ${currency}`,
+    };
+
+    // Procesamiento en modo sin conexión
+    if (!navigator.onLine) {
+      await savePendingReservation(
+        'alojamiento',
+        { alojamientoId: id, data: payload },
+        idempotencyKey,
+        emailParams
+      );
+
+      const localBooking = {
+        id: codigoReservaPnr,
+        reservationId: codigoReservaPnr,
+        alojamientoId: id,
+        titulo: `${alojamiento?.nombre || 'Alojamiento'} (${nights} noche${nights > 1 ? 's' : ''})`,
+        checkin,
+        checkout,
+        fecha: checkin,
+        habitaciones,
+        huesped: customerName,
+        email: customerEmail,
+        status: 'PENDING_OFFLINE',
+        totalPrice: totalEstimadoBase,
+        total: totalEstimadoBase,
+      };
+
+      const existingReservas = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+      existingReservas.unshift(localBooking);
+      localStorage.setItem('reservas_alojamientos', JSON.stringify(existingReservas));
+
+      setBookingSuccess({
+        ...localBooking,
+        offline: true,
+      });
+      setBookingLoading(false);
+      return;
+    }
+
     try {
       const res = await reservarAlojamiento(id, payload, idempotencyKey);
-      setBookingSuccess({
-        reservationId: res.reservation_id || res.id,
+      const reservationCode = res.codigo_reserva || res.codigoReserva || res.reservation_id || codigoReservaPnr;
+
+      // Envío de correo de confirmación
+      try {
+        await emailjs.send(
+          'service_gc9gkdc',
+          'template_nlbgw3v',
+          { ...emailParams, pnr: reservationCode },
+          'vZyuTrdLeGeWrTWLe'
+        );
+      } catch (emailErr) {
+        console.warn('Notificación por correo:', emailErr?.message || emailErr);
+      }
+
+      // Registro local para visualización en el historial del usuario
+      const confirmedBooking = {
+        id: res.reservation_id || res.id || reservationCode,
+        reservationId: reservationCode,
+        alojamientoId: id,
+        titulo: `${alojamiento?.nombre || 'Alojamiento'} (${nights} noche${nights > 1 ? 's' : ''})`,
+        checkin,
+        checkout,
+        fecha: checkin,
+        habitaciones,
+        huesped: customerName,
+        email: customerEmail,
         status: res.status || 'CONFIRMED',
-        totalPrice: res.total_price?.total || totalEstimado,
+        totalPrice: res.total_price?.total || totalEstimadoBase,
+        total: res.total_price?.total || totalEstimadoBase,
         links: res._links,
-      });
+      };
+
+      const existingReservas = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+      existingReservas.unshift(confirmedBooking);
+      localStorage.setItem('reservas_alojamientos', JSON.stringify(existingReservas));
+
+      setBookingSuccess(confirmedBooking);
     } catch (err) {
       if (err.response?.status === 409) {
         setBookingError('Conflicto de Idempotencia: Esta reserva ya fue procesada anteriormente.');
@@ -103,6 +192,82 @@ export function AlojamientoDetail() {
     } finally {
       setBookingLoading(false);
     }
+  };
+
+  const handleDescargarComprobante = () => {
+    if (!bookingSuccess || !alojamiento) return;
+    setIsDownloadingPdf(true);
+
+    setTimeout(() => {
+      try {
+        const doc = new jsPDF();
+        const cleanText = (str) => (str || '').replace(/[^\x00-\xFF]/g, '').trim();
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(0, 53, 128);
+        doc.text('Confirmacion de Reserva de Hospedaje', 20, 30);
+
+        doc.setFontSize(13);
+        doc.setTextColor(51, 51, 51);
+        doc.text(`Propiedad: ${cleanText(alojamiento.nombre)}`, 20, 48);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.text(`Destino: ${cleanText(alojamiento.destino || alojamiento.barrio || 'Ecuador')}`, 20, 58);
+        doc.text(`Huesped titular: ${cleanText(bookingSuccess.huesped || customerName)}`, 20, 66);
+
+        // Caja de detalles
+        doc.setDrawColor(210, 215, 220);
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(20, 75, 170, 75, 3, 3, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(0, 53, 128);
+        doc.text('Detalles de la Reserva', 25, 87);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.setTextColor(51, 51, 51);
+
+        doc.text('Codigo de reserva:', 25, 100);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${cleanText(bookingSuccess.reservationId || bookingSuccess.id)}`, 85, 100);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text('Check-in:', 25, 110);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${bookingSuccess.checkin} (14:00)`, 85, 110);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text('Check-out:', 25, 120);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${bookingSuccess.checkout} (11:00)`, 85, 120);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text('Habitaciones / Noches:', 25, 130);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${habitaciones} hab. / ${nights} noche(s)`, 85, 130);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text('Total cancelado:', 25, 140);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 128, 9);
+        doc.text(`${convertPrice(totalEstimadoBase)} ${currency}`, 85, 140);
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(140, 140, 140);
+        doc.text(`Documento emitido electronicamente por Booking Prototipo el ${new Date().toLocaleDateString()}`, 20, 280);
+
+        doc.save(`Reserva_${cleanText(bookingSuccess.reservationId || 'Alojamiento')}.pdf`);
+      } catch (err) {
+        console.error('Error generando comprobante PDF:', err);
+      } finally {
+        setIsDownloadingPdf(false);
+      }
+    }, 400);
   };
 
   if (loading) {
@@ -210,9 +375,9 @@ export function AlojamientoDetail() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px', borderBottom: '1px solid #e5e7eb', paddingBottom: '12px' }}>
             <div>
               <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#003580' }}>
-                ${precioNoche.toFixed(2)}
+                {convertPrice(precioNocheBase)}
               </span>
-              <span style={{ color: '#6b7280', fontSize: '0.9rem' }}> / noche</span>
+              <span style={{ color: '#6b7280', fontSize: '0.9rem' }}> {currency} / noche</span>
             </div>
             <span style={{ fontSize: '0.8rem', background: '#dcfce7', color: '#166534', padding: '4px 8px', borderRadius: '4px', fontWeight: 600 }}>
               ✓ Precio Garantizado
@@ -222,29 +387,57 @@ export function AlojamientoDetail() {
           {bookingSuccess ? (
             <div style={{ background: '#ecfdf5', border: '1px solid #10b981', padding: '20px', borderRadius: '8px' }}>
               <h3 style={{ color: '#065f46', fontSize: '1.2rem', fontWeight: 800, marginBottom: '8px' }}>
-                ¡Reserva Confirmada Exitosamente! 🎉
+                {bookingSuccess.offline ? '¡Reserva Guardada Localmente!' : '¡Reserva Confirmada Exitosamente! 🎉'}
               </h3>
               <p style={{ fontSize: '0.9rem', color: '#047857', marginBottom: '8px' }}>
-                Tu reserva ha sido registrada en el sistema de Alojamientos.
+                {bookingSuccess.offline
+                  ? 'Te encuentras sin conexión. La reserva ha sido protegida y se sincronizará automáticamente apenas se reanude tu red.'
+                  : 'Tu reserva ha sido registrada y procesada en el sistema de Alojamientos.'}
               </p>
-              <div style={{ background: '#fff', padding: '12px', borderRadius: '6px', fontSize: '0.85rem', color: '#111827', margin: '12px 0' }}>
-                <div><strong>ID de Reserva:</strong> {bookingSuccess.reservationId}</div>
-                <div><strong>Estado:</strong> <span style={{ color: '#059669', fontWeight: 700 }}>{bookingSuccess.status}</span></div>
-                <div><strong>Total:</strong> ${bookingSuccess.totalPrice} USD</div>
+              <div style={{ background: '#fff', padding: '14px', borderRadius: '6px', fontSize: '0.85rem', color: '#111827', margin: '12px 0', border: '1px solid #d1fae5' }}>
+                <div><strong>Código de Reserva (PNR):</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#003580' }}>{bookingSuccess.reservationId || bookingSuccess.id}</span></div>
+                <div style={{ marginTop: '4px' }}><strong>Huésped:</strong> {bookingSuccess.huesped || customerName}</div>
+                <div style={{ marginTop: '4px' }}><strong>Estadía:</strong> {bookingSuccess.checkin} al {bookingSuccess.checkout} ({nights} noche{nights > 1 ? 's' : ''})</div>
+                <div style={{ marginTop: '4px' }}><strong>Estado:</strong> <span style={{ color: bookingSuccess.offline ? '#d97706' : '#059669', fontWeight: 700 }}>{bookingSuccess.offline ? 'Pendiente de sincronización' : bookingSuccess.status}</span></div>
+                <div style={{ marginTop: '4px' }}><strong>Total pagado:</strong> <span style={{ color: '#047857', fontWeight: 800 }}>{convertPrice(bookingSuccess.totalPrice || totalEstimadoBase)} {currency}</span></div>
               </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '14px' }}>
                 <button
-                  onClick={() => setBookingSuccess(null)}
-                  style={{ flex: 1, padding: '10px', background: '#f3f4f6', color: '#1f2937', border: '1px solid #d1d5db', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                  type="button"
+                  onClick={handleDescargarComprobante}
+                  disabled={isDownloadingPdf}
+                  style={{
+                    padding: '11px',
+                    background: '#047857',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    cursor: isDownloadingPdf ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
                 >
-                  Nueva reserva
+                  {isDownloadingPdf ? 'Generando PDF...' : '📄 Descargar Comprobante PDF'}
                 </button>
-                <Link
-                  to="/mis-reservas"
-                  style={{ flex: 1, padding: '10px', background: '#003580', color: '#fff', textAlign: 'center', textDecoration: 'none', borderRadius: '6px', fontWeight: 700 }}
-                >
-                  Ver mis reservas
-                </Link>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => setBookingSuccess(null)}
+                    style={{ flex: 1, padding: '10px', background: '#f3f4f6', color: '#1f2937', border: '1px solid #d1d5db', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Nueva reserva
+                  </button>
+                  <Link
+                    to="/mis-reservas"
+                    style={{ flex: 1, padding: '10px', background: '#003580', color: '#fff', textAlign: 'center', textDecoration: 'none', borderRadius: '6px', fontWeight: 700 }}
+                  >
+                    Ver mis reservas
+                  </Link>
+                </div>
               </div>
             </div>
           ) : (
@@ -332,12 +525,12 @@ export function AlojamientoDetail() {
               {/* DESGLOSE DE PRECIOS */}
               <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '6px', marginBottom: '18px', fontSize: '0.85rem', color: '#4b5563' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span>${precioNoche} x {nights} noche(s) x {habitaciones} hab:</span>
-                  <span>${totalEstimado.toFixed(2)} USD</span>
+                  <span>{convertPrice(precioNocheBase)} {currency} x {nights} noche(s) x {habitaciones} hab:</span>
+                  <span>{convertPrice(totalEstimadoBase)} {currency}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#111827', borderTop: '1px solid #e5e7eb', paddingTop: '6px', marginTop: '6px', fontSize: '0.95rem' }}>
                   <span>Total a confirmar:</span>
-                  <span style={{ color: '#003580' }}>${totalEstimado.toFixed(2)} USD</span>
+                  <span style={{ color: '#003580' }}>{convertPrice(totalEstimadoBase)} {currency}</span>
                 </div>
               </div>
 
