@@ -105,7 +105,7 @@ async function bootstrap() {
       /^https:\/\/.*\.onrender\.com$/
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'idempotency-key', 'x-device-fingerprint'],
     credentials: true,
   });
 
