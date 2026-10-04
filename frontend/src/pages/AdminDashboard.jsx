@@ -1,301 +1,580 @@
-import { useState, useEffect } from 'react';
-import { getAtracciones, crearAtraccion, eliminarAtraccion, getReservas } from '../services/atraccionesApi';
-import { searchAutos, createAutoLocal, deleteAutoLocal, getOrdersAuto } from '../services/autosApi';
+import { useState, useEffect, useCallback } from 'react';
+import { api } from '../services/api';
 
-export function AdminDashboard() {
-  const [moduleSelected, setModuleSelected] = useState('observabilidad'); // 'atracciones' | 'autos' | 'observabilidad'
-  const [tab, setTab] = useState('catalogo'); // 'catalogo' | 'reservas'
-  const [loading, setLoading] = useState(true);
+const C = {
+  blue: '#006ce4', darkBlue: '#003b95', lightBlue: '#ebf3ff',
+  yellow: '#febb02', green: '#008009', red: '#d32f2f',
+  orange: '#e8650a', gray: '#6b6b6b', border: '#e7e7e7',
+  bg: '#f5f5f5', white: '#ffffff', text: '#1a1a1a',
+};
 
-  // Observabilidad State
-  const [usuariosDb, setUsuariosDb] = useState([]);
-  const [facturasDb, setFacturasDb] = useState([]);
+const TABS = [
+  { id: 'observabilidad', label: '📊 Observabilidad', sub: 'Estado en vivo' },
+  { id: 'microservicios', label: '🔬 Microservicios', sub: 'RDA2 Simulado' },
+  { id: 'gestion', label: '🗂️ Gestión', sub: 'Usuarios & Reservas' },
+];
 
-  // Atracciones State
-  const [atracciones, setAtracciones] = useState([]);
-  const [reservasAtracciones, setReservasAtracciones] = useState([]);
-  const [formAtraccion, setFormAtraccion] = useState({ name: '', long_description: '', price: 0, duration: 'PT2H' });
+function fmt(n) { return typeof n === 'number' ? n.toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}) : '0.00'; }
+function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleString('es-EC',{dateStyle:'short',timeStyle:'short'}); }
+function estadoColor(s) {
+  if (!s) return C.gray;
+  const u = s.toUpperCase();
+  if (u==='CONFIRMED'||u==='PAID') return C.green;
+  if (u==='CANCELLED'||u==='REJECTED') return C.red;
+  if (u==='PENDING'||u==='RESERVED') return C.orange;
+  return C.gray;
+}
 
-  // Autos State
-  const [autos, setAutos] = useState([]);
-  const [reservasAutos, setReservasAutos] = useState([]);
-  const [formAuto, setFormAuto] = useState({ supplier_name: '', price: 0, category: 'SUV' });
+function KpiCard({label,value,sub,color,icon}) {
+  return (
+    <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'20px 24px',display:'flex',flexDirection:'column',gap:4,borderTop:`4px solid ${color||C.blue}`}}>
+      <div style={{fontSize:'1.6rem'}}>{icon}</div>
+      <div style={{fontSize:'1.8rem',fontWeight:700,color:color||C.text,lineHeight:1}}>{value}</div>
+      <div style={{fontSize:'0.85rem',fontWeight:600,color:C.text}}>{label}</div>
+      {sub && <div style={{fontSize:'0.75rem',color:C.gray}}>{sub}</div>}
+    </div>
+  );
+}
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      if (moduleSelected === 'observabilidad') {
-        // Obtenemos facturas usando el endpoint de facturas ya hecho en supabase, o simulado
-        const res = await fetch('http://localhost:3000/vuelos/bookings'); // Solo como ejemplo para el panel
-        // Realmente para observabilidad podriamos llamar a Supabase directo si tuvieramos la SDK aqui
-        // Por simplicidad en la demo frontend:
-        setUsuariosDb([
-          { id: '247b01bf-64eb-4d46-b8cf-f3f55ec36147', email: 'admin@booking.com', role: 'admin', created_at: new Date().toISOString() },
-          { id: 'e4c928aa-7831-469c-8b8b-2c1a62de17cb', email: 'prueba@booking.com', role: 'user', created_at: new Date().toISOString() }
-        ]);
-        setFacturasDb([]); // Se podrian cargar facturas globales si hay endpoint
-      } else if (moduleSelected === 'atracciones') {
-        const [resAttr, resResv] = await Promise.all([
-          getAtracciones({ limit: 50 }),
-          getReservas()
-        ]);
-        setAtracciones(resAttr.data || resAttr);
-        setReservasAtracciones(resResv);
-      } else {
-        const [resAutos, resOrders] = await Promise.all([
-          searchAutos({ booker: { country: 'EC' }, currency: 'USD', driver: { age: 30 }, route: { dropoff: {}, pickup: {} } }),
-          getOrdersAuto()
-        ]);
-        setAutos(resAutos.data || []);
-        setReservasAutos(resOrders || []);
-      }
-    } catch (error) {
-      console.error('Error fetching admin data', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+function Badge({status}) {
+  return (
+    <span style={{background:estadoColor(status)+'22',color:estadoColor(status),padding:'2px 8px',borderRadius:20,fontSize:'0.75rem',fontWeight:600}}>
+      {status||'—'}
+    </span>
+  );
+}
 
-  useEffect(() => {
-    fetchData();
-  }, [moduleSelected]);
+function SectionTitle({children,badge}) {
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:10,margin:'28px 0 12px'}}>
+      <h3 style={{margin:0,fontSize:'1rem',fontWeight:700,color:C.text}}>{children}</h3>
+      {badge && <span style={{background:C.orange,color:'white',fontSize:'0.65rem',fontWeight:700,padding:'2px 8px',borderRadius:20}}>{badge}</span>}
+    </div>
+  );
+}
 
-  // --- Atracciones Logic ---
-  const handleCreateAtraccion = async (e) => {
-    e.preventDefault();
-    try {
-      await crearAtraccion({
-        name: formAtraccion.name,
-        long_description: formAtraccion.long_description,
-        duration: formAtraccion.duration,
-        price: { currency: 'USD', total: parseFloat(formAtraccion.price) },
-        categories: ['general']
-      });
-      setFormAtraccion({ name: '', long_description: '', price: 0, duration: 'PT2H' });
-      fetchData();
-      alert('Atracción creada localmente');
-    } catch (error) {
-      alert('Error creando atracción');
-    }
-  };
+function ServiceDot({ok,label,latency}) {
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:`1px solid ${C.border}`}}>
+      <div style={{width:10,height:10,borderRadius:'50%',background:ok?C.green:C.red,flexShrink:0}}/>
+      <span style={{flex:1,fontSize:'0.85rem',color:C.text}}>{label}</span>
+      {latency!==undefined && <span style={{fontSize:'0.8rem',color:ok?C.green:C.red,fontWeight:600}}>{latency}ms</span>}
+    </div>
+  );
+}
 
-  const handleDeleteAtraccion = async (id) => {
-    if (!confirm('¿Seguro que deseas eliminar esta atracción local?')) return;
-    try {
-      await eliminarAtraccion(id);
-      fetchData();
-    } catch (error) {
-      alert('No se puede eliminar. Probablemente sea externa.');
-    }
-  };
+function ObservabilidadTab({stats,loadingStats,serviceHealth}) {
+  if (loadingStats) return (
+    <div style={{textAlign:'center',padding:60,color:C.gray}}>
+      <div style={{fontSize:'2rem',marginBottom:12}}>⏳</div>
+      Consultando datos en tiempo real...
+    </div>
+  );
+  const k = stats?.kpis||{};
 
-  // --- Autos Logic ---
-  const handleCreateAuto = async (e) => {
-    e.preventDefault();
-    try {
-      await createAutoLocal({
-        supplier_name: formAuto.supplier_name,
-        price: parseFloat(formAuto.price),
-        vehicle_info: { category: formAuto.category, transmission: 'AUTOMATIC' }
-      });
-      setFormAuto({ supplier_name: '', price: 0, category: 'SUV' });
-      fetchData();
-      alert('Auto creado localmente');
-    } catch (error) {
-      alert('Error creando auto');
-    }
-  };
-
-  const handleDeleteAuto = async (id) => {
-    if (!confirm('¿Seguro que deseas eliminar este auto local?')) return;
-    try {
-      await deleteAutoLocal(id);
-      fetchData();
-    } catch (error) {
-      alert('No se puede eliminar. Probablemente sea externo.');
-    }
-  };
-
-  if (loading && atracciones.length === 0 && autos.length === 0) {
-    return <div className="state-container"><div className="spinner" /></div>;
+  const res = k.totalReservas || 0;
+  
+  // Usamos el funnel real del backend si viene, si no, fallback al simulado
+  let funnel = stats?.realFunnel;
+  
+  if (!funnel) {
+    funnel = res > 0 ? [
+      {label:'Búsquedas Globales (Vuelos, Autos, Atracciones)',count:res * 14, pct: 100},
+      {label:'Selección de producto / Ver detalles',count:Math.round(res * 11.06), pct: 79},
+      {label:'Inicio de Checkout',count:Math.round(res * 4.76), pct: 34},
+      {label:'Ingreso de datos del cliente',count:Math.round(res * 2.1), pct: 15},
+      {label:'Confirmación de Pago',count:Math.round(res * 1.07), pct: 7.7},
+      {label:'✅ Reserva Exitosa (Global - Real)',count:res, pct: 7.1},
+    ] : [
+      {label:'Búsquedas Globales (Vuelos, Autos, Atracciones)',count:0, pct: 0},
+      {label:'Selección de producto / Ver detalles',count:0, pct: 0},
+      {label:'Inicio de Checkout',count:0, pct: 0},
+      {label:'Ingreso de datos del cliente',count:0, pct: 0},
+      {label:'Confirmación de Pago',count:0, pct: 0},
+      {label:'✅ Reserva Exitosa (Global - Real)',count:0, pct: 0},
+    ];
   }
 
   return (
-    <main className="main-content">
-      {/* Top Level Module Switcher */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24, borderBottom: '2px solid #eee', paddingBottom: 16 }}>
-        <button 
-          onClick={() => { setModuleSelected('observabilidad'); setTab('catalogo'); }} 
-          style={{ fontSize: '1.2rem', padding: '8px 16px', border: 'none', background: moduleSelected === 'observabilidad' ? '#003580' : '#eee', color: moduleSelected === 'observabilidad' ? 'white' : 'black', borderRadius: 8, cursor: 'pointer' }}
-        >
-          Módulo Observabilidad
-        </button>
-        <button 
-          onClick={() => { setModuleSelected('atracciones'); setTab('catalogo'); }} 
-          style={{ fontSize: '1.2rem', padding: '8px 16px', border: 'none', background: moduleSelected === 'atracciones' ? '#003580' : '#eee', color: moduleSelected === 'atracciones' ? 'white' : 'black', borderRadius: 8, cursor: 'pointer' }}
-        >
-          Módulo Atracciones
-        </button>
-        <button 
-          onClick={() => { setModuleSelected('autos'); setTab('catalogo'); }} 
-          style={{ fontSize: '1.2rem', padding: '8px 16px', border: 'none', background: moduleSelected === 'autos' ? '#003580' : '#eee', color: moduleSelected === 'autos' ? 'white' : 'black', borderRadius: 8, cursor: 'pointer' }}
-        >
-          Módulo Autos
-        </button>
+    <div>
+      <SectionTitle>📈 KPIs de Negocio (Tiempo Real)</SectionTitle>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))',gap:12}}>
+        <KpiCard icon="🎫" label="Total Reservas" value={k.totalReservas??0} color={C.blue}/>
+        <KpiCard icon="✈️" label="Vuelos" value={k.reservasVuelos??0} sub="reservas" color={C.darkBlue}/>
+        <KpiCard icon="🚗" label="Autos" value={k.reservasAutos??0} sub="reservas" color={C.orange}/>
+        <KpiCard icon="🎡" label="Atracciones" value={k.reservasAtracciones??0} sub="reservas" color={C.green}/>
+        <KpiCard icon="💵" label="Ingresos Totales" value={`$${fmt(k.ingresosTotal)}`} sub="USD" color={C.green}/>
+      </div>
+      <SectionTitle>🔌 Estado de Servicios</SectionTitle>
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
+        {serviceHealth.map((s)=>(<ServiceDot key={s.label} ok={s.ok} label={s.label} latency={s.latency}/>))}
+        {serviceHealth.length===0 && <div style={{color:C.gray,fontSize:'0.85rem',padding:'10px 0'}}>Comprobando servicios...</div>}
       </div>
 
-      {/* Second Level Tab Switcher */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontSize: '1.8rem' }}>Administración - {moduleSelected === 'atracciones' ? 'Atracciones' : 'Autos'}</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setTab('catalogo')} className={tab === 'catalogo' ? 'card-btn' : 'retry-btn'}>Catálogo Híbrido</button>
-          <button onClick={() => setTab('reservas')} className={tab === 'reservas' ? 'card-btn' : 'retry-btn'}>Historial de Reservas</button>
+      <SectionTitle>📊 Tráfico por Vertical (Nuevas Sesiones)</SectionTitle>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))',gap:12,marginBottom:20}}>
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
+          <div style={{fontSize:'0.85rem',color:C.text}}>✈️ Vuelos</div>
+          <div style={{fontSize:'1.6rem',fontWeight:700,color:C.darkBlue}}>{stats?.trafficByVertical?.vuelos || 0}</div>
+        </div>
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
+          <div style={{fontSize:'0.85rem',color:C.text}}>🚗 Autos</div>
+          <div style={{fontSize:'1.6rem',fontWeight:700,color:C.orange}}>{stats?.trafficByVertical?.autos || 0}</div>
+        </div>
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
+          <div style={{fontSize:'0.85rem',color:C.text}}>🎡 Atracciones</div>
+          <div style={{fontSize:'1.6rem',fontWeight:700,color:C.green}}>{stats?.trafficByVertical?.atracciones || 0}</div>
         </div>
       </div>
-
-      {/* --- CONTENT AREA --- */}
-
-      {/* OBSERVABILIDAD */}
-      {moduleSelected === 'observabilidad' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
-            <h2>Panel de Observabilidad - Usuarios de la Plataforma</h2>
-            <p>Monitoreo de accesos y roles de administración.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-              <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
-                <div style={{ flex: 1 }}>ID</div>
-                <div style={{ flex: 2 }}>Email</div>
-                <div style={{ flex: 1 }}>Rol</div>
-                <div style={{ flex: 1 }}>Registro</div>
-                <div style={{ flex: 1 }}>Acciones</div>
-              </div>
-              {usuariosDb.map(u => (
-                <div key={u.id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
-                  <div style={{ flex: 1, fontSize: '0.8rem', color: '#666' }}>{u.id.substring(0,8)}...</div>
-                  <div style={{ flex: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
-                  <div style={{ flex: 1 }}><span style={{ padding: '4px 8px', borderRadius: 4, background: u.role === 'admin' ? '#e6f4ea' : '#eee', color: u.role === 'admin' ? '#137333' : '#333' }}>{u.role}</span></div>
-                  <div style={{ flex: 1 }}>{new Date(u.created_at).toLocaleDateString()}</div>
-                  <div style={{ flex: 1 }}><button style={{ color: '#0066cc', cursor: 'pointer', background: 'none', border: 'none' }}>Editar Rol</button></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CATALOGO */}
-      {tab === 'catalogo' && moduleSelected === 'atracciones' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
-            <h2>Lista de Atracciones</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-              <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
-                <div style={{ flex: 1 }}>ID</div>
-                <div style={{ flex: 2 }}>Nombre</div>
-                <div style={{ flex: 1 }}>Precio</div>
-                <div style={{ flex: 1 }}>Acciones</div>
-              </div>
-              {atracciones.map(a => (
-                <div key={a.id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
-                  <div style={{ flex: 1, fontSize: '0.8rem', color: '#666' }}>{String(a.id).substring(0, 8)}...</div>
-                  <div style={{ flex: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.nombre || a.name || a.title}</div>
-                  <div style={{ flex: 1 }}>${parseFloat(a.precio_unitario || a.price?.total || 0).toFixed(2)}</div>
-                  <div style={{ flex: 1 }}><button onClick={() => handleDeleteAtraccion(a.id)} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none' }}>🗑️ Eliminar</button></div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)', height: 'fit-content' }}>
-            <h2>Crear Atracción</h2>
-            <form onSubmit={handleCreateAtraccion} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-              <input required name="name" value={formAtraccion.name} onChange={(e) => setFormAtraccion({...formAtraccion, name: e.target.value})} placeholder="Nombre" style={{ padding: 8, border: '1px solid #ccc' }} />
-              <textarea required name="long_description" value={formAtraccion.long_description} onChange={(e) => setFormAtraccion({...formAtraccion, long_description: e.target.value})} placeholder="Descripción" rows={3} style={{ padding: 8, border: '1px solid #ccc' }} />
-              <input required type="number" name="price" value={formAtraccion.price} onChange={(e) => setFormAtraccion({...formAtraccion, price: e.target.value})} placeholder="Precio" style={{ padding: 8, border: '1px solid #ccc' }} />
-              <button type="submit" className="card-btn">Guardar</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {tab === 'catalogo' && moduleSelected === 'autos' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
-            <h2>Lista de Autos</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-              <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
-                <div style={{ flex: 1 }}>ID</div>
-                <div style={{ flex: 1 }}>Agencia</div>
-                <div style={{ flex: 1 }}>Categoría</div>
-                <div style={{ flex: 1 }}>Precio/Día</div>
-                <div style={{ flex: 1 }}>Acciones</div>
-              </div>
-              {autos.map(a => (
-                <div key={a.vehicle_id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
-                  <div style={{ flex: 1, fontSize: '0.8rem', color: '#666' }}>{String(a.vehicle_id).substring(0, 8)}...</div>
-                  <div style={{ flex: 1 }}>{a.supplier_id === 1 ? 'GDS Local' : 'Hertz Mock'}</div>
-                  <div style={{ flex: 1 }}>{a.vehicle_info?.category}</div>
-                  <div style={{ flex: 1 }}>${parseFloat(a.price || 0).toFixed(2)}</div>
-                  <div style={{ flex: 1 }}><button onClick={() => handleDeleteAuto(a.vehicle_id)} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none' }}>🗑️ Eliminar</button></div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)', height: 'fit-content' }}>
-            <h2>Crear Auto</h2>
-            <form onSubmit={handleCreateAuto} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-              <input required value={formAuto.supplier_name} onChange={(e) => setFormAuto({...formAuto, supplier_name: e.target.value})} placeholder="Nombre Agencia Local" style={{ padding: 8, border: '1px solid #ccc' }} />
-              <input required value={formAuto.category} onChange={(e) => setFormAuto({...formAuto, category: e.target.value})} placeholder="Categoría (ej. SUV, Sedan)" style={{ padding: 8, border: '1px solid #ccc' }} />
-              <input required type="number" value={formAuto.price} onChange={(e) => setFormAuto({...formAuto, price: e.target.value})} placeholder="Precio por día" style={{ padding: 8, border: '1px solid #ccc' }} />
-              <button type="submit" className="card-btn">Guardar</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* RESERVAS */}
-      {tab === 'reservas' && moduleSelected === 'atracciones' && (
-        <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
-          <h2>Reservas de Atracciones</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-            <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
-              <div style={{ flex: 2 }}>ID Reserva</div>
-              <div style={{ flex: 1 }}>Tickets</div>
-              <div style={{ flex: 1 }}>Total</div>
-              <div style={{ flex: 1 }}>Estado</div>
-            </div>
-            {reservasAtracciones.map(r => (
-              <div key={r.reservation_id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
-                <div style={{ flex: 2, fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.reservation_id}</div>
-                <div style={{ flex: 1 }}>{r.ticket_count}</div>
-                <div style={{ flex: 1 }}>${parseFloat(r.total_price?.total || 0).toFixed(2)}</div>
-                <div style={{ flex: 1 }}><span style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', background: r.status === 'CONFIRMED' ? '#e6f4ea' : '#fce8e6', color: r.status === 'CONFIRMED' ? '#137333' : '#c5221f' }}>{r.status}</span></div>
+      {stats?.estadosVuelos && Object.keys(stats.estadosVuelos).length>0 && (
+        <>
+          <SectionTitle>📋 Distribución de Estados (Vuelos)</SectionTitle>
+          <div style={{display:'flex',flexWrap:'wrap',gap:10}}>
+            {Object.entries(stats.estadosVuelos).map(([estado,count])=>(
+              <div key={estado} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px',textAlign:'center',minWidth:100}}>
+                <div style={{fontSize:'1.4rem',fontWeight:700,color:estadoColor(estado)}}>{count}</div>
+                <Badge status={estado}/>
               </div>
             ))}
           </div>
-        </div>
+        </>
       )}
 
-      {tab === 'reservas' && moduleSelected === 'autos' && (
-        <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
-          <h2>Órdenes de Autos</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
-            <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
-              <div style={{ flex: 2 }}>ID Orden</div>
-              <div style={{ flex: 1 }}>Días Renta</div>
-              <div style={{ flex: 1 }}>Total</div>
-              <div style={{ flex: 1 }}>Estado</div>
+      <SectionTitle>🎯 Embudo de Conversión (Extrapolado desde reservas reales)</SectionTitle>
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'16px 20px'}}>
+        {funnel.map((f,i)=>(
+          <div key={f.label} style={{marginBottom:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.85rem',marginBottom:4}}>
+              <span style={{color:C.text}}>{f.label}</span>
+              <span style={{fontWeight:700,color:f.pct<20 && f.count > 0 ? C.orange : C.text}}>{f.count.toLocaleString()} ({f.pct}%)</span>
             </div>
-            {reservasAutos.map(r => (
-              <div key={r.order_id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
-                <div style={{ flex: 2, fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.order_id}</div>
-                <div style={{ flex: 1 }}>{r.dias_renta}</div>
-                <div style={{ flex: 1 }}>${parseFloat(r.total_price?.total || 0).toFixed(2)}</div>
-                <div style={{ flex: 1 }}><span style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', background: r.status === 'CONFIRMED' ? '#e6f4ea' : '#fce8e6', color: r.status === 'CONFIRMED' ? '#137333' : '#c5221f' }}>{r.status}</span></div>
-              </div>
+            <div style={{background:C.border,borderRadius:4,height:12,overflow:'hidden'}}>
+              <div style={{width:`${f.pct}%`,height:'100%',borderRadius:4,background:`linear-gradient(90deg, ${C.blue}, ${C.darkBlue})`,opacity:0.5+(i*0.08)}}/>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <SectionTitle>🕒 Últimas Reservas (Global)</SectionTitle>
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:'hidden'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
+          <thead>
+            <tr style={{background:C.lightBlue}}>
+              {['Tipo','PNR','Estado','Total (USD)','Fecha'].map(h=>(
+                <th key={h} style={{padding:'10px 14px',textAlign:'left',fontWeight:600,color:C.darkBlue}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(stats?.ultimasReservas||[]).map((r,i)=>(
+              <tr key={r.id||i} style={{borderTop:`1px solid ${C.border}`}}>
+                <td style={{padding:'9px 14px'}}>
+                  <span>{r.tipo==='vuelo'?'✈️':r.tipo==='auto'?'🚗':'🎡'}</span>
+                  <span style={{marginLeft:6,textTransform:'capitalize'}}>{r.tipo}</span>
+                </td>
+                <td style={{padding:'9px 14px',fontFamily:'monospace',fontWeight:600}}>{r.pnr||'—'}</td>
+                <td style={{padding:'9px 14px'}}><Badge status={r.estado}/></td>
+                <td style={{padding:'9px 14px',fontWeight:600}}>${fmt(r.total)}</td>
+                <td style={{padding:'9px 14px',color:C.gray}}>{fmtDate(r.createdAt)}</td>
+              </tr>
             ))}
+            {(!stats?.ultimasReservas||stats.ultimasReservas.length===0)&&(
+              <tr><td colSpan={5} style={{padding:24,textAlign:'center',color:C.gray}}>Sin reservas aún</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MicroserviciosTab() {
+  const [tick,setTick]=useState(0);
+  useEffect(()=>{const t=setInterval(()=>setTick(n=>n+1),3000);return()=>clearInterval(t);},[]);
+  const rand=(base,spread)=>parseFloat((base+(Math.random()-0.5)*spread).toFixed(1));
+  const randInt=(base,spread)=>Math.round(base+(Math.random()-0.5)*spread);
+  const services=[
+    {name:'API Gateway',p50:rand(12,4),p95:rand(45,10),p99:rand(120,30),rps:randInt(420,60),errors:rand(0.2,0.1),cpu:rand(28,8),mem:rand(42,6)},
+    {name:'Svc Vuelos',p50:rand(95,20),p95:rand(380,60),p99:rand(820,100),rps:randInt(85,20),errors:rand(0.8,0.3),cpu:rand(55,12),mem:rand(68,8)},
+    {name:'Svc Autos',p50:rand(45,12),p95:rand(180,40),p99:rand(420,80),rps:randInt(32,10),errors:rand(0.4,0.2),cpu:rand(35,10),mem:rand(50,8)},
+    {name:'Svc Atracciones',p50:rand(38,10),p95:rand(140,30),p99:rand(310,60),rps:randInt(18,8),errors:rand(0.3,0.15),cpu:rand(22,6),mem:rand(38,5)},
+    {name:'Svc Pagos',p50:rand(320,40),p95:rand(920,100),p99:rand(1800,200),rps:randInt(12,5),errors:rand(1.2,0.4),cpu:rand(45,12),mem:rand(55,8)},
+  ];
+  const topology=[
+    {from:'Browser',to:'API Gateway',ms:rand(18,5)},
+    {from:'API Gateway',to:'Svc Vuelos',ms:rand(8,3)},
+    {from:'API Gateway',to:'Svc Autos',ms:rand(6,2)},
+    {from:'API Gateway',to:'Svc Atracciones',ms:rand(5,2)},
+    {from:'Svc Vuelos',to:'Amadeus API',ms:rand(210,30)},
+    {from:'Svc Pagos',to:'Stripe',ms:rand(310,40)},
+  ];
+  return (
+    <div>
+      <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:8,padding:'10px 16px',marginBottom:20,display:'flex',alignItems:'center',gap:10}}>
+        <span style={{fontSize:'1.2rem'}}>⚠️</span>
+        <span style={{fontSize:'0.85rem',color:'#664d03'}}><strong>Datos Simulados — RDA2.</strong> Esta pestaña muestra cómo se verá el monitoreo cuando el sistema migre a microservicios con Kubernetes, Prometheus y Grafana. Las métricas fluctúan cada 3 segundos para fines demostrativos.</span>
+      </div>
+      <SectionTitle>🔗 Topología de Red y Latencias</SectionTitle>
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'16px 20px'}}>
+        {topology.map(t=>(
+          <div key={`${t.from}-${t.to}`} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:`1px solid ${C.border}`,fontSize:'0.85rem'}}>
+            <span style={{background:C.lightBlue,padding:'2px 10px',borderRadius:4,fontWeight:600,color:C.darkBlue}}>{t.from}</span>
+            <div style={{flex:1,borderBottom:'1px dashed #ccc',margin:'0 4px'}}/>
+            <span style={{background:'#e8f5e9',padding:'2px 8px',borderRadius:4,fontWeight:700,color:C.green,fontSize:'0.8rem'}}>{t.ms}ms</span>
+            <span style={{color:C.gray}}>→</span>
+            <span style={{background:C.lightBlue,padding:'2px 10px',borderRadius:4,fontWeight:600,color:C.darkBlue}}>{t.to}</span>
+          </div>
+        ))}
+      </div>
+      <SectionTitle>📡 Los 4 Golden Signals por Servicio</SectionTitle>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.82rem',background:C.white,border:`1px solid ${C.border}`,borderRadius:8}}>
+          <thead>
+            <tr style={{background:C.darkBlue,color:'white'}}>
+              {['Servicio','p50','p95','p99','req/s','Error %','CPU %','RAM %'].map(h=>(
+                <th key={h} style={{padding:'10px 12px',textAlign:'center',fontWeight:600}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {services.map((s,i)=>(
+              <tr key={s.name} style={{borderTop:`1px solid ${C.border}`,background:i%2===0?C.white:C.bg}}>
+                <td style={{padding:'10px 12px',fontWeight:600}}>{s.name}</td>
+                <td style={{padding:'10px 12px',textAlign:'center',color:C.green}}>{s.p50}ms</td>
+                <td style={{padding:'10px 12px',textAlign:'center',color:s.p95>300?C.orange:C.text}}>{s.p95}ms</td>
+                <td style={{padding:'10px 12px',textAlign:'center',color:s.p99>800?C.red:C.text,fontWeight:s.p99>800?700:400}}>{s.p99}ms</td>
+                <td style={{padding:'10px 12px',textAlign:'center'}}>{s.rps}</td>
+                <td style={{padding:'10px 12px',textAlign:'center',color:s.errors>1?C.red:C.green,fontWeight:700}}>{s.errors}%</td>
+                <td style={{padding:'10px 12px',textAlign:'center',color:s.cpu>70?C.red:C.text}}>{s.cpu}%</td>
+                <td style={{padding:'10px 12px',textAlign:'center',color:s.mem>80?C.red:C.text}}>{s.mem}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <SectionTitle>🎖️ SLOs y Error Budget</SectionTitle>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:12}}>
+        {[
+          {name:'Búsqueda < 800ms',target:99.9,current:99.7,budget:29},
+          {name:'Reserva exitosa',target:99.5,current:98.8,budget:68},
+          {name:'Pago confirmado',target:99.9,current:99.6,budget:45},
+          {name:'Disponibilidad API',target:99.9,current:99.95,budget:100},
+        ].map(s=>{
+          const ok=s.current>=s.target;
+          return (
+            <div key={s.name} style={{background:C.white,border:`1px solid ${ok?C.green:C.red}`,borderRadius:8,padding:'14px 16px'}}>
+              <div style={{fontSize:'0.8rem',fontWeight:600,marginBottom:6}}>{s.name}</div>
+              <div style={{fontSize:'1.3rem',fontWeight:700,color:ok?C.green:C.red}}>{s.current}%</div>
+              <div style={{fontSize:'0.75rem',color:C.gray,marginBottom:8}}>Meta: {s.target}%</div>
+              <div style={{fontSize:'0.75rem',marginBottom:4,display:'flex',justifyContent:'space-between'}}>
+                <span>Error Budget</span><span style={{fontWeight:700,color:s.budget>50?C.green:C.orange}}>{s.budget}%</span>
+              </div>
+              <div style={{background:C.border,borderRadius:4,height:6}}>
+                <div style={{width:`${s.budget}%`,height:'100%',borderRadius:4,background:s.budget>50?C.green:C.orange}}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
+  const [vista,setVista]=useState('usuarios');
+  const [modal,setModal]=useState(null);
+  const [confirmModal,setConfirmModal]=useState(null);
+
+  const btnStyle = { background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:'6px 12px', cursor:'pointer', fontSize:'1.1rem', display:'inline-flex', alignItems:'center', justifyContent:'center', transition:'all 0.2s' };
+
+  const requestConfirm = (title, text, color, actionFn) => {
+    setConfirmModal({ title, text, color, actionFn });
+  };
+
+  const executeConfirm = async () => {
+    if (confirmModal && confirmModal.actionFn) {
+      await confirmModal.actionFn();
+    }
+    setConfirmModal(null);
+  };
+
+  const execUserAction = async (id, action) => {
+    try { 
+      await api.put(`/admin/users/${id}/action`, { action }); 
+      if (action === 'reset_password') {
+        alert('Enlace de reseteo enviado correctamente.');
+      } else {
+        alert('Acción ejecutada correctamente.');
+      }
+      onRefresh(); 
+    }
+    catch(e) { alert('Error al ejecutar la acción'); }
+  };
+
+  const handleReservaAction = async (tipo, id, action) => {
+    try {
+      if (action === 'cancelar') await api.put(`/admin/reservas/${tipo}/${id}/cancelar`);
+      if (action === 'reenviar') await api.put(`/admin/reservas/${tipo}/${id}/reenviar`);
+      alert(`Acción de ${action} ejecutada exitosamente.`);
+      onRefresh();
+    } catch(e) { alert('Error al ejecutar la acción'); }
+  };
+
+  const viewHistorial = async (id, email) => {
+    try {
+      const { data } = await api.get(`/admin/users/${id}/historial`);
+      setModal({ type: 'detalles', data: data.data, title: `Historial de Reservas - ${email}` });
+    } catch (e) { alert('Error al obtener historial'); }
+  };
+
+  const viewDetalles = async (tipo, id) => {
+    try {
+      const { data } = await api.get(`/admin/reservas/${tipo}/${id}/detalles`);
+      setModal({ type: 'detalles', data: data.data, title: `Detalles Técnicos - ${tipo} ${id}` });
+    } catch (e) {
+      alert('Error al obtener detalles');
+    }
+  };
+  const VISTAS=[
+    {id:'usuarios',label:'👤 Usuarios',count:users.length},
+    {id:'vuelos',label:'✈️ Vuelos',count:reservas.vuelos?.length||0},
+    {id:'hospedaje',label:'🏨 Hospedaje',count:reservas.hospedaje?.length||0},
+    {id:'autos',label:'🚗 Autos',count:reservas.autos?.length||0},
+    {id:'atracciones',label:'🎡 Atracciones',count:reservas.atracciones?.length||0},
+  ];
+  const isLoading=vista==='usuarios'?loadingUsers:loadingReservas;
+  const renderTable=()=>{
+    if(isLoading) return <div style={{padding:40,textAlign:'center',color:C.gray}}>Cargando...</div>;
+    if(vista==='usuarios') {
+      const admins = users.filter(u => u.rol === 'admin').length;
+      return (
+        <div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,padding:16,background:C.bg,borderBottom:`1px solid ${C.border}`}}>
+            <div style={{background:C.white,padding:12,borderRadius:8,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:'0.8rem',color:C.gray}}>Total Usuarios Registrados</div>
+              <div style={{fontSize:'1.4rem',fontWeight:700,color:C.darkBlue}}>{users.length}</div>
+            </div>
+            <div style={{background:C.white,padding:12,borderRadius:8,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:'0.8rem',color:C.gray}}>Administradores</div>
+              <div style={{fontSize:'1.4rem',fontWeight:700,color:C.orange}}>{admins}</div>
+            </div>
+          </div>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
+            <thead><tr style={{background:C.lightBlue}}>
+              {['Email','Rol','Registrado','Acciones'].map(h=>(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontWeight:600,color:C.darkBlue}}>{h}</th>))}
+            </tr></thead>
+            <tbody>
+              {users.map((u,i)=>(
+                <tr key={u.id||i} style={{borderTop:`1px solid ${C.border}`}}>
+                  <td style={{padding:'9px 14px'}}>{u.email}</td>
+                  <td style={{padding:'9px 14px'}}>
+                    <span style={{background:u.rol==='admin'?C.blue:C.border,color:u.rol==='admin'?'white':C.text,padding:'2px 8px',borderRadius:20,fontSize:'0.75rem',fontWeight:600}}>{u.rol||'usuario'}</span>
+                  </td>
+                  <td style={{padding:'9px 14px',color:C.gray}}>{fmtDate(u.created_at)}</td>
+                  <td style={{padding:'9px 14px',display:'flex',gap:8}}>
+                    {u.rol !== 'admin' && (
+                      <>
+                        <button onClick={()=>requestConfirm(u.status === 'bloquear' ? "Desbloquear Usuario" : "Bloquear Usuario", `¿Seguro que quieres ${u.status === 'bloquear' ? "desbloquear" : "bloquear"} a ${u.email}?`, u.status === 'bloquear' ? C.green : C.red, ()=>execUserAction(u.id, u.status === 'bloquear' ? 'desbloquear' : 'bloquear'))} title={u.status === 'bloquear' ? "Desbloquear Usuario" : "Bloquear Usuario"} style={btnStyle}>
+                          {u.status === 'bloquear' ? '✅' : '🚫'}
+                        </button>
+                        <button onClick={()=>requestConfirm("Promover a Administrador", `¿Seguro que quieres hacer administrador a ${u.email}?`, C.blue, ()=>execUserAction(u.id, 'promover_admin'))} title="Hacer Administrador" style={btnStyle}>👑</button>
+                        <button onClick={()=>viewHistorial(u.id, u.email)} title="Ver Historial" style={btnStyle}>📋</button>
+                      </>
+                    )}
+                    <button onClick={()=>requestConfirm("Enviar Reseteo de Contraseña", `¿Enviar enlace de reseteo a ${u.email}?`, C.orange, ()=>execUserAction(u.id, 'reset_password'))} title="Enviar Reseteo de Contraseña" style={btnStyle}>🔑</button>
+                  </td>
+                </tr>
+              ))}
+              {users.length===0&&(<tr><td colSpan={4} style={{padding:24,textAlign:'center',color:C.gray}}>Sin usuarios. Ejecuta el Trigger SQL en Supabase para sincronizar.</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    const rows=reservas[vista]||[];
+    const isVuelos = vista === 'vuelos';
+    const totalIngresos = rows.reduce((s, r) => s + Number(r.total), 0);
+
+    return (
+      <div>
+        {isVuelos && (
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,padding:16,background:C.bg,borderBottom:`1px solid ${C.border}`}}>
+            <div style={{background:C.white,padding:12,borderRadius:8,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:'0.8rem',color:C.gray}}>Reservas de Vuelos</div>
+              <div style={{fontSize:'1.4rem',fontWeight:700,color:C.darkBlue}}>{rows.length}</div>
+            </div>
+            <div style={{background:C.white,padding:12,borderRadius:8,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:'0.8rem',color:C.gray}}>Ingresos Totales (Vuelos)</div>
+              <div style={{fontSize:'1.4rem',fontWeight:700,color:C.green}}>${fmt(totalIngresos)}</div>
+            </div>
+          </div>
+        )}
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
+          <thead><tr style={{background:C.lightBlue}}>
+            {['PNR / ID','Estado','Total (USD)',vista==='atracciones'?'Cliente':'Moneda','Fecha','Acciones'].map(h=>(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontWeight:600,color:C.darkBlue}}>{h}</th>))}
+          </tr></thead>
+          <tbody>
+            {rows.map((r,i)=>(
+              <tr key={r.id||i} style={{borderTop:`1px solid ${C.border}`}}>
+                <td style={{padding:'9px 14px',fontFamily:'monospace',fontWeight:600}}>{r.pnr}</td>
+                <td style={{padding:'9px 14px'}}><Badge status={r.estado}/></td>
+                <td style={{padding:'9px 14px',fontWeight:600}}>${fmt(r.total)}</td>
+                <td style={{padding:'9px 14px',color:C.gray}}>{vista==='atracciones'?(r.cliente||'—'):(r.moneda||'USD')}</td>
+                <td style={{padding:'9px 14px',color:C.gray}}>{fmtDate(r.createdAt)}</td>
+                <td style={{padding:'9px 14px',display:'flex',gap:8}}>
+                  {r.estado !== 'CANCELLED' && (
+                    <button onClick={()=>requestConfirm("Cancelar Reserva", `¿Seguro que deseas cancelar la reserva ${r.pnr}? Esta acción no se puede deshacer.`, C.red, ()=>handleReservaAction(vista, r.id, 'cancelar'))} title="Cancelar Reserva" style={btnStyle}>❌</button>
+                  )}
+                  <button onClick={()=>requestConfirm("Reenviar Confirmación", `¿Deseas enviar el comprobante de reserva nuevamente al cliente?`, C.blue, ()=>handleReservaAction(vista, r.id, 'reenviar'))} title="Reenviar Confirmación" style={btnStyle}>📧</button>
+                  <button onClick={()=>viewDetalles(vista, r.id)} title="Ver Detalles Técnicos" style={btnStyle}>👁️</button>
+                </td>
+              </tr>
+            ))}
+            {rows.length===0&&(<tr><td colSpan={6} style={{padding:24,textAlign:'center',color:C.gray}}>Sin registros</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+  return (
+    <div>
+      <div style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap'}}>
+        {VISTAS.map(v=>(
+          <button key={v.id} onClick={()=>setVista(v.id)} style={{padding:'8px 16px',borderRadius:20,border:`1px solid ${vista===v.id?C.blue:C.border}`,background:vista===v.id?C.blue:C.white,color:vista===v.id?'white':C.text,fontWeight:600,cursor:'pointer',fontSize:'0.85rem',display:'flex',alignItems:'center',gap:6}}>
+            {v.label}
+            <span style={{background:vista===v.id?'rgba(255,255,255,0.3)':C.border,borderRadius:20,padding:'0 6px',fontSize:'0.75rem'}}>{v.count}</span>
+          </button>
+        ))}
+      </div>
+      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,overflow:'hidden'}}>{renderTable()}</div>
+
+      {/* Modal de detalles */}
+      {modal && modal.type === 'detalles' && (
+        <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
+          <div style={{background:'white',padding:24,borderRadius:8,width:600,maxHeight:'80vh',display:'flex',flexDirection:'column',boxShadow:'0 10px 25px rgba(0,0,0,0.2)'}}>
+            <h3 style={{marginTop:0,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>{modal.title}</h3>
+            <div style={{overflow:'auto',flex:1}}>
+              <pre style={{background:C.bg,padding:16,borderRadius:4,fontSize:'0.8rem',margin:0}}>
+                {JSON.stringify(modal.data, null, 2)}
+              </pre>
+            </div>
+            <div style={{display:'flex',justifyContent:'flex-end',marginTop:16,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+              <button type="button" onClick={()=>setModal(null)} style={{padding:'8px 24px',border:'none',background:C.blue,color:'white',borderRadius:6,cursor:'pointer',fontWeight:600}}>Cerrar</button>
+            </div>
           </div>
         </div>
       )}
-    </main>
+
+      {/* Modal de Confirmación Global */}
+      {confirmModal && (
+        <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+          <div style={{background:'white',padding:24,borderRadius:12,width:400,boxShadow:'0 15px 35px rgba(0,0,0,0.2)',textAlign:'center'}}>
+            <div style={{fontSize:'3rem',marginBottom:10}}>{confirmModal.color === C.red ? '⚠️' : confirmModal.color === C.green ? '✅' : 'ℹ️'}</div>
+            <h3 style={{marginTop:0,marginBottom:12,color:C.text}}>{confirmModal.title}</h3>
+            <p style={{fontSize:'0.95rem',color:C.gray,marginBottom:24,lineHeight:1.5}}>{confirmModal.text}</p>
+            
+            <div style={{display:'flex',justifyContent:'center',gap:12}}>
+              <button type="button" onClick={()=>setConfirmModal(null)} style={{padding:'10px 20px',border:`1px solid ${C.border}`,background:C.white,color:C.text,borderRadius:8,cursor:'pointer',fontWeight:600,flex:1}}>Cancelar</button>
+              <button type="button" onClick={executeConfirm} style={{padding:'10px 20px',border:'none',background:confirmModal.color,color:'white',borderRadius:8,cursor:'pointer',fontWeight:600,flex:1}}>Sí, Proceder</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function AdminDashboard() {
+  const [activeTab,setActiveTab]=useState('observabilidad');
+  const [stats,setStats]=useState(null);
+  const [users,setUsers]=useState([]);
+  const [reservas,setReservas]=useState({vuelos:[],autos:[],atracciones:[],hospedaje:[]});
+  const [serviceHealth,setServiceHealth]=useState([]);
+  const [loadingStats,setLoadingStats]=useState(true);
+  const [loadingUsers,setLoadingUsers]=useState(false);
+  const [loadingReservas,setLoadingReservas]=useState(false);
+  const [lastRefresh,setLastRefresh]=useState(null);
+
+  const checkServices=useCallback(async()=>{
+    const endpoints=[
+      {label:'Módulo Vuelos',url:'/vuelos/bookings?limit=1'},
+      {label:'Módulo Autos',url:'/autos/orders'},
+      {label:'Módulo Atracciones',url:'/atracciones?page=1&limit=1'},
+      {label:'Módulo Chatbot',url:'/chatbot/estado'},
+      {label:'Módulo Admin (Stats)',url:'/admin/stats'},
+    ];
+    const results=await Promise.all(endpoints.map(async(e)=>{
+      const t0=Date.now();
+      try{await api.get(e.url);return{label:e.label,ok:true,latency:Date.now()-t0};}
+      catch{return{label:e.label,ok:false,latency:Date.now()-t0};}
+    }));
+    setServiceHealth(results);
+  },[]);
+
+  const fetchStats=useCallback(async(silent=false)=>{
+    if(!silent) setLoadingStats(true);
+    try{const{data}=await api.get('/admin/stats');setStats(data);}
+    catch{setStats({kpis:{},ultimasReservas:[],estadosVuelos:{}});}
+    finally{if(!silent) setLoadingStats(false);setLastRefresh(new Date());}
+  },[]);
+
+  const fetchUsers=useCallback(async(silent=false)=>{
+    if(!silent) setLoadingUsers(true);
+    try{const{data}=await api.get('/admin/users');setUsers(Array.isArray(data)?data:[]);}
+    catch{setUsers([]);}
+    finally{if(!silent) setLoadingUsers(false);}
+  },[]);
+
+  const fetchReservas=useCallback(async(silent=false)=>{
+    if(!silent) setLoadingReservas(true);
+    try{const{data}=await api.get('/admin/reservas');setReservas(data||{vuelos:[],autos:[],atracciones:[],hospedaje:[]});}
+    catch{setReservas({vuelos:[],autos:[],atracciones:[],hospedaje:[]});}
+    finally{if(!silent) setLoadingReservas(false);}
+  },[]);
+
+  useEffect(()=>{fetchStats();checkServices();},[]);
+
+  useEffect(()=>{
+    if(activeTab==='gestion'){fetchUsers();fetchReservas();}
+  },[activeTab]);
+
+  const handleRefresh=()=>{
+    fetchStats(true);checkServices();
+    if(activeTab==='gestion'){fetchUsers(true);fetchReservas(true);}
+  };
+
+  return (
+    <div style={{minHeight:'100vh',background:C.bg,fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
+      <div style={{background:C.darkBlue,color:'white',padding:'0 24px'}}>
+        <div style={{maxWidth:1280,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',height:56}}>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <span style={{fontSize:'1.3rem'}}>🛡️</span>
+            <div>
+              <div style={{fontWeight:700,fontSize:'1rem'}}>Panel de Administración</div>
+              <div style={{fontSize:'0.7rem',opacity:0.7}}>Booking Ecuador — RDA1 · Integración de Sistemas</div>
+            </div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            {lastRefresh&&<span style={{fontSize:'0.75rem',opacity:0.7}}>Actualizado: {lastRefresh.toLocaleTimeString('es-EC')}</span>}
+            <button onClick={handleRefresh} style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',padding:'6px 14px',borderRadius:6,cursor:'pointer',fontSize:'0.8rem',fontWeight:600}}>↻ Refrescar</button>
+          </div>
+        </div>
+      </div>
+      <div style={{background:C.blue,padding:'0 24px'}}>
+        <div style={{maxWidth:1280,margin:'0 auto',display:'flex'}}>
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{background:'transparent',border:'none',color:activeTab===t.id?'white':'rgba(255,255,255,0.65)',padding:'14px 20px',cursor:'pointer',fontSize:'0.9rem',fontWeight:activeTab===t.id?700:400,borderBottom:activeTab===t.id?'3px solid white':'3px solid transparent',transition:'all 0.2s'}}>
+              {t.label}
+              <div style={{fontSize:'0.65rem',marginTop:1,fontWeight:400}}>{t.sub}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{maxWidth:1280,margin:'0 auto',padding:'24px'}}>
+        {activeTab==='observabilidad'&&<ObservabilidadTab stats={stats} loadingStats={loadingStats} serviceHealth={serviceHealth}/>}
+        {activeTab==='microservicios'&&<MicroserviciosTab/>}
+        {activeTab==='gestion'&&<GestionTab users={users} reservas={reservas} loadingUsers={loadingUsers} loadingReservas={loadingReservas} onRefresh={handleRefresh}/>}
+      </div>
+    </div>
   );
 }
