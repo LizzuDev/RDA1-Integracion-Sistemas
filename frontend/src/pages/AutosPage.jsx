@@ -55,8 +55,8 @@ export function AutosPage() {
     setPickupError('');
   };
 
-  const [dateRange, setDateRange] = useState([null, null]);
-  const [startDate, endDate] = dateRange;
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [sameDropoff, setSameDropoff] = useState(false);
   const [driverAge, setDriverAge] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
@@ -214,30 +214,31 @@ export function AutosPage() {
         <div style={{ maxWidth: '1100px', width: '100%', padding: '0 20px' }}>
           <h1 style={{ fontSize: '3rem', fontWeight: 'bold', marginBottom: '10px', textAlign: 'left', lineHeight: '1.2' }}>Alquiler de coches para cualquier tipo de viaje</h1>
           <p style={{ fontSize: '1.4rem', marginBottom: '30px', textAlign: 'left' }}>Coches fantásticos a precios increíbles de las principales empresas de alquiler</p>
-          
-          {/* SEARCH BOX */}
-          <form className="search-box-container" onSubmit={handleSearch} style={{ position: 'relative', marginTop: '20px' }}>
-            <div style={{ background: '#febb02', padding: '4px', borderRadius: '4px', display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'nowrap', overflowX: 'auto' }}>
+                <form className="av-form-container" onSubmit={handleSearch} style={{ marginTop: '20px' }}>
+            <div className="av-form-grid" style={{ gridTemplateColumns: 'minmax(250px, 2fr) minmax(280px, 2fr) minmax(280px, 2fr) auto' }}>
               
               {/* Pickup Location */}
-              <div style={{ position: 'relative', flex: '1.5', minWidth: '300px' }}>
-                <div style={{ background: flashRed ? '#fce8e6' : 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px', border: flashRed ? '3px solid #d93025' : '3px solid transparent', transition: 'border 0.2s, background-color 0.2s', outline: 'none' }} onFocus={(e) => { if(!flashRed) e.currentTarget.style.border = '3px solid #febb02'; setShowSuggestions(pickupLocation.length > 0); }} onBlur={(e) => { if(!flashRed) e.currentTarget.style.border = '3px solid transparent'; setTimeout(() => setShowSuggestions(false), 200); }}>
-                  <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🚗</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
-                    <span style={{ fontSize: '0.75rem', color: flashRed ? '#d93025' : '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Lugar de recogida</span>
+              <div className="av-input-group" style={flashRed ? { borderColor: '#d93025' } : {}}>
+                <div className="av-input-segment">
+                  <div className="av-input-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                  </div>
+                  <div className="av-input-field">
+                    <label style={{ color: flashRed ? '#d93025' : '#666' }}>Lugar de recogida</label>
                     <input
                       type="text"
                       required
                       placeholder="Aeropuerto, ciudad o estación"
                       value={pickupLocation}
                       onChange={handlePickupChange}
-                      style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500', background: 'transparent' }}
+                      onFocus={() => setShowSuggestions(pickupLocation.length > 0)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     />
                   </div>
                 </div>
                 {pickupError && <div style={{ position: 'absolute', top: '-25px', left: 0, color: '#d93025', fontSize: '0.8rem', fontWeight: 'bold', background: '#fce8e6', padding: '2px 8px', borderRadius: '4px' }}>{pickupError}</div>}
                 {showSuggestions && pickupLocation && (
-                  <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', listStyle: 'none', margin: 0, padding: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: '4px', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                  <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', listStyle: 'none', margin: 0, padding: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: '4px', zIndex: 1050, maxHeight: '200px', overflowY: 'auto' }}>
                     {destinos.filter(d => d.toLowerCase().includes(pickupLocation.toLowerCase())).length > 0 ? (
                       destinos.filter(d => d.toLowerCase().includes(pickupLocation.toLowerCase())).map((destino, idx) => (
                         <li key={idx} onMouseDown={() => handleSelectSuggestion(destino)} style={{ padding: '12px 16px', borderBottom: '1px solid #e7e7e7', cursor: 'pointer', fontSize: '0.95rem', color: '#333', display: 'flex', alignItems: 'center', gap: '10px' }} onMouseOver={e => e.currentTarget.style.background = '#f5f5f5'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
@@ -251,89 +252,85 @@ export function AutosPage() {
                 )}
               </div>
               
-              {/* Pickup Date */}
-              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>📅</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Fecha de recogida</span>
-                  <div style={{ width: '100%' }}>
-                    <DatePicker
-                      selected={startDate}
-                      onChange={(date) => setDateRange([date, endDate])}
-                      placeholderText="sáb 3 de oct"
-                      dateFormat="EEE d 'de' MMM"
-                      className="custom-date-picker-input"
-                      style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
+              {/* Pickup Date & Time */}
+              <div className="av-input-group">
+                <div className="av-input-segment">
+                  <div className="av-input-icon">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M6.66667 3.33366H13.3333V1.66699H15V3.33366H15.8333C16.2917 3.33366 16.6842 3.49691 17.0109 3.82357C17.337 4.14968 17.5 4.54199 17.5 5.00033V16.667C17.5 17.1253 17.337 17.5179 17.0109 17.8446C16.6842 18.1707 16.2917 18.3337 15.8333 18.3337H4.16667C3.70833 18.3337 3.31576 18.1707 2.9891 17.8446C2.66298 17.5179 2.5 17.1253 2.5 16.667V5.00033C2.5 4.54199 2.66298 4.14968 2.9891 3.82357C3.31576 3.49691 3.70834 3.33366 4.16667 3.33366H5V1.66699H6.66667V3.33366ZM4.16667 16.667H15.8333V8.33366H4.16667V16.667ZM6.66667 13.3337C7.125 13.3337 7.5 13.7087 7.5 14.167C7.5 14.6253 7.125 15.0003 6.66667 15.0003C6.20833 15.0003 5.83333 14.6253 5.83333 14.167C5.83333 13.7087 6.20833 13.3337 6.66667 13.3337ZM10 13.3337C10.4583 13.3337 10.8333 13.7087 10.8333 14.167C10.8333 14.6253 10.4583 15.0003 10 15.0003C9.54167 15.0003 9.16667 14.6253 9.16667 14.167C9.16667 13.7087 9.54167 13.3337 10 13.3337ZM13.3333 13.3337C13.7917 13.3337 14.1667 13.7087 14.1667 14.167C14.1667 14.6253 13.7917 15.0003 13.3333 15.0003C12.875 15.0003 12.5 14.6253 12.5 14.167C12.5 13.7087 12.875 13.3337 13.3333 13.3337ZM6.66667 10.0003C7.125 10.0003 7.5 10.3753 7.5 10.8337C7.5 11.292 7.125 11.667 6.66667 11.667C6.20833 11.667 5.83333 11.292 5.83333 10.8337C5.83333 10.3753 6.20833 10.0003 6.66667 10.0003ZM10 10.0003C10.4583 10.0003 10.8333 10.3753 10.8333 10.8337C10.8333 11.292 10.4583 11.667 10 11.667C9.54167 11.667 9.16667 11.292 9.16667 10.8337C9.16667 10.3753 9.54167 10.0003 10 10.0003ZM13.3333 10.0003C13.7917 10.0003 14.1667 10.3753 14.1667 10.8337C14.1667 11.292 13.7917 11.667 13.3333 11.667C12.875 11.667 12.5 11.292 12.5 10.8337C12.5 10.3753 12.875 10.0003 13.3333 10.0003Z"/></svg>
+                  </div>
+                  <div className="av-input-field">
+                    <label>Salida</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
                     />
                   </div>
                 </div>
-              </div>
-
-              {/* Pickup Time */}
-              <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Hora</span>
-                  <select aria-label="Hora de recogida" style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
-                    {timeOptions.map(t => <option key={`pickup-${t}`} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-              
-              {/* Dropoff Date */}
-              <div style={{ flex: '1', minWidth: '150px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>📅</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Fecha de devolución</span>
-                  <div style={{ width: '100%' }}>
-                    <DatePicker
-                      selected={endDate}
-                      onChange={(date) => setDateRange([startDate, date])}
-                      placeholderText="mar 6 de oct"
-                      dateFormat="EEE d 'de' MMM"
-                      className="custom-date-picker-input"
-                      style={{ border: 'none', padding: '0', width: '100%', outline: 'none', fontSize: '0.95rem', color: '#333', fontWeight: '500' }}
-                    />
+                <div className="av-divider"></div>
+                <div className="av-input-segment" style={{ flex: 0.7 }}>
+                  <div className="av-input-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/></svg>
+                  </div>
+                  <div className="av-input-field">
+                    <label>Hora</label>
+                    <select aria-label="Hora de recogida">
+                      {timeOptions.map(t => <option key={`pickup-${t}`} value={t}>{t}</option>)}
+                    </select>
                   </div>
                 </div>
               </div>
-
-              {/* Dropoff Time */}
-              <div style={{ flex: '0.8', minWidth: '100px', background: 'white', display: 'flex', alignItems: 'center', padding: '6px 12px', borderRadius: '2px', height: '60px' }}>
-                <span style={{ fontSize: '1.2rem', color: '#333', marginRight: '10px' }}>🕒</span>
-                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#666', fontWeight: '500', marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>Hora</span>
-                  <select aria-label="Hora de devolución" style={{ border: 'none', outline: 'none', background: 'transparent', padding: '0', fontSize: '0.95rem', color: '#333', width: '100%', fontWeight: '500', cursor: 'pointer' }}>
-                    {timeOptions.map(t => <option key={`dropoff-${t}`} value={t}>{t}</option>)}
-                  </select>
+              
+              {/* Dropoff Date & Time */}
+              <div className="av-input-group">
+                <div className="av-input-segment">
+                  <div className="av-input-icon">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M6.66667 3.33366H13.3333V1.66699H15V3.33366H15.8333C16.2917 3.33366 16.6842 3.49691 17.0109 3.82357C17.337 4.14968 17.5 4.54199 17.5 5.00033V16.667C17.5 17.1253 17.337 17.5179 17.0109 17.8446C16.6842 18.1707 16.2917 18.3337 15.8333 18.3337H4.16667C3.70833 18.3337 3.31576 18.1707 2.9891 17.8446C2.66298 17.5179 2.5 17.1253 2.5 16.667V5.00033C2.5 4.54199 2.66298 4.14968 2.9891 3.82357C3.31576 3.49691 3.70834 3.33366 4.16667 3.33366H5V1.66699H6.66667V3.33366ZM4.16667 16.667H15.8333V8.33366H4.16667V16.667ZM6.66667 13.3337C7.125 13.3337 7.5 13.7087 7.5 14.167C7.5 14.6253 7.125 15.0003 6.66667 15.0003C6.20833 15.0003 5.83333 14.6253 5.83333 14.167C5.83333 13.7087 6.20833 13.3337 6.66667 13.3337ZM10 13.3337C10.4583 13.3337 10.8333 13.7087 10.8333 14.167C10.8333 14.6253 10.4583 15.0003 10 15.0003C9.54167 15.0003 9.16667 14.6253 9.16667 14.167C9.16667 13.7087 9.54167 13.3337 10 13.3337ZM13.3333 13.3337C13.7917 13.3337 14.1667 13.7087 14.1667 14.167C14.1667 14.6253 13.7917 15.0003 13.3333 15.0003C12.875 15.0003 12.5 14.6253 12.5 14.167C12.5 13.7087 12.875 13.3337 13.3333 13.3337ZM6.66667 10.0003C7.125 10.0003 7.5 10.3753 7.5 10.8337C7.5 11.292 7.125 11.667 6.66667 11.667C6.20833 11.667 5.83333 11.292 5.83333 10.8337C5.83333 10.3753 6.20833 10.0003 6.66667 10.0003ZM10 10.0003C10.4583 10.0003 10.8333 10.3753 10.8333 10.8337C10.8333 11.292 10.4583 11.667 10 11.667C9.54167 11.667 9.16667 11.292 9.16667 10.8337C9.16667 10.3753 9.54167 10.0003 10 10.0003ZM13.3333 10.0003C13.7917 10.0003 14.1667 10.3753 14.1667 10.8337C14.1667 11.292 13.7917 11.667 13.3333 11.667C12.875 11.667 12.5 11.292 12.5 10.8337C12.5 10.3753 12.875 10.0003 13.3333 10.0003Z"/></svg>
+                  </div>
+                  <div className="av-input-field">
+                    <label>Regreso</label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      min={startDate || new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                </div>
+                <div className="av-divider"></div>
+                <div className="av-input-segment" style={{ flex: 0.7 }}>
+                  <div className="av-input-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/></svg>
+                  </div>
+                  <div className="av-input-field">
+                    <label>Hora</label>
+                    <select aria-label="Hora de devolución">
+                      {timeOptions.map(t => <option key={`dropoff-${t}`} value={t}>{t}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
               
-              <button 
-                type="submit"
-                style={{ flex: '0.8', minWidth: '120px', background: '#006ce4', color: 'white', border: 'none', height: '60px', fontSize: '1.1rem', fontWeight: 'bold', borderRadius: '2px', cursor: 'pointer' }}
-              >
+              {/* Submit */}
+              <button type="submit" className="av-btn-buscar">
                 Buscar
               </button>
             </div>
 
             {/* Opciones inferiores */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' }}>
-              <div style={{ display: 'flex', gap: '20px', alignItems: 'center', color: 'white' }}>
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'center', color: '#1b1b1b' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={sameDropoff} onChange={(e) => setSameDropoff(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                  <input type="checkbox" checked={sameDropoff} onChange={(e) => setSameDropoff(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#1b1b1b' }} />
                   Devolver el coche en otra oficina
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={driverAge} onChange={(e) => setDriverAge(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                  <input type="checkbox" checked={driverAge} onChange={(e) => setDriverAge(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#1b1b1b' }} />
                   Conductor entre 30 y 65 años
                 </label>
               </div>
-              <div style={{ color: '#006ce4', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', background: 'white', padding: '4px 8px', borderRadius: '4px' }}>
-                <span>⚙️</span> Filtros rápidos
-              </div>
             </div>
-
           </form>
         </div>
       </section>

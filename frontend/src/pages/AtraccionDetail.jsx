@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getAtraccion, reservarAtraccion } from '../services/atraccionesApi';
 import { v4 as uuidv4 } from 'uuid';
-import emailjs from '@emailjs/browser';
 import { useAuth } from '../hooks/useAuth';
 import { savePendingReservation } from '../services/offlineSync';
+import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { useCurrency } from '../hooks/CurrencyContext';
 
 export function AtraccionDetail() {
@@ -13,6 +13,7 @@ export function AtraccionDetail() {
   const { user } = useAuth();
   const isLoggedIn = !!user;
   const { convertPrice } = useCurrency();
+  const isAdmin = user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin';
   
   const [atraccion, setAtraccion] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,21 +88,22 @@ export function AtraccionDetail() {
             ticket_count: parseInt(form.ticket_count)
           }
         };
-        const templateParams = user?.email ? {
-          to_email: user.email,
-          to_name: user.user_metadata?.nombre || user.user_metadata?.full_name || user.email.split('@')[0] || 'Cliente',
-          email: user.email,
-          name: user.user_metadata?.nombre || user.user_metadata?.full_name || user.email.split('@')[0] || 'Cliente',
-          reply_to: user.email,
-          pnr: idempotencyKey.substring(0, 8).toUpperCase(),
-          service_name: atraccion?.nombre || atraccion?.name || `Tour / Atracción (${form.ticket_count} personas)`,
-          date: form.date,
-          time: form.time,
-          total_price: convertPrice(precio * parseInt(form.ticket_count, 10)),
-          message: `Reserva confirmada: ${atraccion?.nombre || atraccion?.name}. Fecha: ${form.date}. Hora: ${form.time}. Total: ${convertPrice(precio * parseInt(form.ticket_count, 10))}.`,
-        } : null;
+        const tituloAtraccion =
+          atraccion?.nombre || atraccion?.name || `Tour / Atracción (${form.ticket_count} personas)`;
 
-        await savePendingReservation('atraccion', payload, idempotencyKey, templateParams);
+        await savePendingReservation('atraccion', payload, idempotencyKey, {
+          tipo: 'atraccion',
+          pnr: idempotencyKey.substring(0, 8).toUpperCase(),
+          titulo: tituloAtraccion,
+          total: (precio * parseInt(form.ticket_count, 10)).toFixed(2),
+          pasajeros: [
+            {
+              firstName: user.user_metadata?.nombre || user.user_metadata?.full_name || '',
+              lastName: user.user_metadata?.apellido || '',
+              documentNumber: user.user_metadata?.cedula || '',
+            },
+          ],
+        });
         result = { reservation_id: idempotencyKey, offline: true };
       } else {
         try {
@@ -135,38 +137,25 @@ export function AtraccionDetail() {
       const existing = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
       localStorage.setItem('reservas_atracciones', JSON.stringify([atraccionRes, ...existing]));
 
-      // Enviar correo electrónico con EmailJS solo si hay conexión
-      if (user?.email && navigator.onLine) {
-        const orderTotal = (precio * parseInt(form.ticket_count, 10)).toFixed(2);
-        const clienteName =
-          user.user_metadata?.nombre ||
-          user.user_metadata?.full_name ||
-          user.email.split('@')[0] ||
-          'Cliente';
-        const templateParams = {
-          // Variables para cualquier configuración del template de EmailJS
-          to_email: user.email,
-          to_name: clienteName,
-          email: user.email,
-          name: clienteName,
-          reply_to: user.email,
+      // Factura por correo. Va DESPUÉS de guardar la reserva en localStorage, a
+      // propósito: si el envío falla, la reserva ya está registrada y el usuario
+      // puede recuperarla en Mis Reservas.
+      //
+      // Sin conexión no se intenta: `offlineSync` la mandará al reconectar, que es
+      // donde se guardan los datos de la factura. Enviar aquí fallaría siempre.
+      if (navigator.onLine) {
+        enviarFacturaTrasCompra({
+          tipo: 'atraccion',
           pnr: atraccionRes.id.substring(0, 8).toUpperCase(),
-          service_name: atraccionRes.titulo,
-          date: form.date,
-          time: form.time,
-          total_price: convertPrice(orderTotal),
-          message: `Reserva confirmada: ${atraccionRes.titulo}. Fecha: ${form.date}. Hora: ${form.time}. Total: ${convertPrice(orderTotal)}.`,
-        };
-        console.log('[EmailJS] Enviando a:', user.email, 'params:', templateParams);
-        emailjs.send(
-          'service_gc9gkdc',
-          'template_nlbgw3v',
-          templateParams,
-          'vZyuTrdLeGeWrTWLe'
-        ).then((response) => {
-          console.log('✅ CORREO ATRACCION ENVIADO!', response.status, response.text);
-        }).catch((error) => {
-          console.error('❌ ERROR CORREO ATRACCION:', error);
+          titulo: atraccionRes.titulo,
+          total: atraccionRes.totalPrice.total,
+          pasajeros: [
+            {
+              firstName: user.user_metadata?.nombre || user.user_metadata?.full_name || '',
+              lastName: user.user_metadata?.apellido || '',
+              documentNumber: user.user_metadata?.cedula || '',
+            },
+          ],
         });
       }
 
@@ -510,9 +499,15 @@ export function AtraccionDetail() {
 
                     <div className="total-price-box">
                       <div className="total-text">Total <strong>{convertPrice(precio * form.ticket_count)}</strong><br/><span>Incluye impuestos y cargos</span></div>
-                      <button className="search-btn" style={{width: '100%', padding: '12px', fontSize: '1rem', marginTop: 16}} onClick={handleBooking} disabled={isBooking}>
-                        {isBooking ? 'Procesando Pago Seguro...' : 'Pagar y Confirmar'}
-                      </button>
+                      {isAdmin ? (
+                        <div style={{ marginTop: 16, padding: '10px', background: '#f8d7da', color: '#721c24', borderRadius: '4px', textAlign: 'center', fontSize: '0.9rem' }}>
+                          Las cuentas de administrador no pueden realizar compras.
+                        </div>
+                      ) : (
+                        <button className="search-btn" style={{width: '100%', padding: '12px', fontSize: '1rem', marginTop: 16}} onClick={handleBooking} disabled={isBooking}>
+                          {isBooking ? 'Procesando Pago Seguro...' : 'Pagar y Confirmar'}
+                        </button>
+                      )}
                     </div>
                   </>
                 ) : (

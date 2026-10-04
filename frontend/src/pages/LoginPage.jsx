@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../hooks/useAuth';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+  const redirectTo = location.state?.from || '/';
+  const redirectMessage = location.state?.message || null;
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,9 +22,9 @@ export function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      navigate('/', { replace: true });
+      navigate(redirectTo, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, redirectTo]);
 
   const handleEmailChange = (e) => {
     const rawValue = e.target.value;
@@ -72,7 +75,7 @@ export function LoginPage() {
          setErrors(prev => ({ ...prev, general: signInError.message }));
       }
     } else {
-      navigate('/', { replace: true });
+      navigate(redirectTo, { replace: true });
     }
     setLoading(false);
   };
@@ -94,6 +97,11 @@ export function LoginPage() {
       <div className="state-container" style={{ maxWidth: '400px', margin: '0 auto', textAlign: 'left' }}>
         <h1 className="state-title" style={{ textAlign: 'center' }}>Iniciar sesión</h1>
         
+        {redirectMessage && (
+          <div style={{ color: '#856404', marginBottom: '1rem', textAlign: 'center', backgroundColor: '#fff3cd', padding: '10px 14px', borderRadius: '4px', fontWeight: '500', border: '1px solid #ffc107', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>🔒</span> {redirectMessage}
+          </div>
+        )}
         {errors.general && <div style={{ color: '#d93025', marginBottom: '1rem', textAlign: 'center', backgroundColor: '#fce8e6', padding: '10px', borderRadius: '4px', fontWeight: '500' }}>{errors.general}</div>}
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

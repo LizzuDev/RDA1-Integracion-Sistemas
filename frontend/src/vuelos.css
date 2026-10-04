@@ -117,7 +117,7 @@
 }
 .legal-callout {
   background: #fffbeb;
-  border: 1px solid #fde68a;
+  border: 1px solid var(--warn-border);
   border-left: 4px solid var(--booking-yellow);
   border-radius: 6px;
   padding: 14px 18px;
@@ -444,8 +444,8 @@
   color: var(--booking-blue);
   white-space: nowrap;
 }
-.vuelo-estado-delayed { background: #fef3c7; color: #92400e; }
-.vuelo-estado-cancelled { background: #fee2e2; color: #991b1b; }
+.vuelo-estado-delayed { background: var(--warn-bg); color: var(--warn-fg); }
+.vuelo-estado-cancelled { background: var(--error-bg); color: var(--error-fg); }
 .vuelo-estado-arrived, .vuelo-estado-departed { background: #dcfce7; color: #166534; }
 
 .vuelo-detalles {
@@ -858,13 +858,31 @@
   opacity: .8;
 }
 .modal-vacio { font-size: .78rem; color: var(--text-muted); }
-.modal-error {
+
+/* ── Aviso en línea: una sola paleta para todo el e-commerce ───────────────
+ *
+ * Antes `.modal-error` era AMBAR (#854d0e sobre #fef3c7) y `.av-error-box` era
+ * ROJO (#d32f2f sobre #ffebee). Las dos se usan para errores de la misma
+ * gravedad —el usuario no puede deducir del color si algo es un aviso o un
+ * error—, así que ahora derivan de los mismos tokens de `index.css`.
+ *
+ * Se conservan los nombres porque los usan 19 sitios ya escritos; lo que cambia
+ * es que ahora significan lo mismo que `.inline-alert` del design system.
+ */
+.modal-error,
+.av-error-box {
+  padding: 9px 11px;
+  border: 1px solid var(--error-border);
+  border-left: 3px solid var(--error-fg);
+  border-radius: 6px;
+  background: var(--error-bg);
+  color: var(--error-fg);
   font-size: .78rem;
-  color: #854d0e;
-  background: #fef3c7;
-  border-radius: 4px;
-  padding: 8px 10px;
+  line-height: 1.45;
 }
+
+/* `.av-error-box` se centra porque vive dentro del formulario de búsqueda. */
+.av-error-box { margin-top: 12px; text-align: center; }
 
 /* --- Cabinas: radios en pastilla, igual que los del tipo de viaje ---------- */
 .modal-radios { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -993,7 +1011,7 @@
   margin-top: 4px;
   font-variant-numeric: tabular-nums;
 }
-.modal-cuenta.caducado { color: #991b1b; }
+.modal-cuenta.caducado { color: var(--error-fg); }
 
 @media (max-width: 560px) {
   .modal { max-width: 100%; }
@@ -1071,7 +1089,13 @@
 }
 .modal-input:focus-visible { outline: 2px solid var(--booking-blue); outline-offset: 1px; border-color: var(--booking-blue); }
 .modal-input.es-error { border-color: #dc2626; background: #fef2f2; }
-.modal-error-campo { font-size: .66rem; color: #991b1b; margin-top: 2px; }
+/* Error de un campo concreto: sin fondo, porque va pegado al input. */
+.modal-error-campo {
+  display: block;
+  font-size: .72rem;
+  color: var(--error-fg);
+  margin-top: 3px;
+}
 
 .modal-radios-inline { display: flex; gap: 6px; }
 .modal-radio-mini {
@@ -1149,8 +1173,8 @@
 
 .aviso-tickets {
   font-size: .76rem;
-  color: #92400e;
-  background: #fef3c7;
+  color: var(--warn-fg);
+  background: var(--warn-bg);
   border-radius: 4px;
   padding: 9px 11px;
   margin-top: 14px;
@@ -1234,9 +1258,9 @@
   white-space: nowrap;
 }
 .estado-confirmed { background: #dcfce7; color: #166534; }
-.estado-pending, .estado-pending_payment { background: #fef3c7; color: #92400e; }
+.estado-pending, .estado-pending_payment { background: var(--warn-bg); color: var(--warn-fg); }
 .estado-ticket_issuing { background: #dbeafe; color: #1e40af; }
-.estado-failed, .estado-cancelled { background: #fee2e2; color: #991b1b; }
+.estado-failed, .estado-cancelled { background: var(--error-bg); color: var(--error-fg); }
 .estado-change_pending, .estado-cancellation_pending { background: #ede9fe; color: #5b21b6; }
 
 .acciones-paginacion { margin-top: 14px; display: flex; justify-content: center; }
@@ -1329,8 +1353,8 @@
 }
 .boarding-estado-emitido { background: #dcfce7; color: #166534; }
 .boarding-estado-proceso { background: #dbeafe; color: #1e40af; }
-.boarding-estado-pendiente { background: #fef3c7; color: #92400e; }
-.boarding-estado-fallido { background: #fee2e2; color: #991b1b; }
+.boarding-estado-pendiente { background: var(--warn-bg); color: var(--warn-fg); }
+.boarding-estado-fallido { background: var(--error-bg); color: var(--error-fg); }
 
 .boarding-cuerpo {
   display: grid;
@@ -1425,7 +1449,7 @@
   border: 1px solid #dc2626;
   border-radius: var(--radius);
   background: #fff;
-  color: #991b1b;
+  color: var(--error-fg);
   cursor: pointer;
   transition: background .15s, border-color .15s;
 }
@@ -1460,7 +1484,7 @@
   border-bottom: 1px solid var(--border);
 }
 .cotizacion-fila:last-child { border-bottom: none; }
-.cotizacion-fila-penalidad { color: #991b1b; }
+.cotizacion-fila-penalidad { color: var(--error-fg); }
 /* La fila del total va destacada: es la cifra que el usuario vino a ver. */
 .cotizacion-fila-total {
   background: #f7f9fd;
@@ -1473,9 +1497,9 @@
   padding: 9px 11px;
   margin-bottom: 12px;
   border-radius: var(--radius);
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fde68a;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  border: 1px solid var(--warn-border);
 }
 
 .modal-texto { font-size: .84rem; line-height: 1.5; }
@@ -2396,4 +2420,390 @@
 .vuelo-grid {
   grid-template-columns: 1fr;
   gap: 16px;
+}
+
+/* ==========================================================================
+   AVIANCA-STYLE SEARCH FORM
+   ========================================================================== */
+
+.av-form-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0px 0px 6px 0px rgba(90, 90, 90, 0.20);
+  padding: 16px;
+  width: 100%;
+  margin: 0 auto 30px auto;
+  font-family: 'Inter', sans-serif;
+  color: #1b1b1b;
+  position: relative;
+  z-index: 100;
+}
+
+@media (min-width: 1024px) {
+  .av-form-container {
+    padding: 20px 24px 24px 24px;
+  }
+}
+
+.av-header-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 16px;
+}
+
+.av-trip-type-toggle {
+  display: inline-flex;
+  background: #efefef;
+  border-radius: 32px;
+  padding: 2px;
+  align-items: center;
+}
+
+.av-trip-type-btn {
+  padding: 8px 16px;
+  border-radius: 32px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 400;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  color: #1b1b1b;
+  min-width: 130px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.av-trip-type-btn.activo {
+  background: white;
+  font-weight: 700;
+  box-shadow: 0px 2px 20px 2px rgba(73, 73, 73, 0.25);
+}
+
+.av-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .av-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .av-form-grid {
+    grid-template-columns: minmax(300px, 3fr) minmax(200px, 2fr) minmax(180px, 1.5fr) auto;
+    align-items: center;
+  }
+}
+
+.av-input-group {
+  display: flex;
+  border: 1px solid #c9c9c9;
+  border-radius: 8px;
+  background: white;
+  position: relative;
+  transition: border-color 0.2s;
+  flex: 1;
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .av-input-group {
+    flex-direction: row;
+  }
+}
+
+.av-input-group:focus-within {
+  border-color: #1b1b1b;
+}
+
+.av-input-segment {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  padding: 0 16px;
+  height: 52px;
+  min-width: 0;
+}
+
+.av-input-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.av-input-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: #1b1b1b;
+}
+
+.av-input-field {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
+  position: relative;
+  min-width: 0;
+}
+
+.av-input-field label {
+  font-size: 12px;
+  color: #666;
+  position: absolute;
+  top: 6px;
+  pointer-events: none;
+}
+
+.av-input-field input, .av-input-field select {
+  border: none;
+  outline: none;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1b1b1b;
+  background: transparent;
+  width: 100%;
+  padding: 0;
+  padding-top: 14px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.av-divider {
+  width: 100%;
+  height: 1px;
+  background-color: #c9c9c9;
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .av-divider {
+    width: 1px;
+    height: 32px;
+    margin: auto 0;
+  }
+}
+
+.av-swap-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid #949494;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  transition: transform 0.2s;
+  padding: 0;
+}
+
+@media (min-width: 768px) {
+  .av-swap-btn {
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+  }
+}
+
+.av-swap-btn:hover {
+  background: #f5f5f5;
+}
+
+.av-swap-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: #1C1B1F;
+}
+
+/* Passengers Toggle */
+.av-passengers-container {
+  position: relative;
+  width: 100%;
+}
+
+.av-passengers-toggle {
+  border: 1px solid #c9c9c9;
+  border-radius: 8px;
+  height: 52px;
+  background: white;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  cursor: pointer;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.av-passengers-toggle:hover {
+  border-color: #1b1b1b;
+}
+
+.av-passengers-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  text-align: left;
+}
+
+.av-passengers-text span:first-child {
+  font-size: 12px;
+  color: #666;
+}
+
+.av-passengers-text span:last-child {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1b1b1b;
+}
+
+.av-caret svg {
+  width: 10px;
+  height: 10px;
+  fill: #1b1b1b;
+}
+
+/* Passengers Dropdown */
+.av-passengers-dropdown {
+  position: absolute;
+  top: 60px;
+  right: 0;
+  width: 320px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0px 4px 20px rgba(0,0,0,0.15);
+  padding: 24px;
+  z-index: 1050;
+}
+
+@media (max-width: 768px) {
+  .av-passengers-dropdown {
+    width: 100%;
+    right: auto;
+    left: 0;
+  }
+}
+
+.av-dropdown-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1b1b1b;
+  margin-bottom: 20px;
+}
+
+.av-passenger-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.av-passenger-row:last-child {
+  margin-bottom: 0;
+}
+
+.av-passenger-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.av-passenger-info strong {
+  font-size: 16px;
+  font-weight: 400;
+  color: #1b1b1b;
+}
+
+.av-passenger-info span {
+  font-size: 13px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.av-passenger-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.av-passenger-controls button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #949494;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #1b1b1b;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.av-passenger-controls button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.av-passenger-controls span {
+  font-size: 18px;
+  font-weight: 700;
+  min-width: 14px;
+  text-align: center;
+}
+
+/* `.av-error-box` se define junto a `.modal-error` más arriba, con la paleta
+ * única de estado. Aquí solo queda su centrado, que es lo único específico del
+ * formulario de búsqueda. */
+
+/* Button Buscar */
+.av-btn-buscar {
+  background: #1c1b1f;
+  color: white;
+  border-radius: 32px;
+  padding: 0 24px;
+  height: 48px;
+  font-size: 20px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .av-btn-buscar {
+    width: auto;
+  }
+}
+
+.av-btn-buscar:hover {
+  background: #333;
+}
+
+.av-btn-buscar:disabled {
+  background: #999;
+  cursor: wait;
 }

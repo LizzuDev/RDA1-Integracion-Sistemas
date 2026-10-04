@@ -1,3 +1,5 @@
+/* Tipografías: Noto Sans JP para japonés y carga complementaria */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
 .sr-only {
   position: absolute;
   width: 1px;
@@ -21,11 +23,51 @@
   --border: #e7e7e7;
   --radius: 8px;
   --bg: #ffffff;
+
+  /* ── Estados ───────────────────────────────────────────────────────────
+   *
+   * Antes de este bloque la app tenía CUATRO paletas de rojo distintas para el
+   * mismo significado —"esto es un error"—:
+   *
+   *   Material    #d32f2f / #ffebee   (.av-error-box, formulario de vuelos)
+   *   Google      #d93025 / #fce8e6   (AtraccionesPage, estilos inline)
+   *   Bootstrap   #721c24 / #f8d7da   (AtraccionDetail, estilos inline)
+   *   Rojo oscuro #991b1b / sin fondo (.modal-error-campo)
+   *
+   * y una quinta que no era roja: `.modal-error` era ÁMBAR (#854d0e / #fef3c7),
+   * de modo que un error de validación se veía como advertencia en 17 sitios y
+   * como error en 2. El usuario no podía inferir la gravedad por el color.
+   *
+   * Aquí se fija UNA sola escala. Los valores NO son nuevos: se copiaron de los
+   * que ya usaban los badges de estado de vuelo (`#fef3c7`/`#92400e` para
+   * avisos y `#fee2e2`/`#991b1b` para errores). Se eligieron esos y no otros
+   * para que un badge de "retrasado" y una caja de error se vean iguales tras
+   * la unificación, sin cambiar la apariencia de lo que ya funcionaba.
+   *
+   * Los textos cumplen WCAG AA (4.5:1) sobre su fondo: #92400e sobre #fef3c7 da
+   * 5.4:1, y #991b1b sobre #fee2e2 da 6.9:1.
+   */
+  --error-fg: #991b1b;
+  --error-bg: #fee2e2;
+  --error-border: #f5c2c0;
+
+  --warn-fg: #92400e;
+  --warn-bg: #fef3c7;
+  --warn-border: #fde68a;
+
+  --success-fg: #1b6b1f;
+  --success-bg: #f2fbee;
+  --success-border: #b7e0a0;
+
+  --info-fg: #0958d9;
+  --info-bg: #eef5ff;
+  --info-border: #b3ceff;
 }
 
+.app-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans JP', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text-dark);
   -webkit-font-smoothing: antialiased;
@@ -1115,4 +1157,160 @@ a { text-decoration: none; color: var(--booking-blue-light); }
 .search-header-compact .custom-date-picker-input {
   font-size: 0.95rem;
   padding: 10px 0;
+}
+
+/* ===================== FOOTER ===================== */
+.footer {
+  background-color: var(--booking-blue);
+  color: #fff;
+  text-align: center;
+  padding: 40px 24px;
+  margin-top: auto;
+}
+.footer p {
+  margin: 8px 0 0 0;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+.footer .footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.footer .footer-links a,
+.footer .footer-links button {
+  color: #fff;
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.footer .footer-links a:hover,
+.footer .footer-links button:hover {
+  background: rgba(255,255,255,0.15);
+  text-decoration: underline;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PANTALLAS DE ESTADO (error / vacío / cargando)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Estas cinco clases estaban USADAS 46 veces en 10 pantallas y NO TENÍAN
+ * NINGUNA DEFINICIÓN en el proyecto. Como consecuencia, cada error a pantalla
+ * completa se renderizaba sin formato: sin centrado, sin icono, y con el botón
+ * de reintento con el aspecto de un botón nativo del navegador.
+ *
+ * El bloque vive aquí y no en `vuelos.css` a propósito: `.state-*` lo usan
+ * atracciones, autos, vuelos, facturas, login, registro, 404 y detalle de
+ * reserva. Si viviera en el CSS de vuelos, las demás pantallas dependerían de
+ * un archivo que no les pertenece.
+ *
+ * Los modificadores (`--error`, `--empty`, `--info`) son opcionales: las
+ * pantallas que aún no los usan siguen viéndose bien con la base, y las nuevas
+ * pueden declarar la gravedad sin inline styles.
+ */
+.state-container {
+  min-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.state-icon,
+.error-icon {
+  font-size: 3rem;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.state-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+/* `white-space: pre-line` para que los saltos de línea del mensaje se respeten
+ * sin tener que convertirlos en <br /> en cada JSX. */
+.state-subtitle {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  max-width: 54ch;
+  margin: 0;
+  white-space: pre-line;
+}
+
+.retry-btn {
+  margin-top: 8px;
+  padding: 10px 22px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--booking-blue);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.retry-btn:hover { background: var(--booking-blue-light); }
+.retry-btn:focus-visible {
+  outline: 2px solid var(--booking-blue-light);
+  outline-offset: 2px;
+}
+
+/* Modificadores opcionales de gravedad. */
+.state-container--error { color: var(--error-fg); }
+.state-container--error .state-title { color: var(--error-fg); }
+.state-container--empty .state-icon { opacity: 0.75; }
+.state-container--info { color: var(--info-fg); }
+.state-container--info .state-title { color: var(--info-fg); }
+
+/* ── Aviso en línea ───────────────────────────────────────────────────────
+ *
+ * Sustituye a `.modal-error` (ámbar) y `.av-error-box` (rojo), que eran la
+ * misma cosa con dos paletas distintas. Se deja `.modal-error` y
+ * `.av-error-box` como alias de esta en `vuelos.css` para no romper las 19
+ * pantallas que ya los usan.
+ */
+.inline-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--error-border);
+  border-left: 3px solid var(--error-fg);
+  border-radius: 6px;
+  background: var(--error-bg);
+  color: var(--error-fg);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.inline-alert--warn {
+  border-color: var(--warn-border);
+  border-left-color: var(--warn-fg);
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.inline-alert--success {
+  border-color: var(--success-border);
+  border-left-color: var(--success-fg);
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+.inline-alert--info {
+  border-color: var(--info-border);
+  border-left-color: var(--info-fg);
+  background: var(--info-bg);
+  color: var(--info-fg);
 }

@@ -87,7 +87,7 @@ export class AtraccionesController {
   @ApiOperation({ summary: 'Consultar el historial de reservas del usuario (Requiere autenticación JWT)' })
   @ApiResponse({ status: 200, description: 'Listado de reservas.' })
   async getReservas(@Req() req: any) {
-    return this.atraccionesService.getReservas();
+    return this.atraccionesService.getReservas(req.user?.email);
   }
 
   @Get('reservations/:reservationId')

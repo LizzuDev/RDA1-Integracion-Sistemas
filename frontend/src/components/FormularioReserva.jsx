@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import emailjs from '@emailjs/browser';
+import { useAuth } from '../hooks/useAuth';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { crearReserva } from '../services/vuelosApi';
 import { obtenerHuellaDispositivo, formatearMoneda } from '../services/formato';
 import { savePendingReservation } from '../services/offlineSync';
+import { enviarFacturaTrasCompra } from '../services/envioFactura';
+import { useTelemetry } from '../hooks/useTelemetry';
 
 const COUNTRIES = [
   { code: 'ECU', name: 'Ecuador' },
@@ -148,8 +151,12 @@ const REGLAS = {
 };
 
 export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfirmada }) {
+  const { user } = useAuth();
+  const isAdmin = user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin';
+  const navigate = useNavigate();
   const refDialogo = useRef(null);
   const idBase = useId();
+  const { trackEvent } = useTelemetry();
 
   const tipos = useMemo(() => distribuir(pasajeros), [pasajeros]);
   const [lista, setLista] = useState([]);
@@ -194,6 +201,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
     claveIdempotencia.current = uuidv4();
     setErrorGeneral(null);
     setErrores({});
+    trackEvent('checkout_started', 'vuelos');
 
     const idsAdultos = [];
     for (let i = 0; i < (tipos.filter((t) => t === 'ADULT').length || 1); i++) {
@@ -274,17 +282,26 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
           setErrorGeneral('Por favor, revisa que todos los campos obligatorios esten llenos correctamente antes de enviar.');
           return;
         }
+        setErrorGeneral(null);
         setPasoActual(2);
+        trackEvent('form_step_completed', 'vuelos', { step: 1 });
         return;
       }
 
       if (pasoActual === 2) {
+        if (!user) {
+          navigate('/login');
+          return;
+        }
+        setErrorGeneral(null);
         setPasoActual(3);
+        trackEvent('form_step_completed', 'vuelos', { step: 2 });
         return;
       }
 
       setEnviando(true);
       setErrorGeneral(null);
+      trackEvent('payment_started', 'vuelos');
       try {
         // Simulando pasarela de pagos
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -309,50 +326,45 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         const idempotencyKey = claveIdempotencia.current ?? uuidv4();
         const fingerprint = obtenerHuellaDispositivo();
 
-        const primerPasajero = lista[0];
-        const correoDestino = primerPasajero?.email?.trim();
-        const pnrVuelo = idempotencyKey.toString().substring(0, 8).toUpperCase();
-        const totalVuelo = hold?.lockedPrice?.total
-          ? formatearMoneda(hold.lockedPrice.total, hold.lockedPrice.currency)
-          : 'Pendiente';
-        const nombrePasajero = `${primerPasajero?.firstName || ''} ${primerPasajero?.lastName || ''}`.trim() || 'Pasajero';
-
-        const emailParams = correoDestino ? {
-          to_email: correoDestino,
-          to_name: nombrePasajero,
-          email: correoDestino,
-          name: nombrePasajero,
-          reply_to: correoDestino,
-          pnr: pnrVuelo,
-          service_name: 'Reserva de Vuelo',
-          total_price: totalVuelo,
-          message: `Vuelo reservado. PNR: ${pnrVuelo}. Total: ${totalVuelo}.`,
-        } : null;
+        // Datos de la factura. `monto` va como string porque `hold.lockedPrice.total`
+        // lo declara `MoneyAmount` como texto y convertirlo a `float` aquí perdería
+        // precisión en el redondeo que hace el generador del PDF.
+        const datosFactura = {
+          tipo: 'vuelo',
+          pnr: idempotencyKey.toString().substring(0, 8).toUpperCase(),
+          titulo: `Reserva de vuelo · ${hold?.itineraries?.length ?? 1} itinerario(s)`,
+          total: hold?.lockedPrice?.total,
+          pasajeros: lista.map((p) => ({
+            firstName: p.firstName,
+            lastName: p.lastName,
+            documentNumber: p.documentNumber,
+          })),
+        };
 
         let reserva = null;
 
         if (!navigator.onLine) {
-          await savePendingReservation('vuelo', { ...payload, fingerprint }, idempotencyKey, emailParams);
+          await savePendingReservation('vuelo', { ...payload, fingerprint }, idempotencyKey, datosFactura);
           reserva = { bookingId: idempotencyKey, pnr: idempotencyKey, offline: true };
         } else {
           reserva = await crearReserva(payload, idempotencyKey, fingerprint);
-          
-          if (emailParams) {
-            emailjs.send(
-              'service_gc9gkdc',
-              'template_nlbgw3v',
-              emailParams,
-              'vZyuTrdLeGeWrTWLe'
-            ).then((res) => {
-              console.log('✅ CORREO VUELO ENVIADO!', res.status, res.text);
-            }).catch((err) => {
-              console.error('❌ ERROR CORREO VUELO:', err);
-            });
-          }
+
+          // El PNR lo asigna el servidor. Se usa el suyo y solo se recurre a la
+          // clave de idempotencia si la respuesta viniera sin él, porque pintar un
+          // PNR distinto al real daría dos referencias para la misma reserva.
+          enviarFacturaTrasCompra({
+            ...datosFactura,
+            pnr: reserva?.pnr || datosFactura.pnr,
+            creadaEn: reserva?.createdAt,
+          });
         }
+
+        trackEvent('payment_succeeded', 'vuelos');
+        trackEvent('booking_confirmed', 'vuelos');
 
         onConfirmada?.(reserva, lista);
       } catch (fallo) {
+        trackEvent('payment_failed', 'vuelos', { error: fallo?.message });
         setErrorGeneral(
           fallo?.response?.data?.detail ??
             'No se pudo completar la reserva. Intentalo de nuevo.',
@@ -773,11 +785,17 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
                   Atrás
                 </button>
               )}
-              <button type="submit" className="btn-primario" disabled={enviando}>
-                {pasoActual === 1 && 'Continuar a Extras'}
-                {pasoActual === 2 && 'Continuar al Pago'}
-                {pasoActual === 3 && (enviando ? 'Procesando pago...' : 'Confirmar pago')}
-              </button>
+              {isAdmin && pasoActual === 3 ? (
+                <div style={{ padding: '10px', background: '#f8d7da', color: '#721c24', borderRadius: '4px', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                  Los administradores no pueden pagar.
+                </div>
+              ) : (
+                <button type="submit" className="btn-primario" disabled={enviando}>
+                  {pasoActual === 1 && 'Continuar a Extras'}
+                  {pasoActual === 2 && (!user ? 'Inicia sesión para continuar' : 'Continuar al Pago')}
+                  {pasoActual === 3 && (enviando ? 'Procesando pago...' : 'Confirmar pago')}
+                </button>
+              )}
             </div>
         </div>
       </form>

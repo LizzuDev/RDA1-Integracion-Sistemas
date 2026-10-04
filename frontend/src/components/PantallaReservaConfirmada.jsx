@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { formatearFecha, formatearMoneda } from '../services/formato';
+import { listarTickets } from '../services/vuelosApi';
 
 /**
  * Pantalla de "Reserva confirmada" (`BookingDetail`).
@@ -18,12 +19,26 @@ import { formatearFecha, formatearMoneda } from '../services/formato';
 export function PantallaReservaConfirmada({ reserva, onVolver }) {
   // El titulo del documento cambia con la vista: el usuario tiene varias
   // pestanas y "Booking Prototipo" no dice en que esta.
+  const [tickets, setTickets] = useState(reserva?.tickets ?? []);
+
   useEffect(() => {
     document.title = `Reserva ${reserva?.pnr ?? ''} confirmada · Booking Prototipo`;
     return () => {
       document.title = 'Booking Prototipo';
     };
   }, [reserva?.pnr]);
+
+  useEffect(() => {
+    if (reserva?.bookingId && (!reserva.tickets || reserva.tickets.length === 0)) {
+      listarTickets(reserva.bookingId)
+        .then((data) => {
+          if (data && data.tickets) {
+            setTickets(data.tickets);
+          }
+        })
+        .catch((err) => console.error('Error cargando tickets:', err));
+    }
+  }, [reserva?.bookingId, reserva?.tickets]);
 
   if (!reserva) return null;
 
@@ -116,10 +131,32 @@ export function PantallaReservaConfirmada({ reserva, onVolver }) {
           </div>
         </section>
 
-        {reserva.tickets?.length === 0 && (
-          <p className="aviso-tickets" role="note">
-            Los billetes aún no se han emitido. El número de billete aparecerá
-            aquí en cuanto se complete la emisión.
+        {tickets.length > 0 ? (
+          <section className="card" style={{ marginTop: '24px' }}>
+            <div className="card-body">
+              <h2 className="card-title">Billetes emitidos</h2>
+              <ul className="lista-pasajeros">
+                {tickets.map((t) => {
+                  const pasajero = reserva.passengers?.find(p => p.passengerId === t.passengerId);
+                  return (
+                    <li key={t.ticketId} className="lista-pasajero">
+                      <span className="lista-pasajero-nombre">
+                        Billete: {t.ticketId}
+                      </span>
+                      <span className="lista-pasajero-detalle">
+                        Pasajero: {pasajero ? `${pasajero.firstName} ${pasajero.lastName}` : t.passengerId}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </section>
+        ) : (
+          <p className="aviso-tickets" role="note" style={{ marginTop: '24px' }}>
+            {reserva.status === 'CONFIRMED' 
+              ? 'Los billetes se están procesando...'
+              : 'Los billetes aún no se han emitido. El número de billete aparecerá aquí en cuanto se complete la emisión.'}
           </p>
         )}
 

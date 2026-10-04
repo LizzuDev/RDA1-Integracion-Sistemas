@@ -5,7 +5,7 @@ export class ReservaAtraccion {
   @PrimaryGeneratedColumn('uuid')
   id: string; // The reservation_id (e.g. uuid)
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'varchar', length: 50 })
   atraccionId: string;
 
   @Column({ type: 'uuid', unique: true })
@@ -34,7 +34,4 @@ export class ReservaAtraccion {
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamp' })
-  updatedAt: Date;
 }
