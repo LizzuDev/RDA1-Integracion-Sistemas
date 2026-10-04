@@ -171,7 +171,8 @@ export function MisReservasPage() {
           icono: '🛏️',
           servicioTexto: 'Alojamiento',
           titulo: al.customer_name ? `Hospedaje de ${al.customer_name} (${al.huespedes || 2} personas)` : 'Estadía en Alojamiento',
-          fecha: al.checkin ? formatearFecha(al.checkin) : '2026-10-15',
+          fecha: al.checkin ? (al.checkout ? `${formatearFecha(al.checkin)} al ${formatearFecha(al.checkout)}` : formatearFecha(al.checkin)) : '2026-10-15',
+          rawDate: al.created_at ? new Date(al.created_at).getTime() : (al.checkin ? new Date(al.checkin).getTime() : new Date().getTime()),
           status: al.status || 'CONFIRMED',
           totalRaw: al.total_price?.total || al.total || 180.00,
           link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/'
@@ -187,9 +188,9 @@ export function MisReservasPage() {
         tipo: 'alojamiento',
         icono: '🛏️',
         servicioTexto: 'Alojamiento',
-        titulo: al.titulo || 'Hotel Hilton Colón - 3 Noches',
-        fecha: al.createdAt ? formatearFecha(String(al.createdAt).split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0]),
-        rawDate: al.createdAt ? new Date(al.createdAt).getTime() : new Date().getTime(),
+        titulo: al.titulo || 'Estadía en Alojamiento',
+        fecha: al.checkin ? (al.checkout ? `${formatearFecha(al.checkin)} al ${formatearFecha(al.checkout)}` : formatearFecha(al.checkin)) : (al.createdAt ? formatearFecha(String(al.createdAt).split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0])),
+        rawDate: al.createdAt ? new Date(al.createdAt).getTime() : (al.checkin ? new Date(al.checkin).getTime() : new Date().getTime()),
         status: al.status || 'CONFIRMED',
         totalRaw: al.totalPrice || al.total || 180.00,
         link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/'

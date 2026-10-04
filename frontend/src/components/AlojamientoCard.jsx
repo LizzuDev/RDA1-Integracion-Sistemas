@@ -1,94 +1,217 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '../hooks/CurrencyContext';
+import { HeartIcon, BookingGeniusBadge } from './BookingIcons';
 
-export function AlojamientoCard({ alojamiento }) {
+export function AlojamientoCard({ alojamiento, nights = 2, showDealBadge = true, isGenius = true }) {
   const navigate = useNavigate();
   const { convertPrice, currency } = useCurrency();
-  const id = alojamiento.id;
+  const [isSaved, setIsSaved] = useState(false);
+  const id = alojamiento?.id || '';
 
-  const precio = parseFloat(alojamiento.precioPorNoche || alojamiento.price?.total || alojamiento.price || 120);
-  const ratingScore = alojamiento.ratings?.score || (8.5 + (Math.abs(String(id).charCodeAt(0) || 5) % 15) / 10).toFixed(1);
-  const reviewCount = alojamiento.ratings?.number_of_reviews || (120 + (Math.abs(String(id).charCodeAt(1) || 3) * 7));
+  const pricePerNight = parseFloat(
+    alojamiento?.precioPorNoche || alojamiento?.price?.total || alojamiento?.price || 45
+  );
+  const totalPrice = Math.round(pricePerNight * nights);
+  const originalPrice = Math.round(totalPrice * 1.18);
 
-  const foto = alojamiento.photos?.[0]?.url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600';
+  const rawScore = Number(
+    alojamiento?.ratings?.score || (8.5 + (Math.abs(String(id).charCodeAt(0) || 5) % 12) / 10)
+  ).toFixed(1);
+  const reviewCount = alojamiento?.ratings?.number_of_reviews || (120 + (Math.abs(String(id).charCodeAt(1) || 3) * 7));
+
+  const getScoreLabel = (score) => {
+    const s = Number(score);
+    if (s >= 9.0) return 'Excelente';
+    if (s >= 8.5) return 'Fantástico';
+    if (s >= 8.0) return 'Muy bien';
+    return 'Bien';
+  };
+
+  const rawFoto = alojamiento?.photos?.[0]?.url;
+  const foto = (rawFoto && !rawFoto.includes('example.com'))
+    ? rawFoto
+    : 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600';
+
+  const destinoStr = alojamiento?.destino
+    ? `${alojamiento.destino}, Ecuador`
+    : 'Quito, Ecuador';
 
   return (
-    <div className="card" onClick={() => navigate(`/alojamientos/${id}`)}>
-      <div className="card-img-wrapper" style={{ height: '180px', overflow: 'hidden' }}>
+    <div
+      onClick={() => navigate(`/alojamientos/${id}`)}
+      style={{
+        background: '#ffffff',
+        border: '1px solid #e7e7e7',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        cursor: 'pointer',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.12)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
+    >
+      {/* 1. Image Header with 5:4 aspect ratio & Wishlist Heart */}
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '5 / 4',
+          backgroundColor: '#f3f4f6',
+          overflow: 'hidden',
+        }}
+      >
         <img
           src={foto}
-          alt={alojamiento.nombre}
+          alt={alojamiento?.nombre || 'Alojamiento'}
+          loading="lazy"
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           onError={(e) => {
-            e.target.style.display = 'none';
+            e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600';
           }}
         />
-        <span className="card-badge" style={{ background: '#003580', color: '#fff' }}>
-          🏨 {alojamiento.destino || 'Destino'}
-        </span>
+
+        {/* Wishlist Circle Button */}
+        <button
+          type="button"
+          aria-label="Guardar alojamiento en la lista"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsSaved(!isSaved);
+          }}
+          style={{
+            position: 'absolute',
+            top: '8px',
+            right: '8px',
+            width: '34px',
+            height: '34px',
+            borderRadius: '50%',
+            background: '#ffffff',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+            cursor: 'pointer',
+            transition: 'transform 0.15s ease',
+          }}
+          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.92)')}
+          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          <HeartIcon size={18} filled={isSaved} color="#e11d48" outlineColor="#1a1a1a" />
+        </button>
       </div>
-      <div className="card-body">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-          <h3 className="card-title" style={{ fontSize: '1.1rem', color: '#003580' }}>
-            {alojamiento.nombre}
-          </h3>
-          <div style={{
-            background: '#003580',
-            color: '#fff',
-            fontWeight: 700,
-            fontSize: '0.85rem',
-            padding: '4px 7px',
-            borderRadius: '4px 4px 4px 0',
-            minWidth: '32px',
-            textAlign: 'center'
-          }}>
-            {ratingScore}
-          </div>
-        </div>
 
-        <p style={{ fontSize: '0.8rem', color: '#6b7280', margin: '4px 0' }}>
-          📍 {alojamiento.destino} • <span style={{ color: '#0071c2', fontWeight: 500 }}>Mostrar en el mapa</span>
-        </p>
-
-        <p className="card-desc" style={{ WebkitLineClamp: 2, margin: '6px 0 10px' }}>
-          {alojamiento.descripcion || `Estupendo hotel con habitaciones climatizadas, ${alojamiento.habitaciones || 1} dormitorio(s) y excelente ubicación.`}
-        </p>
-
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-          {alojamiento.tienePiscina && (
-            <span style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
-              🏊 Piscina
-            </span>
+      {/* 2. Content Details */}
+      <div
+        style={{
+          padding: '10px 12px 12px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          justifyContent: 'space-between',
+          gap: '6px',
+        }}
+      >
+        <div>
+          {/* Genius badge if applicable */}
+          {isGenius && (
+            <div style={{ marginBottom: '4px' }}>
+              <BookingGeniusBadge width={60} height={24} />
+            </div>
           )}
-          <span style={{ fontSize: '0.75rem', background: '#f3f4f6', color: '#374151', padding: '2px 8px', borderRadius: '12px' }}>
-            👥 {alojamiento.capacidadAdultos || 2} Adultos
-          </span>
-          {alojamiento.capacidadNinos > 0 && (
-            <span style={{ fontSize: '0.75rem', background: '#f3f4f6', color: '#374151', padding: '2px 8px', borderRadius: '12px' }}>
-              🧒 {alojamiento.capacidadNinos} Niños
-            </span>
-          )}
-          <span style={{ fontSize: '0.75rem', background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500 }}>
-            ✓ Cancelación flexible
-          </span>
-        </div>
 
-        <div className="card-footer" style={{ borderTop: '1px solid #f3f4f6', paddingTop: '10px' }}>
-          <div className="card-price">
-            {convertPrice(precio)} {currency}
-            <span> / noche</span>
-            <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 400 }}>+ impuestos y cargos</div>
-          </div>
-          <button
-            className="card-btn"
-            style={{ background: '#0071c2', color: '#fff' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/alojamientos/${id}`);
+          {/* Property Title */}
+          <h3
+            style={{
+              fontSize: '1rem',
+              fontWeight: 700,
+              color: '#1a1a1a',
+              margin: '0 0 2px 0',
+              lineHeight: 1.3,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
             }}
           >
-            Ver Disponibilidad
-          </button>
+            {alojamiento?.nombre}
+          </h3>
+
+          {/* Location */}
+          <div style={{ fontSize: '0.85rem', color: '#595959', marginBottom: '6px' }}>
+            {destinoStr}
+          </div>
+
+          {/* Rating Block */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+            <div
+              style={{
+                background: '#003580',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                padding: '3px 6px',
+                borderRadius: '4px 4px 4px 0',
+                minWidth: '28px',
+                textAlign: 'center',
+              }}
+            >
+              {rawScore}
+            </div>
+            <div>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1a1a1a', marginRight: '6px' }}>
+                {getScoreLabel(rawScore)}
+              </span>
+              <span style={{ fontSize: '0.78rem', color: '#595959' }}>
+                {reviewCount} comentarios
+              </span>
+            </div>
+          </div>
+
+          {/* Late Escape Deal badge */}
+          {showDealBadge && (
+            <div style={{ marginTop: '4px' }}>
+              <span
+                style={{
+                  background: '#008009',
+                  color: '#ffffff',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  display: 'inline-block',
+                }}
+              >
+                Oferta de escapada
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Price Block */}
+        <div style={{ marginTop: '8px', textAlign: 'right' }}>
+          <div style={{ fontSize: '0.78rem', color: '#595959' }}>
+            {nights} noches
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: '6px' }}>
+            <s style={{ color: '#d4111e', fontSize: '0.85rem', textDecoration: 'line-through' }}>
+              {currency} {convertPrice(originalPrice)}
+            </s>
+            <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#1a1a1a' }}>
+              {currency} {convertPrice(totalPrice)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

@@ -1,0 +1,625 @@
+/* ======================================================================
+   BOOKING.COM ACCOMMODATIONS HOME PAGE STYLES (100% Spanish Authentic)
+   ====================================================================== */
+
+.bk-page-wrapper {
+  background-color: #ffffff;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Hero Banner */
+.bk-hero-banner {
+  background: #003b95;
+  color: #ffffff;
+  padding: 48px 24px 76px 24px;
+}
+
+.bk-hero-inner {
+  max-width: 1140px;
+  margin: 0 auto;
+}
+
+.bk-hero-title {
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 0 0 10px 0;
+  line-height: 1.22;
+  color: #ffffff;
+}
+
+.bk-hero-subtitle {
+  font-size: 24px;
+  font-weight: 400;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.35;
+  letter-spacing: -0.1px;
+}
+
+@media (max-width: 768px) {
+  .bk-hero-banner {
+    padding: 32px 16px 56px 16px;
+  }
+  .bk-hero-title {
+    font-size: 30px;
+    line-height: 1.25;
+  }
+  .bk-hero-subtitle {
+    font-size: 17px;
+    line-height: 1.35;
+  }
+}
+
+/* Floating Search Box Container */
+.bk-searchbox-wrapper {
+  max-width: 1140px;
+  margin: -28px auto 32px auto;
+  padding: 0 16px;
+  position: relative;
+  z-index: 10;
+}
+
+.bk-searchbox-form {
+  background: transparent;
+}
+
+.bk-searchbox-fields {
+  display: grid;
+  grid-template-columns: 3.3fr 3.3fr 2.6fr auto;
+  gap: 4px;
+  background: #febb02;
+  border: 4px solid #febb02;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  position: relative;
+}
+
+@media (max-width: 860px) {
+  .bk-searchbox-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+.bk-search-field {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  gap: 10px;
+  cursor: pointer;
+  position: relative;
+  background: #ffffff;
+  border-radius: 4px;
+  height: 52px;
+  min-height: 52px;
+  box-sizing: border-box;
+  transition: box-shadow 0.15s ease;
+}
+
+.bk-search-field:focus-within {
+  outline: 2px solid #006ce4;
+  outline-offset: -1px;
+}
+
+.bk-field-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+.bk-field-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: #474747;
+  text-transform: none;
+  line-height: 16px;
+  margin-bottom: 1px;
+}
+
+.bk-field-input {
+  border: none;
+  outline: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  background: transparent;
+  width: 100%;
+  font-family: inherit;
+  padding: 0;
+  line-height: 20px;
+}
+
+.bk-field-input::placeholder {
+  color: #1a1a1a;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.bk-field-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 20px;
+}
+
+.bk-search-submit-btn {
+  background: #006ce4;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 0 32px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  min-height: 52px;
+  transition: background 0.15s ease;
+  font-family: inherit;
+}
+
+.bk-search-submit-btn:hover {
+  background: #0057b8;
+}
+
+.bk-search-submit-btn:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .bk-search-submit-btn {
+    width: 100%;
+  }
+}
+
+.bk-work-travel-checkbox {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #1a1a1a;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+/* Responsive Popovers (Mobile Bottom Sheet / Desktop Dropdown) */
+.bk-search-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: #ffffff;
+  padding: 18px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  z-index: 50;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+}
+
+.bk-search-popover.right {
+  left: auto;
+  right: 0;
+}
+
+@media (max-width: 768px) {
+  .bk-search-popover,
+  .bk-search-popover.right {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    padding: 24px 20px 36px 20px;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.25);
+    z-index: 1000;
+    margin-top: 0;
+    animation: bkSlideUp 0.25s ease-out;
+  }
+  .bk-popover-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 999;
+  }
+}
+
+@keyframes bkSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Touch Target Friendly Stepper Buttons */
+.bk-stepper-btn {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 4px;
+  border: 1px solid #006ce4;
+  background: #ffffff;
+  color: #006ce4;
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.bk-stepper-btn:hover:not(:disabled) {
+  background: #f0f6ff;
+}
+
+.bk-stepper-btn:disabled {
+  border-color: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.bk-stepper-btn:focus-visible {
+  outline: 2px solid #006ce4;
+  outline-offset: 2px;
+}
+
+/* Main Content Wrapper */
+.bk-main-container {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 24px 60px 24px;
+}
+
+/* Section Header Typography */
+.bk-section-header {
+  margin-bottom: 16px;
+}
+
+.bk-section-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.2px;
+}
+
+.bk-section-subtitle {
+  font-size: 0.95rem;
+  color: #595959;
+  margin: 0;
+}
+
+/* Generic Carousel Wrapper */
+.bk-carousel-outer {
+  position: relative;
+  margin-bottom: 48px;
+}
+
+.bk-carousel-track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding: 4px 2px 14px 2px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.bk-carousel-track::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+/* Carousel Control Arrows */
+.bk-carousel-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #d9d9d9;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.bk-carousel-nav-btn:hover {
+  background: #f5f5f5;
+  transform: translateY(-50%) scale(1.05);
+}
+
+.bk-carousel-nav-prev {
+  left: -20px;
+}
+
+.bk-carousel-nav-next {
+  right: -20px;
+}
+
+@media (max-width: 768px) {
+  .bk-carousel-nav-btn {
+    display: none;
+  }
+}
+
+/* 1. Beach Card Style (Aspect Ratio 5:4) */
+.bk-beach-card {
+  flex: 0 0 260px;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.bk-beach-card:hover {
+  transform: translateY(-2px);
+}
+
+.bk-beach-img-box {
+  width: 100%;
+  aspect-ratio: 5 / 4;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e5e7eb;
+  margin-bottom: 8px;
+}
+
+.bk-beach-img-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.bk-beach-card:hover .bk-beach-img-box img {
+  transform: scale(1.04);
+}
+
+.bk-beach-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 2px 0;
+}
+
+.bk-beach-subtitle {
+  font-size: 0.82rem;
+  color: #595959;
+  line-height: 1.35;
+}
+
+/* 2. Immersive Card (Property Themes unique to Quito) */
+.bk-immersive-card {
+  flex: 0 0 220px;
+  position: relative;
+  aspect-ratio: 5 / 4;
+  border-radius: 8px;
+  overflow: hidden;
+  text-decoration: none;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
+}
+
+.bk-immersive-card:hover {
+  transform: translateY(-3px);
+}
+
+.bk-immersive-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.bk-immersive-card:hover img {
+  transform: scale(1.06);
+}
+
+.bk-immersive-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.8) 100%);
+  display: flex;
+  align-items: flex-end;
+  padding: 14px;
+}
+
+.bk-immersive-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  margin: 0;
+}
+
+/* 3. Browse By Property Type Card */
+.bk-proptype-card {
+  flex: 0 0 210px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.bk-proptype-card:hover {
+  transform: translateY(-2px);
+}
+
+.bk-proptype-img-box {
+  width: 100%;
+  aspect-ratio: 5 / 4;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e5e7eb;
+  margin-bottom: 8px;
+}
+
+.bk-proptype-img-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.bk-proptype-card:hover .bk-proptype-img-box img {
+  transform: scale(1.04);
+}
+
+.bk-proptype-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+/* 4. Trending Destinations Postcards */
+.bk-postcards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 48px;
+}
+
+.bk-postcards-row-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.bk-postcards-row-bottom {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .bk-postcards-row-top,
+  .bk-postcards-row-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bk-postcard {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bk-postcard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+}
+
+.bk-postcard.large {
+  aspect-ratio: 2 / 1;
+}
+
+.bk-postcard.small {
+  aspect-ratio: 4 / 3;
+}
+
+.bk-postcard img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.bk-postcard:hover img {
+  transform: scale(1.04);
+}
+
+.bk-postcard-overlay {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+.bk-postcard-name {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.bk-postcard.small .bk-postcard-name {
+  font-size: 1.25rem;
+}
+
+/* 5. Trip Planner Tabs */
+.bk-tabs-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  scrollbar-width: none;
+}
+
+.bk-tabs-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.bk-tab-item {
+  background: none;
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.bk-tab-item:hover {
+  background: #f3f4f6;
+}
+
+.bk-tab-item.active {
+  background: #006ce4;
+  color: #ffffff;
+}
+
+/* Weekend Deals Cards in Carousel */
+.bk-deal-card-slide {
+  flex: 0 0 270px;
+}

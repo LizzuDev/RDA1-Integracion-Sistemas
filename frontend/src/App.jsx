@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 
 // --- Modulo de Alojamientos ---
 import { AlojamientosPage } from './pages/AlojamientosPage';
+import { AlojamientosSearchPage } from './pages/AlojamientosSearchPage';
 import { AlojamientoDetail } from './pages/AlojamientoDetail';
 
 // --- Modulo de Atracciones ---
@@ -74,17 +75,30 @@ function App() {
       <div className="app-wrapper">
         <Navbar />
         <Routes>
-          <Route path="/" element={<AtraccionesPage />} />
+          {/* Rutas de Alojamientos (Página principal por defecto) */}
+          <Route path="/" element={<AlojamientosPage />} />
+          <Route path="/alojamientos" element={<AlojamientosPage />} />
+          <Route path="/alojamientos/search" element={<AlojamientosSearchPage />} />
+          <Route path="/searchresults" element={<AlojamientosSearchPage />} />
+          <Route path="/alojamientos/:id" element={<AlojamientoDetail />} />
+
+          {/* Rutas de Atracciones */}
+          <Route path="/atracciones" element={<AtraccionesPage />} />
           <Route path="/hospedaje" element={<HospedajePage />} />
           <Route path="/search" element={<AtraccionesSearchPage />} />
           <Route path="/atracciones/:id" element={<AtraccionDetail />} />
+
+          {/* Rutas de Autos */}
           <Route path="/autos" element={<AutosPage />} />
           <Route path="/autos/:id" element={<AutoDetail />} />
+
+          {/* Admin */}
           <Route path="/admin" element={
             <AdminGuard>
               <AdminDashboard />
             </AdminGuard>
           } />
+
           {/* Modulo de Vuelos */}
           <Route path="/vuelos" element={<VuelosPage />} />
           <Route path="/vuelos/busqueda" element={<VuelosPage />} />

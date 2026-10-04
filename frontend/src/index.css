@@ -1,21 +1,5 @@
-/* ══════════════════════════════════════════════════════════════════════════
- * TIPOGRAFÍAS
- * ══════════════════════════════════════════════════════════════════════════
- *
- * Inter no incluye glifos CJK (japonés, chino, coreano). Sin una fuente de
- * reserva declarada, el japonés se dibujaría con la fuente del sistema
- * operativo —Yu Gothic en Windows, Hiragino en macOS, Noto CJK en Android— y
- * dentro de una misma frase se verían DOS tipografías: una para "Booking Ecuador"
- * y otra para el texto japonés.
- *
- * Noto Sans JP se pide con `display=swap` (no bloquea el render) y Google la
- * sirve troceada por rangos de Unicode: solo se descarga el subconjunto que la
- * página usa realmente, así que añadir japonés no engorda la carga de las
- * páginas que no lo usan.
- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* Tipografías: Noto Sans JP para japonés y carga complementaria */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -83,14 +67,18 @@
 .app-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  /* Inter para latín, Noto Sans JP para japonés. Ver la nota de las tipografías
-     arriba: sin Noto, el japonés caería en la fuente del sistema y se verían dos
-     tipografías dentro de la misma frase. */
-  font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans JP', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text-dark);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Accessibility - WCAG AA Focus Visible Ring */
+:focus-visible {
+  outline: 2px solid #006ce4;
+  outline-offset: 2px;
 }
 
 @keyframes spin {
@@ -106,29 +94,55 @@ a { text-decoration: none; color: var(--booking-blue-light); }
   color: #fff;
 }
 .navbar-inner {
-  max-width: 1024px;
+  max-width: 1140px;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 10px 16px;
+  height: 54px;
 }
 .navbar-logo {
   font-size: 1.5rem;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
+  letter-spacing: -0.3px;
+  color: #ffffff;
+  line-height: 1;
 }
-.navbar-logo span { color: #fff; }
+.navbar-logo span { color: #ffffff; }
 
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 14px;
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: 14px;
 }
 .nav-currency, .nav-flag, .nav-help {
   cursor: pointer;
+}
+.nav-currency {
+  font-weight: 700;
+  font-size: 14px;
+  color: #ffffff;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+  line-height: 1;
+}
+.nav-currency:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.nav-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+.nav-flag:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 .nav-help {
   display: flex;
@@ -137,54 +151,78 @@ a { text-decoration: none; color: var(--booking-blue-light); }
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1px solid #fff;
-  font-size: 0.85rem;
+  border: 1.5px solid #fff;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s ease;
+  line-height: 1;
+}
+.nav-help:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 .navbar-btn {
-  padding: 8px 12px;
+  padding: 7px 12px;
   border-radius: 4px;
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   border: none;
+  background: #ffffff;
+  color: #006ce4;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  height: 36px;
+  line-height: 1;
+}
+.navbar-btn:hover {
+  background: #f0f6ff;
 }
 .navbar-btn.outline {
-  background: #fff;
-  color: var(--booking-blue-light);
+  background: #ffffff;
+  color: #006ce4;
 }
 .navbar-btn.solid {
-  background: #fff;
-  color: var(--booking-blue-light);
+  background: #ffffff;
+  color: #006ce4;
 }
 
 .navbar-secondary {
-  max-width: 1024px;
+  max-width: 1140px;
   margin: 0 auto;
-  padding: 0 24px 16px;
+  padding: 0 16px 10px;
 }
 .navbar-links {
   display: flex;
-  gap: 24px;
+  gap: 6px;
   overflow-x: auto;
+  align-items: center;
 }
 .navbar-links a {
-  color: #fff;
-  opacity: 0.9;
-  padding: 8px 16px;
+  color: #ffffff;
+  opacity: 1;
+  padding: 8px 12px;
   border-radius: 20px;
-  font-size: 0.95rem;
+  font-size: 14px;
   font-weight: 400;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: background 0.2s;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  height: 36px;
+  line-height: 1;
 }
 .navbar-links a:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.08);
 }
 .navbar-links a.active {
-  background: rgba(255,255,255,0.15);
-  border: 1px solid #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid #ffffff;
+  font-weight: 500;
 }
 
 /* ===================== HERO SECTION ===================== */

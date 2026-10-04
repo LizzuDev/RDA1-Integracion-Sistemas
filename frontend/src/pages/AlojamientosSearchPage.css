@@ -1,0 +1,1018 @@
+/* ==========================================================================
+   Booking.com Desktop Search Results Layout & Styles
+   ========================================================================== */
+
+:root {
+  --bui-blue-primary: #006ce4;
+  --bui-blue-dark: #003580;
+  --bui-blue-hover: #0057b8;
+  --bui-yellow: #ffb700;
+  --bui-yellow-border: #febb02;
+  --bui-green-dark: #008009;
+  --bui-green-bg: #e8f5e9;
+  --bui-red-urgency: #d4111e;
+  --bui-text-primary: #1a1a1a;
+  --bui-text-muted: #595959;
+  --bui-border: #e7e7e7;
+  --bui-bg-light: #f5f5f5;
+  --bui-card-border: #e7e7e7;
+}
+
+.sr-page-wrapper {
+  background-color: #ffffff;
+  color: var(--bui-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+  padding-bottom: 60px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* --------------------------------------------------------------------------
+   Top Horizontal Search Box
+   -------------------------------------------------------------------------- */
+.sr-searchbox-container {
+  background-color: var(--bui-blue-dark);
+  padding: 0 16px 16px 16px;
+}
+
+.sr-searchbox-inner {
+  max-width: 1140px;
+  margin: 0 auto;
+}
+
+.sr-searchbox-bar {
+  background-color: var(--bui-yellow);
+  padding: 4px;
+  border-radius: 4px;
+  display: grid;
+  grid-template-columns: 3.3fr 3.3fr 2.6fr auto;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  position: relative;
+}
+
+.sr-search-field {
+  background-color: #ffffff;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  gap: 8px;
+  position: relative;
+  cursor: pointer;
+  height: 44px;
+  min-height: 44px;
+  user-select: none;
+}
+
+.sr-search-field:focus-within {
+  outline: 2px solid var(--bui-blue-primary);
+}
+
+.sr-search-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #474747;
+}
+
+.sr-field-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  justify-content: center;
+}
+
+.sr-field-label {
+  font-size: 11px;
+  color: #474747;
+  font-weight: 400;
+  line-height: 1.1;
+  margin-bottom: 1px;
+}
+
+.sr-field-input {
+  border: none;
+  outline: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bui-text-primary);
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: inherit;
+}
+
+.sr-clear-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #595959;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sr-clear-btn:hover {
+  background: #f0f0f0;
+  color: #1a1a1a;
+}
+
+.sr-search-btn {
+  background-color: var(--bui-blue-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 0 28px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+}
+
+.sr-search-btn:hover {
+  background-color: var(--bui-blue-hover);
+}
+
+/* Dropdown popover for occupancy / dates */
+.sr-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  border: 1px solid #d9d9d9;
+  padding: 16px;
+  z-index: 100;
+  min-width: 300px;
+}
+
+.sr-popover-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sr-popover-row:last-child {
+  border-bottom: none;
+}
+
+.sr-stepper-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1px solid var(--bui-blue-primary);
+  background: #ffffff;
+  color: var(--bui-blue-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sr-stepper-btn:disabled {
+  border-color: #d9d9d9;
+  color: #bfbfbf;
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   Breadcrumbs
+   -------------------------------------------------------------------------- */
+.sr-breadcrumbs-container {
+  max-width: 1140px;
+  margin: 12px auto;
+  padding: 0 24px;
+}
+
+.sr-breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.78rem;
+  color: #006ce4;
+}
+
+.sr-breadcrumbs li {
+  display: flex;
+  align-items: center;
+}
+
+.sr-breadcrumbs a {
+  color: #006ce4;
+  text-decoration: none;
+}
+
+.sr-breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.sr-breadcrumb-separator {
+  margin: 0 6px;
+  color: #595959;
+  display: flex;
+  align-items: center;
+}
+
+.sr-breadcrumbs .sr-current {
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------------------
+   Main Content Layout (Sidebar + Results)
+   -------------------------------------------------------------------------- */
+.sr-main-container {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* --------------------------------------------------------------------------
+   Left Sidebar Filters
+   -------------------------------------------------------------------------- */
+.sr-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Map entry card */
+.sr-map-entry {
+  position: relative;
+  height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--bui-card-border);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.sr-map-btn {
+  background-color: var(--bui-blue-primary);
+  color: #ffffff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.sr-map-btn:hover {
+  background-color: var(--bui-blue-hover);
+  transform: translateY(-1px);
+}
+
+/* Filter sections box */
+.sr-filters-box {
+  border: 1px solid var(--bui-border);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.sr-filters-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--bui-text-primary);
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bui-border);
+}
+
+.sr-filter-group {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--bui-border);
+}
+
+.sr-filter-group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.sr-filter-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--bui-text-primary);
+  margin: 0 0 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sr-filter-subtitle {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: var(--bui-text-muted);
+  margin-top: 2px;
+}
+
+/* Histogram Budget Slider */
+.sr-histogram-container {
+  display: flex;
+  align-items: flex-end;
+  height: 48px;
+  gap: 2px;
+  margin: 10px 0 6px 0;
+  padding: 0 4px;
+}
+
+.sr-histogram-bar {
+  flex: 1;
+  background-color: #006ce4;
+  border-radius: 1px 1px 0 0;
+  opacity: 0.75;
+  transition: opacity 0.2s;
+}
+
+.sr-histogram-bar.inactive {
+  background-color: #e0e0e0;
+  opacity: 0.4;
+}
+
+.sr-price-inputs {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.sr-range-slider {
+  width: 100%;
+  accent-color: var(--bui-blue-primary);
+  cursor: pointer;
+}
+
+/* Checkbox item */
+.sr-checkbox-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.85rem;
+  color: #262626;
+}
+
+.sr-checkbox-label-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.sr-checkbox-item input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  accent-color: var(--bui-blue-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sr-checkbox-count {
+  font-size: 0.75rem;
+  color: var(--bui-text-muted);
+  margin-left: 8px;
+}
+
+/* Stepper group */
+.sr-stepper-filter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.sr-stepper-filter-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.sr-stepper-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sr-stepper-control button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--bui-blue-primary);
+  background: #ffffff;
+  color: var(--bui-blue-primary);
+  border-radius: 4px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sr-stepper-control button:disabled {
+  border-color: #d9d9d9;
+  color: #bfbfbf;
+  cursor: not-allowed;
+}
+
+.sr-stepper-control span {
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 14px;
+  text-align: center;
+}
+
+/* Smart filter box */
+.sr-smart-filter-box {
+  background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%);
+  border: 1px solid #d4e0fc;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 6px 0;
+}
+
+.sr-smart-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #003580;
+  margin-bottom: 6px;
+}
+
+.sr-smart-textarea {
+  width: 100%;
+  border: 1px solid #c7d7f7;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 0.8rem;
+  resize: vertical;
+  min-height: 54px;
+  box-sizing: border-box;
+}
+
+.sr-smart-btn {
+  margin-top: 8px;
+  background-color: var(--bui-blue-primary);
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}
+
+.sr-expand-btn {
+  background: none;
+  border: none;
+  color: var(--bui-blue-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sr-expand-btn:hover {
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+   Right Column Search Results Area
+   -------------------------------------------------------------------------- */
+.sr-results-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sr-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.sr-results-title {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--bui-text-primary);
+  margin: 0;
+}
+
+.sr-view-toggle {
+  display: inline-flex;
+  background: #f0f0f0;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.sr-view-btn {
+  border: none;
+  background: transparent;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #595959;
+}
+
+.sr-view-btn.active {
+  background: #ffffff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* Sorter dropdown trigger */
+.sr-sorter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sr-sort-select {
+  border: 1px solid #d9d9d9;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  background-color: #ffffff;
+  cursor: pointer;
+  outline: none;
+}
+
+.sr-sort-select:hover {
+  border-color: #a6a6a6;
+}
+
+/* --------------------------------------------------------------------------
+   Property Card Component (Horizontal Desktop Booking style)
+   -------------------------------------------------------------------------- */
+.sr-property-card {
+  background: #ffffff;
+  border: 1px solid var(--bui-card-border);
+  border-radius: 8px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 240px 1fr 230px;
+  gap: 16px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  position: relative;
+}
+
+.sr-property-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border-color: #c9c9c9;
+}
+
+/* Image container */
+.sr-card-image-wrapper {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: #f0f0f0;
+  flex-shrink: 0;
+}
+
+.sr-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.sr-property-card:hover .sr-card-image {
+  transform: scale(1.02);
+}
+
+.sr-wishlist-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.sr-wishlist-btn:hover {
+  transform: scale(1.1);
+  background: #ffffff;
+}
+
+.sr-wishlist-btn.saved svg {
+  fill: #e11d48;
+  stroke: #e11d48;
+}
+
+/* Middle info container */
+.sr-card-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sr-card-title-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sr-card-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--bui-blue-primary);
+  text-decoration: none;
+  line-height: 1.3;
+}
+
+.sr-card-title:hover {
+  color: var(--bui-blue-hover);
+  text-decoration: underline;
+}
+
+.sr-rating-squares {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  color: #ffb700;
+}
+
+.sr-preferred-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #ffb700;
+  color: #003580;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sr-ad-badge {
+  background: #e7e7e7;
+  color: #595959;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.sr-card-location {
+  font-size: 0.8rem;
+  color: #1a1a1a;
+  margin: 4px 0 10px 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sr-map-link {
+  color: var(--bui-blue-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.sr-distance-tag {
+  color: var(--bui-text-muted);
+}
+
+.sr-deal-tag {
+  display: inline-block;
+  background: var(--bui-green-dark);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  width: fit-content;
+}
+
+.sr-room-details {
+  border-left: 2px solid #e7e7e7;
+  padding-left: 10px;
+  margin-top: 6px;
+}
+
+.sr-room-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+}
+
+.sr-bed-config {
+  font-size: 0.8rem;
+  color: #595959;
+  margin-bottom: 6px;
+}
+
+.sr-perks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.sr-perk-item {
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sr-perk-item.green {
+  color: var(--bui-green-dark);
+  font-weight: 600;
+}
+
+.sr-urgency-note {
+  color: var(--bui-red-urgency);
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+/* Right rating & price box */
+.sr-card-price-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.sr-rating-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sr-rating-text-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.sr-rating-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--bui-text-primary);
+  line-height: 1.1;
+}
+
+.sr-rating-reviews {
+  font-size: 0.75rem;
+  color: var(--bui-text-muted);
+}
+
+.sr-rating-badge {
+  background-color: var(--bui-blue-dark);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 6px 8px;
+  border-radius: 6px 6px 6px 0;
+  min-width: 34px;
+  text-align: center;
+  line-height: 1;
+}
+
+.sr-comfort-subscore {
+  font-size: 0.75rem;
+  color: #262626;
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+.sr-pricing-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-top: 20px;
+}
+
+.sr-stay-duration {
+  font-size: 0.75rem;
+  color: var(--bui-text-muted);
+  margin-bottom: 2px;
+}
+
+.sr-original-price {
+  font-size: 0.85rem;
+  color: var(--bui-red-urgency);
+  text-decoration: line-through;
+  font-weight: 600;
+}
+
+.sr-final-price {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--bui-text-primary);
+  line-height: 1.1;
+}
+
+.sr-taxes-note {
+  font-size: 0.75rem;
+  color: var(--bui-text-muted);
+  margin-top: 2px;
+  margin-bottom: 12px;
+}
+
+.sr-cta-btn {
+  background-color: var(--bui-blue-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 18px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.sr-cta-btn:hover {
+  background-color: var(--bui-blue-hover);
+}
+
+/* --------------------------------------------------------------------------
+   Genius / Sign In Promo Banner
+   -------------------------------------------------------------------------- */
+.sr-genius-banner {
+  background: var(--bui-blue-dark);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin-top: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sr-genius-banner h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+}
+
+.sr-genius-banner p {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.sr-genius-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.sr-genius-signin-btn {
+  background: #ffffff;
+  color: var(--bui-blue-primary);
+  font-weight: 700;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.sr-genius-register-link {
+  color: #ffffff;
+  text-decoration: underline;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sr-genius-icon-box {
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive Breakpoints
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .sr-main-container {
+    grid-template-columns: 240px 1fr;
+  }
+  .sr-property-card {
+    grid-template-columns: 200px 1fr 200px;
+  }
+  .sr-card-image-wrapper {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sr-searchbox-bar {
+    grid-template-columns: 1fr;
+  }
+  .sr-main-container {
+    grid-template-columns: 1fr;
+  }
+  .sr-sidebar {
+    display: none; /* In mobile Booking, filters open in bottom sheet */
+  }
+  .sr-property-card {
+    grid-template-columns: 1fr;
+  }
+  .sr-card-image-wrapper {
+    width: 100%;
+    height: 220px;
+  }
+  .sr-card-price-col {
+    align-items: flex-start;
+    text-align: left;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--bui-border);
+  }
+  .sr-pricing-block {
+    align-items: flex-start;
+    margin-top: 10px;
+  }
+}
