@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createOrderAuto } from './autosApi';
 import { reservarAtraccion } from './atraccionesApi';
 import { crearReserva as crearReservaVuelo } from './vuelosApi';
+import { reservarAlojamiento } from './alojamientosApi';
 
 const PENDING_RESERVATIONS_KEY = 'pending_reservations';
 
@@ -53,6 +54,8 @@ export async function syncPendingReservations() {
         await reservarAtraccion(task.payload.atraccionId, task.payload.data, task.idempotencyKey);
       } else if (task.tipo === 'vuelo') {
         await crearReservaVuelo(task.payload, task.idempotencyKey, task.fingerprint);
+      } else if (task.tipo === 'alojamiento') {
+        await reservarAlojamiento(task.payload.alojamientoId, task.payload.data, task.idempotencyKey);
       }
       
       console.log(`[Offline Sync] ✅ Sincronización exitosa para reserva de ${task.tipo} (${task.id})`);

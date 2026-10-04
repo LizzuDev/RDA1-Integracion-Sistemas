@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { getAtracciones, crearAtraccion, eliminarAtraccion, getReservas } from '../services/atraccionesApi';
 import { searchAutos, createAutoLocal, deleteAutoLocal, getOrdersAuto } from '../services/autosApi';
+import { getAlojamientos, crearAlojamiento, eliminarAlojamiento, getReservasAlojamientos } from '../services/alojamientosApi';
 
 export function AdminDashboard() {
-  const [moduleSelected, setModuleSelected] = useState('observabilidad'); // 'atracciones' | 'autos' | 'observabilidad'
+  const [moduleSelected, setModuleSelected] = useState('observabilidad'); // 'atracciones' | 'autos' | 'alojamientos' | 'observabilidad'
   const [tab, setTab] = useState('catalogo'); // 'catalogo' | 'reservas'
   const [loading, setLoading] = useState(true);
 
@@ -20,6 +21,20 @@ export function AdminDashboard() {
   const [autos, setAutos] = useState([]);
   const [reservasAutos, setReservasAutos] = useState([]);
   const [formAuto, setFormAuto] = useState({ supplier_name: '', price: 0, category: 'SUV' });
+
+  // Alojamientos State
+  const [alojamientos, setAlojamientos] = useState([]);
+  const [reservasAlojamientos, setReservasAlojamientos] = useState([]);
+  const [formAlojamiento, setFormAlojamiento] = useState({
+    nombre: '',
+    descripcion: '',
+    destino: 'Quito',
+    tipoPropiedad: 'Hotel / Resort',
+    precioPorNoche: 120,
+    habitaciones: 1,
+    capacidadAdultos: 2,
+    tienePiscina: false,
+  });
 
   const fetchData = async () => {
     setLoading(true);
@@ -41,6 +56,15 @@ export function AdminDashboard() {
         ]);
         setAtracciones(resAttr.data || resAttr);
         setReservasAtracciones(resResv);
+      } else if (moduleSelected === 'alojamientos') {
+        const [resAlojamientos, resReservas] = await Promise.all([
+          getAlojamientos({ limit: 50 }),
+          getReservasAlojamientos(),
+        ]);
+        const listaAloj = Array.isArray(resAlojamientos) ? resAlojamientos : (resAlojamientos.data || []);
+        const listaResv = Array.isArray(resReservas) ? resReservas : (resReservas.data || []);
+        setAlojamientos(listaAloj);
+        setReservasAlojamientos(listaResv);
       } else {
         const [resAutos, resOrders] = await Promise.all([
           searchAutos({ booker: { country: 'EC' }, currency: 'USD', driver: { age: 30 }, route: { dropoff: {}, pickup: {} } }),
@@ -59,6 +83,48 @@ export function AdminDashboard() {
   useEffect(() => {
     fetchData();
   }, [moduleSelected]);
+
+  // --- Alojamientos Logic ---
+  const handleCreateAlojamiento = async (e) => {
+    e.preventDefault();
+    try {
+      await crearAlojamiento({
+        id: `prop-${Date.now().toString().slice(-6)}`,
+        nombre: formAlojamiento.nombre,
+        descripcion: formAlojamiento.descripcion,
+        destino: formAlojamiento.destino,
+        tipoPropiedad: formAlojamiento.tipoPropiedad,
+        precioPorNoche: parseFloat(formAlojamiento.precioPorNoche),
+        habitaciones: parseInt(formAlojamiento.habitaciones, 10),
+        capacidadAdultos: parseInt(formAlojamiento.capacidadAdultos, 10),
+        tienePiscina: Boolean(formAlojamiento.tienePiscina),
+      });
+      setFormAlojamiento({
+        nombre: '',
+        descripcion: '',
+        destino: 'Quito',
+        tipoPropiedad: 'Hotel / Resort',
+        precioPorNoche: 120,
+        habitaciones: 1,
+        capacidadAdultos: 2,
+        tienePiscina: false,
+      });
+      fetchData();
+      alert('Alojamiento registrado exitosamente');
+    } catch (error) {
+      alert('Error al registrar alojamiento');
+    }
+  };
+
+  const handleDeleteAlojamiento = async (id) => {
+    if (!confirm('¿Deseas eliminar este alojamiento del sistema?')) return;
+    try {
+      await eliminarAlojamiento(id);
+      fetchData();
+    } catch (error) {
+      alert('Error al eliminar el alojamiento');
+    }
+  };
 
   // --- Atracciones Logic ---
   const handleCreateAtraccion = async (e) => {
@@ -142,11 +208,19 @@ export function AdminDashboard() {
         >
           Módulo Autos
         </button>
+        <button 
+          onClick={() => { setModuleSelected('alojamientos'); setTab('catalogo'); }} 
+          style={{ fontSize: '1.2rem', padding: '8px 16px', border: 'none', background: moduleSelected === 'alojamientos' ? '#003580' : '#eee', color: moduleSelected === 'alojamientos' ? 'white' : 'black', borderRadius: 8, cursor: 'pointer' }}
+        >
+          Módulo Alojamientos
+        </button>
       </div>
 
       {/* Second Level Tab Switcher */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontSize: '1.8rem' }}>Administración - {moduleSelected === 'atracciones' ? 'Atracciones' : 'Autos'}</h1>
+        <h1 style={{ fontSize: '1.8rem' }}>
+          Administración - {moduleSelected === 'atracciones' ? 'Atracciones' : moduleSelected === 'autos' ? 'Autos' : moduleSelected === 'alojamientos' ? 'Alojamientos' : 'Observabilidad'}
+        </h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setTab('catalogo')} className={tab === 'catalogo' ? 'card-btn' : 'retry-btn'}>Catálogo Híbrido</button>
           <button onClick={() => setTab('reservas')} className={tab === 'reservas' ? 'card-btn' : 'retry-btn'}>Historial de Reservas</button>
@@ -252,6 +326,55 @@ export function AdminDashboard() {
         </div>
       )}
 
+      {tab === 'catalogo' && moduleSelected === 'alojamientos' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24 }}>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
+            <h2>Lista de Alojamientos Registrados</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+              <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
+                <div style={{ flex: 1 }}>ID</div>
+                <div style={{ flex: 2 }}>Propiedad</div>
+                <div style={{ flex: 1 }}>Destino</div>
+                <div style={{ flex: 1 }}>Precio/Noche</div>
+                <div style={{ flex: 1 }}>Acciones</div>
+              </div>
+              {alojamientos.map(a => (
+                <div key={a.id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
+                  <div style={{ flex: 1, fontSize: '0.8rem', color: '#666' }}>{String(a.id).substring(0, 8)}...</div>
+                  <div style={{ flex: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.nombre}</div>
+                  <div style={{ flex: 1 }}>{a.destino}</div>
+                  <div style={{ flex: 1 }}>${parseFloat(a.precioPorNoche || a.price?.total || 0).toFixed(2)} USD</div>
+                  <div style={{ flex: 1 }}>
+                    <button onClick={() => handleDeleteAlojamiento(a.id)} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none' }}>
+                      🗑️ Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)', height: 'fit-content' }}>
+            <h2>Registrar Alojamiento</h2>
+            <form onSubmit={handleCreateAlojamiento} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+              <input required value={formAlojamiento.nombre} onChange={(e) => setFormAlojamiento({...formAlojamiento, nombre: e.target.value})} placeholder="Nombre de la propiedad" style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+              <textarea required value={formAlojamiento.descripcion} onChange={(e) => setFormAlojamiento({...formAlojamiento, descripcion: e.target.value})} placeholder="Descripción general" rows={3} style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+              <input required value={formAlojamiento.destino} onChange={(e) => setFormAlojamiento({...formAlojamiento, destino: e.target.value})} placeholder="Destino / Ciudad (ej. Quito)" style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+              <select value={formAlojamiento.tipoPropiedad} onChange={(e) => setFormAlojamiento({...formAlojamiento, tipoPropiedad: e.target.value})} style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }}>
+                <option value="Hotel / Resort">Hotel / Resort</option>
+                <option value="Departamento">Departamento</option>
+                <option value="Villa">Villa</option>
+              </select>
+              <input required type="number" value={formAlojamiento.precioPorNoche} onChange={(e) => setFormAlojamiento({...formAlojamiento, precioPorNoche: e.target.value})} placeholder="Precio por noche (USD)" style={{ padding: 8, border: '1px solid #ccc', borderRadius: 4 }} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.9rem' }}>
+                <input type="checkbox" checked={formAlojamiento.tienePiscina} onChange={(e) => setFormAlojamiento({...formAlojamiento, tienePiscina: e.target.checked})} />
+                Cuenta con piscina
+              </label>
+              <button type="submit" className="card-btn">Guardar Alojamiento</button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* RESERVAS */}
       {tab === 'reservas' && moduleSelected === 'atracciones' && (
         <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
@@ -290,6 +413,30 @@ export function AdminDashboard() {
                 <div style={{ flex: 2, fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.order_id}</div>
                 <div style={{ flex: 1 }}>{r.dias_renta}</div>
                 <div style={{ flex: 1 }}>${parseFloat(r.total_price?.total || 0).toFixed(2)}</div>
+                <div style={{ flex: 1 }}><span style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', background: r.status === 'CONFIRMED' ? '#e6f4ea' : '#fce8e6', color: r.status === 'CONFIRMED' ? '#137333' : '#c5221f' }}>{r.status}</span></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === 'reservas' && moduleSelected === 'alojamientos' && (
+        <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
+          <h2>Historial de Reservas de Alojamientos</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
+              <div style={{ flex: 2 }}>Código / ID Reserva</div>
+              <div style={{ flex: 2 }}>Huésped</div>
+              <div style={{ flex: 1 }}>Estadía</div>
+              <div style={{ flex: 1 }}>Total</div>
+              <div style={{ flex: 1 }}>Estado</div>
+            </div>
+            {reservasAlojamientos.map(r => (
+              <div key={r.reservation_id || r.id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
+                <div style={{ flex: 2, fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.codigo_reserva || r.reservation_id || r.id}</div>
+                <div style={{ flex: 2 }}>{r.customer_name || r.huesped || 'Huésped'}</div>
+                <div style={{ flex: 1, fontSize: '0.85rem' }}>{r.checkin ? `${r.checkin}` : '—'}</div>
+                <div style={{ flex: 1 }}>${parseFloat(r.total_price?.total || r.total || 0).toFixed(2)}</div>
                 <div style={{ flex: 1 }}><span style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', background: r.status === 'CONFIRMED' ? '#e6f4ea' : '#fce8e6', color: r.status === 'CONFIRMED' ? '#137333' : '#c5221f' }}>{r.status}</span></div>
               </div>
             ))}
