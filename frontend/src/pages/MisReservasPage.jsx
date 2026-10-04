@@ -163,7 +163,7 @@ export function MisReservasPage() {
           icono: '🛏️',
           servicioTexto: 'Alojamiento',
           titulo: al.customer_name ? `Hospedaje de ${al.customer_name} (${al.huespedes || 2} personas)` : 'Estadía en Alojamiento',
-          fecha: al.checkin ? formatearFecha(al.checkin) : '2026-10-15',
+          fecha: al.checkin ? (al.checkout ? `${formatearFecha(al.checkin)} al ${formatearFecha(al.checkout)}` : formatearFecha(al.checkin)) : '2026-10-15',
           status: al.status || 'CONFIRMED',
           totalRaw: al.total_price?.total || al.total || 180.00,
           link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/'
@@ -180,7 +180,7 @@ export function MisReservasPage() {
         icono: '🛏️',
         servicioTexto: 'Alojamiento',
         titulo: al.titulo || 'Estadía en Alojamiento',
-        fecha: al.fecha ? formatearFecha(al.fecha) : '2026-10-15',
+        fecha: al.checkin ? (al.checkout ? `${formatearFecha(al.checkin)} al ${formatearFecha(al.checkout)}` : formatearFecha(al.checkin)) : (al.fecha ? formatearFecha(al.fecha) : '2026-10-15'),
         status: al.status || 'CONFIRMED',
         totalRaw: al.totalPrice || al.total || 180.00,
         link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/'

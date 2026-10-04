@@ -4,6 +4,14 @@ import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { useLanguage, languages } from '../hooks/LanguageContext';
 import { supabase } from '../services/supabase';
+import {
+  BedIcon,
+  FlightIcon,
+  CarRentalIcon,
+  AttractionsNavIcon,
+  AirportTaxiIcon,
+  RoundFlag,
+} from './BookingIcons';
 
 export function Navbar() {
   const location = useLocation();
@@ -131,10 +139,56 @@ export function Navbar() {
           </div>
         </Link>
         <div className="navbar-actions">
-          <span className="nav-currency" onClick={() => setShowCurrencyModal(true)} style={{ cursor: 'pointer' }}>{currency}</span>
-          <span className="nav-flag" onClick={() => setShowLanguageModal(true)} style={{ cursor: 'pointer' }}>{currentLanguage.flag}</span>
-          <span className="nav-help" title="Ayuda y asistencia">?</span>
-          <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500, cursor: 'pointer', margin: '0 4px' }}>
+          <span
+            className="nav-currency"
+            onClick={() => setShowCurrencyModal(true)}
+            style={{
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.92rem',
+              color: '#ffffff',
+              padding: '6px 8px',
+              borderRadius: '4px',
+            }}
+          >
+            {currency}
+          </span>
+          <span
+            className="nav-flag"
+            onClick={() => setShowLanguageModal(true)}
+            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+            title="Seleccionar idioma"
+          >
+            <RoundFlag country={language === 'es' ? 'EC' : 'ES'} size={24} />
+          </span>
+          <span
+            className="nav-help"
+            title="Ayuda y asistencia"
+            style={{
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '26px',
+              height: '26px',
+              borderRadius: '50%',
+              border: '1px solid #ffffff',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: '#ffffff',
+            }}
+          >
+            ?
+          </span>
+          <span
+            style={{
+              color: '#ffffff',
+              fontSize: '0.9rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              margin: '0 4px',
+            }}
+          >
             Publica tu propiedad
           </span>
           {user ? (
@@ -188,36 +242,68 @@ export function Navbar() {
               )}
             </div>
           ) : (
-            <>
-              <Link to="/register" className="navbar-btn outline" style={{ textDecoration: 'none' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Link
+                to="/register"
+                style={{
+                  textDecoration: 'none',
+                  background: '#ffffff',
+                  color: '#006ce4',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  padding: '7px 14px',
+                  borderRadius: '4px',
+                  border: '1px solid transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  transition: 'background 0.15s ease',
+                }}
+              >
                 Regístrate
               </Link>
-              <Link to="/login" className="navbar-btn solid" style={{ textDecoration: 'none' }}>
+              <Link
+                to="/login"
+                style={{
+                  textDecoration: 'none',
+                  background: '#ffffff',
+                  color: '#006ce4',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  padding: '7px 14px',
+                  borderRadius: '4px',
+                  border: '1px solid transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  transition: 'background 0.15s ease',
+                }}
+              >
                 Iniciar sesión
               </Link>
-            </>
+            </div>
           )}
         </div>
       </div>
       <div className="navbar-secondary">
         <div className="navbar-links">
           <Link to="/alojamientos" className={isAlojamientos ? 'active' : ''}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2.75 12h18.5c.69 0 1.25.56 1.25 1.25V18l.75-.75H.75l.75.75v-4.75c0-.69.56-1.25 1.25-1.25m0-1.5A2.75 2.75 0 0 0 0 13.25V18c0 .414.336.75.75.75h22.5A.75.75 0 0 0 24 18v-4.75a2.75 2.75 0 0 0-2.75-2.75zM0 18v3a.75.75 0 0 0 1.5 0v-3A.75.75 0 0 0 0 18m22.5 0v3a.75.75 0 0 0 1.5 0v-3a.75.75 0 0 0-1.5 0m-.75-6.75V4.5a2.25 2.25 0 0 0-2.25-2.25h-15A2.25 2.25 0 0 0 2.25 4.5v6.75a.75.75 0 0 0 1.5 0V4.5a.75.75 0 0 1 .75-.75h15a.75.75 0 0 1 .75.75v6.75a.75.75 0 0 0 1.5 0m-13.25-3h7a.25.25 0 0 1 .25.25v2.75l.75-.75h-9l.75.75V8.5a.25.25 0 0 1 .25-.25m0-1.5A1.75 1.75 0 0 0 6.75 8.5v2.75c0 .414.336.75.75.75h9a.75.75 0 0 0 .75-.75V8.5a1.75 1.75 0 0 0-1.75-1.75z"></path>
-            </svg>
-            Hospedajes
+            <BedIcon size={18} color="#ffffff" />
+            <span>Hospedajes</span>
           </Link>
           <Link to="/vuelos" className={isVuelos ? 'active' : ''}>
-            ✈️ Vuelos
+            <FlightIcon size={18} color="#ffffff" />
+            <span>Vuelos</span>
           </Link>
           <Link to="/autos" className={isAutos ? 'active' : ''}>
-            🚗 Renta de autos
+            <CarRentalIcon size={18} color="#ffffff" />
+            <span>Renta de autos</span>
           </Link>
           <Link to="/atracciones" className={isAtracciones ? 'active' : ''}>
-            🎡 Atracciones
+            <AttractionsNavIcon size={18} color="#ffffff" />
+            <span>Atracciones</span>
           </Link>
-          <span style={{ opacity: 0.6, cursor: 'default', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            🚕 Taxis aeropuerto
+          <span style={{ opacity: 0.85, cursor: 'default', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', color: '#ffffff', fontSize: '0.92rem' }}>
+            <AirportTaxiIcon size={18} color="#ffffff" />
+            <span>Taxis aeropuerto</span>
           </span>
         </div>
       </div>

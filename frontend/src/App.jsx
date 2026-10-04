@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 
 // --- Modulo de Alojamientos ---
 import { AlojamientosPage } from './pages/AlojamientosPage';
+import { AlojamientosSearchPage } from './pages/AlojamientosSearchPage';
 import { AlojamientoDetail } from './pages/AlojamientoDetail';
 
 // --- Modulo de Atracciones ---
@@ -75,6 +76,8 @@ function App() {
             {/* Rutas de Alojamientos (Página principal por defecto) */}
             <Route path="/" element={<AlojamientosPage />} />
             <Route path="/alojamientos" element={<AlojamientosPage />} />
+            <Route path="/alojamientos/search" element={<AlojamientosSearchPage />} />
+            <Route path="/searchresults" element={<AlojamientosSearchPage />} />
             <Route path="/alojamientos/:id" element={<AlojamientoDetail />} />
 
             {/* Rutas de Atracciones */}
