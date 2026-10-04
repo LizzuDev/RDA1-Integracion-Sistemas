@@ -161,28 +161,24 @@ export function AdminDashboard() {
           <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
             <h2>Panel de Observabilidad - Usuarios de la Plataforma</h2>
             <p>Monitoreo de accesos y roles de administración.</p>
-            <table style={{ width: '100%', marginTop: 16, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                  <th style={{ padding: 8 }}>ID</th>
-                  <th style={{ padding: 8 }}>Email</th>
-                  <th style={{ padding: 8 }}>Rol</th>
-                  <th style={{ padding: 8 }}>Registro</th>
-                  <th style={{ padding: 8 }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usuariosDb.map(u => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: 8, fontSize: '0.8rem', color: '#666' }}>{u.id.substring(0,8)}...</td>
-                    <td style={{ padding: 8 }}>{u.email}</td>
-                    <td style={{ padding: 8 }}><span style={{ padding: '4px 8px', borderRadius: 4, background: u.role === 'admin' ? '#e6f4ea' : '#eee', color: u.role === 'admin' ? '#137333' : '#333' }}>{u.role}</span></td>
-                    <td style={{ padding: 8 }}>{new Date(u.created_at).toLocaleDateString()}</td>
-                    <td style={{ padding: 8 }}><button style={{ color: '#0066cc', cursor: 'pointer', background: 'none', border: 'none' }}>Editar Rol</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+              <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
+                <div style={{ flex: 1 }}>ID</div>
+                <div style={{ flex: 2 }}>Email</div>
+                <div style={{ flex: 1 }}>Rol</div>
+                <div style={{ flex: 1 }}>Registro</div>
+                <div style={{ flex: 1 }}>Acciones</div>
+              </div>
+              {usuariosDb.map(u => (
+                <div key={u.id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
+                  <div style={{ flex: 1, fontSize: '0.8rem', color: '#666' }}>{u.id.substring(0,8)}...</div>
+                  <div style={{ flex: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
+                  <div style={{ flex: 1 }}><span style={{ padding: '4px 8px', borderRadius: 4, background: u.role === 'admin' ? '#e6f4ea' : '#eee', color: u.role === 'admin' ? '#137333' : '#333' }}>{u.role}</span></div>
+                  <div style={{ flex: 1 }}>{new Date(u.created_at).toLocaleDateString()}</div>
+                  <div style={{ flex: 1 }}><button style={{ color: '#0066cc', cursor: 'pointer', background: 'none', border: 'none' }}>Editar Rol</button></div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -192,26 +188,22 @@ export function AdminDashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
           <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
             <h2>Lista de Atracciones</h2>
-            <table style={{ width: '100%', marginTop: 16, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                  <th style={{ padding: 8 }}>ID</th>
-                  <th style={{ padding: 8 }}>Nombre</th>
-                  <th style={{ padding: 8 }}>Precio</th>
-                  <th style={{ padding: 8 }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {atracciones.map(a => (
-                  <tr key={a.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: 8, fontSize: '0.8rem', color: '#666' }}>{String(a.id).substring(0, 8)}...</td>
-                    <td style={{ padding: 8 }}>{a.nombre || a.name || a.title}</td>
-                    <td style={{ padding: 8 }}>${parseFloat(a.precio_unitario || a.price?.total || 0).toFixed(2)}</td>
-                    <td style={{ padding: 8 }}><button onClick={() => handleDeleteAtraccion(a.id)} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none' }}>🗑️ Eliminar</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+              <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
+                <div style={{ flex: 1 }}>ID</div>
+                <div style={{ flex: 2 }}>Nombre</div>
+                <div style={{ flex: 1 }}>Precio</div>
+                <div style={{ flex: 1 }}>Acciones</div>
+              </div>
+              {atracciones.map(a => (
+                <div key={a.id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
+                  <div style={{ flex: 1, fontSize: '0.8rem', color: '#666' }}>{String(a.id).substring(0, 8)}...</div>
+                  <div style={{ flex: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.nombre || a.name || a.title}</div>
+                  <div style={{ flex: 1 }}>${parseFloat(a.precio_unitario || a.price?.total || 0).toFixed(2)}</div>
+                  <div style={{ flex: 1 }}><button onClick={() => handleDeleteAtraccion(a.id)} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none' }}>🗑️ Eliminar</button></div>
+                </div>
+              ))}
+            </div>
           </div>
           <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)', height: 'fit-content' }}>
             <h2>Crear Atracción</h2>
@@ -229,28 +221,24 @@ export function AdminDashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
           <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
             <h2>Lista de Autos</h2>
-            <table style={{ width: '100%', marginTop: 16, borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                  <th style={{ padding: 8 }}>ID</th>
-                  <th style={{ padding: 8 }}>Agencia</th>
-                  <th style={{ padding: 8 }}>Categoría</th>
-                  <th style={{ padding: 8 }}>Precio/Día</th>
-                  <th style={{ padding: 8 }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {autos.map(a => (
-                  <tr key={a.vehicle_id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: 8, fontSize: '0.8rem', color: '#666' }}>{String(a.vehicle_id).substring(0, 8)}...</td>
-                    <td style={{ padding: 8 }}>{a.supplier_id === 1 ? 'GDS Local' : 'Hertz Mock'}</td>
-                    <td style={{ padding: 8 }}>{a.vehicle_info?.category}</td>
-                    <td style={{ padding: 8 }}>${parseFloat(a.price || 0).toFixed(2)}</td>
-                    <td style={{ padding: 8 }}><button onClick={() => handleDeleteAuto(a.vehicle_id)} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none' }}>🗑️ Eliminar</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+              <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
+                <div style={{ flex: 1 }}>ID</div>
+                <div style={{ flex: 1 }}>Agencia</div>
+                <div style={{ flex: 1 }}>Categoría</div>
+                <div style={{ flex: 1 }}>Precio/Día</div>
+                <div style={{ flex: 1 }}>Acciones</div>
+              </div>
+              {autos.map(a => (
+                <div key={a.vehicle_id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
+                  <div style={{ flex: 1, fontSize: '0.8rem', color: '#666' }}>{String(a.vehicle_id).substring(0, 8)}...</div>
+                  <div style={{ flex: 1 }}>{a.supplier_id === 1 ? 'GDS Local' : 'Hertz Mock'}</div>
+                  <div style={{ flex: 1 }}>{a.vehicle_info?.category}</div>
+                  <div style={{ flex: 1 }}>${parseFloat(a.price || 0).toFixed(2)}</div>
+                  <div style={{ flex: 1 }}><button onClick={() => handleDeleteAuto(a.vehicle_id)} style={{ color: 'red', cursor: 'pointer', background: 'none', border: 'none' }}>🗑️ Eliminar</button></div>
+                </div>
+              ))}
+            </div>
           </div>
           <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)', height: 'fit-content' }}>
             <h2>Crear Auto</h2>
@@ -268,52 +256,44 @@ export function AdminDashboard() {
       {tab === 'reservas' && moduleSelected === 'atracciones' && (
         <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
           <h2>Reservas de Atracciones</h2>
-          <table style={{ width: '100%', marginTop: 16, borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                <th style={{ padding: 8 }}>ID Reserva</th>
-                <th style={{ padding: 8 }}>Tickets</th>
-                <th style={{ padding: 8 }}>Total</th>
-                <th style={{ padding: 8 }}>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reservasAtracciones.map(r => (
-                <tr key={r.reservation_id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: 8, fontSize: '0.8rem', color: '#666' }}>{r.reservation_id}</td>
-                  <td style={{ padding: 8 }}>{r.ticket_count}</td>
-                  <td style={{ padding: 8 }}>${parseFloat(r.total_price?.total || 0).toFixed(2)}</td>
-                  <td style={{ padding: 8 }}><span style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', background: r.status === 'CONFIRMED' ? '#e6f4ea' : '#fce8e6', color: r.status === 'CONFIRMED' ? '#137333' : '#c5221f' }}>{r.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
+              <div style={{ flex: 2 }}>ID Reserva</div>
+              <div style={{ flex: 1 }}>Tickets</div>
+              <div style={{ flex: 1 }}>Total</div>
+              <div style={{ flex: 1 }}>Estado</div>
+            </div>
+            {reservasAtracciones.map(r => (
+              <div key={r.reservation_id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
+                <div style={{ flex: 2, fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.reservation_id}</div>
+                <div style={{ flex: 1 }}>{r.ticket_count}</div>
+                <div style={{ flex: 1 }}>${parseFloat(r.total_price?.total || 0).toFixed(2)}</div>
+                <div style={{ flex: 1 }}><span style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', background: r.status === 'CONFIRMED' ? '#e6f4ea' : '#fce8e6', color: r.status === 'CONFIRMED' ? '#137333' : '#c5221f' }}>{r.status}</span></div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {tab === 'reservas' && moduleSelected === 'autos' && (
         <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: 'var(--card-shadow)' }}>
           <h2>Órdenes de Autos</h2>
-          <table style={{ width: '100%', marginTop: 16, borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                <th style={{ padding: 8 }}>ID Orden</th>
-                <th style={{ padding: 8 }}>Días Renta</th>
-                <th style={{ padding: 8 }}>Total</th>
-                <th style={{ padding: 8 }}>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reservasAutos.map(r => (
-                <tr key={r.order_id} style={{ borderBottom: '1px solid #eee' }}>
-                  <td style={{ padding: 8, fontSize: '0.8rem', color: '#666' }}>{r.order_id}</td>
-                  <td style={{ padding: 8 }}>{r.dias_renta}</td>
-                  <td style={{ padding: 8 }}>${parseFloat(r.total_price?.total || 0).toFixed(2)}</td>
-                  <td style={{ padding: 8 }}><span style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', background: r.status === 'CONFIRMED' ? '#e6f4ea' : '#fce8e6', color: r.status === 'CONFIRMED' ? '#137333' : '#c5221f' }}>{r.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', borderBottom: '2px solid #eee', paddingBottom: '8px', fontWeight: 'bold' }}>
+              <div style={{ flex: 2 }}>ID Orden</div>
+              <div style={{ flex: 1 }}>Días Renta</div>
+              <div style={{ flex: 1 }}>Total</div>
+              <div style={{ flex: 1 }}>Estado</div>
+            </div>
+            {reservasAutos.map(r => (
+              <div key={r.order_id} style={{ display: 'flex', borderBottom: '1px solid #eee', paddingBottom: '8px', alignItems: 'center' }}>
+                <div style={{ flex: 2, fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.order_id}</div>
+                <div style={{ flex: 1 }}>{r.dias_renta}</div>
+                <div style={{ flex: 1 }}>${parseFloat(r.total_price?.total || 0).toFixed(2)}</div>
+                <div style={{ flex: 1 }}><span style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', background: r.status === 'CONFIRMED' ? '#e6f4ea' : '#fce8e6', color: r.status === 'CONFIRMED' ? '#137333' : '#c5221f' }}>{r.status}</span></div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </main>

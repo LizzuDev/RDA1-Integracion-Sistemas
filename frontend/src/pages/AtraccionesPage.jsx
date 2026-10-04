@@ -6,28 +6,28 @@ import 'react-datepicker/dist/react-datepicker.css';
 
 // Datos Mock para Destinos Top en Ecuador
 const DESTINOS_TOP = [
-  { id: 1, nombre: 'Quito', cosas: '245 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Quito_skyline_2.jpg/800px-Quito_skyline_2.jpg' },
-  { id: 2, nombre: 'Guayaquil', cosas: '128 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Guayaquil_Centro_Navidad.jpg/800px-Guayaquil_Centro_Navidad.jpg' },
-  { id: 3, nombre: 'Cuenca', cosas: '184 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg/800px-Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg' },
-  { id: 4, nombre: 'Baños', cosas: '312 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Banos_-_Ecuador_%288346618456%29.jpg/800px-Banos_-_Ecuador_%288346618456%29.jpg' },
-  { id: 5, nombre: 'Galápagos', cosas: '89 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg/800px-Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg' }
+  { id: 1, nombre: 'Quito', cosas: '245 cosas que hacer', img: 'https://picsum.photos/id/28/800/600' },
+  { id: 2, nombre: 'Guayaquil', cosas: '128 cosas que hacer', img: 'https://picsum.photos/id/29/800/600' },
+  { id: 3, nombre: 'Cuenca', cosas: '184 cosas que hacer', img: 'https://picsum.photos/id/38/800/600' },
+  { id: 4, nombre: 'Baños', cosas: '312 cosas que hacer', img: 'https://picsum.photos/id/49/800/600' },
+  { id: 5, nombre: 'Galápagos', cosas: '89 cosas que hacer', img: 'https://picsum.photos/id/58/800/600' }
 ];
 
 const EXPLORA_TABS = ['Pichincha', 'Guayas', 'Azuay', 'Tungurahua', 'Manabí', 'Imbabura', 'Galápagos'];
 const EXPLORA_DESTINOS = [
-  { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Mitaddelmundo.jpg/800px-Mitaddelmundo.jpg' },
-  { nombre: 'Mindo', cosas: '78 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Mindo_Cloud_Forest_01.jpg/800px-Mindo_Cloud_Forest_01.jpg' },
-  { nombre: 'Sangolquí', cosas: '12 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Sangolqu%C3%AD_-_Ecuador.jpg/800px-Sangolqu%C3%AD_-_Ecuador.jpg' },
-  { nombre: 'Machachi', cosas: '24 cosas que hacer', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Volc%C3%A1n_Coraz%C3%B3n.jpg/800px-Volc%C3%A1n_Coraz%C3%B3n.jpg' },
+  { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://picsum.photos/id/111/800/600' },
+  { nombre: 'Mindo', cosas: '78 cosas que hacer', img: 'https://picsum.photos/id/112/800/600' },
+  { nombre: 'Sangolquí', cosas: '12 cosas que hacer', img: 'https://picsum.photos/id/113/800/600' },
+  { nombre: 'Machachi', cosas: '24 cosas que hacer', img: 'https://picsum.photos/id/114/800/600' },
 ];
 
 const ECUADOR_IMAGES = [
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Quito_skyline_2.jpg/800px-Quito_skyline_2.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Guayaquil_Centro_Navidad.jpg/800px-Guayaquil_Centro_Navidad.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg/800px-Catedral_de_la_Inmaculada_Concepci%C3%B3n_en_Cuenca_-_Ecuador.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Banos_-_Ecuador_%288346618456%29.jpg/800px-Banos_-_Ecuador_%288346618456%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg/800px-Bartolom%C3%A9_Island_-_Gal%C3%A1pagos.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Mitaddelmundo.jpg/800px-Mitaddelmundo.jpg'
+  'https://picsum.photos/id/28/800/600',
+  'https://picsum.photos/id/29/800/600',
+  'https://picsum.photos/id/38/800/600',
+  'https://picsum.photos/id/49/800/600',
+  'https://picsum.photos/id/58/800/600',
+  'https://picsum.photos/id/111/800/600'
 ];
 const getEcuadorImage = (idx) => ECUADOR_IMAGES[idx % ECUADOR_IMAGES.length];
 
@@ -37,6 +37,44 @@ export function AtraccionesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busqueda, setBusqueda] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [flashRed, setFlashRed] = useState(false);
+  const destinos = ['Quito', 'Guayaquil', 'Cuenca', 'Baños', 'Galápagos', 'Mindo', 'Mitad del Mundo', 'Otavalo'];
+
+  const triggerFlash = (msg) => {
+    setSearchError(msg);
+    setFlashRed(true);
+    setTimeout(() => setFlashRed(false), 300);
+  };
+
+  const handleSearchChange = (e) => {
+    const raw = e.target.value;
+    const hasNumbers = /[0-9]/.test(raw);
+    const hasSymbols = /[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ0-9]/.test(raw);
+    const hasMultipleSpaces = /\s{2,}/.test(raw);
+
+    if (hasNumbers) {
+      triggerFlash('No se permiten números en el destino');
+    } else if (hasSymbols) {
+      triggerFlash('Solo se permiten letras y comas');
+    } else if (hasMultipleSpaces) {
+      triggerFlash('No se permiten espacios consecutivos');
+    } else {
+      setSearchError('');
+    }
+
+    const clean = raw.replace(/[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ]/g, '').replace(/\s{2,}/g, ' ');
+    setBusqueda(clean);
+    setShowSuggestions(clean.length > 0);
+  };
+
+  const handleSelectSuggestion = (destino) => {
+    setBusqueda(destino);
+    setShowSuggestions(false);
+    setSearchError('');
+  };
+
   const [tabActivo, setTabActivo] = useState('Pichincha');
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
@@ -73,7 +111,7 @@ export function AtraccionesPage() {
   });
 
   return (
-    <>
+    <main id="contenido-principal">
       {/* HERO SECTION */}
       <section className="hero">
         <div className="hero-content">
@@ -82,18 +120,35 @@ export function AtraccionesPage() {
         </div>
         
         <div className="search-box">
-          <div className="search-input-group">
-            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="search-input-group" style={{ position: 'relative', background: flashRed ? '#fce8e6' : 'white', border: flashRed ? '3px solid #d93025' : '3px solid transparent', transition: 'background-color 0.2s, border 0.2s' }}>
+            <svg width="24" height="24" fill="none" stroke={flashRed ? '#d93025' : 'currentColor'} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
-            <div className="input-text-wrapper">
+            <div className="input-text-wrapper" style={{ width: '100%' }}>
               <input
                 type="text"
                 placeholder="Destino o ¿A dónde vas?"
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
+                onChange={handleSearchChange}
+                onFocus={() => setShowSuggestions(busqueda.length > 0)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                style={{ background: 'transparent' }}
               />
             </div>
+            {searchError && <div style={{ position: 'absolute', top: '-25px', left: 0, color: '#d93025', fontSize: '0.8rem', fontWeight: 'bold', background: '#fce8e6', padding: '2px 8px', borderRadius: '4px' }}>{searchError}</div>}
+            {showSuggestions && busqueda && (
+              <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', listStyle: 'none', margin: 0, padding: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: '4px', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                {destinos.filter(d => d.toLowerCase().includes(busqueda.toLowerCase())).length > 0 ? (
+                  destinos.filter(d => d.toLowerCase().includes(busqueda.toLowerCase())).map((destino, idx) => (
+                    <li key={idx} onMouseDown={() => handleSelectSuggestion(destino)} style={{ padding: '12px 16px', borderBottom: '1px solid #e7e7e7', cursor: 'pointer', fontSize: '0.95rem', color: '#333', display: 'flex', alignItems: 'center', gap: '10px' }} onMouseOver={e => e.currentTarget.style.background = '#f5f5f5'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
+                      <span style={{ color: '#666' }}>📍</span> {destino}
+                    </li>
+                  ))
+                ) : (
+                  <li style={{ padding: '12px 16px', color: '#666', fontSize: '0.95rem' }}>No hay resultados</li>
+                )}
+              </ul>
+            )}
           </div>
           
           <div className="search-input-group date-group">
@@ -121,7 +176,7 @@ export function AtraccionesPage() {
         </div>
       </section>
 
-      <main className="main-content">
+      <div className="main-content">
         
         {/* RECOMENDADO GENERADO POR IA */}
         <section className="section-block">
@@ -134,7 +189,7 @@ export function AtraccionesPage() {
           </div>
 
           {loading && <div className="spinner"></div>}
-          {!loading && error && <p style={{color: 'red'}}>{error}</p>}
+          {!loading && error && <p style={{color: '#d32f2f'}}>{error}</p>}
           
           <div className="atracciones-horizontal-scroll">
             {atraccionesFiltradas.slice(0, 5).map((atraccion, idx) => (
@@ -147,12 +202,12 @@ export function AtraccionesPage() {
                 <div className="asc-img-wrapper">
                   <span className="asc-badge">#{idx + 1} Más vendido</span>
                   <img src={getEcuadorImage(idx)} alt={atraccion.nombre} />
-                </div>
-                <div className="asc-info">
-                  <h3 className="asc-title">{atraccion.nombre || atraccion.name || atraccion.title}</h3>
-                  <div className="asc-rating">
-                    <span className="score">{(Math.random() * 2 + 8).toFixed(1)}</span>
-                    <span className="text">Excepcional ({Math.floor(Math.random() * 500) + 50})</span>
+                  <div className="asc-info">
+                    <h3 className="asc-title">{atraccion.nombre || atraccion.name || atraccion.title}</h3>
+                    <div className="asc-rating">
+                      <span className="score">{(Math.random() * 2 + 8).toFixed(1)}</span>
+                      <span className="text">Excepcional ({Math.floor(Math.random() * 500) + 50})</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -206,21 +261,21 @@ export function AtraccionesPage() {
             <div className="feature-item">
               <span className="feature-icon">🎡</span>
               <div>
-                <h4>Descubre las principales atracciones</h4>
+                <h3>Descubre las principales atracciones</h3>
                 <p>Conoce lo mejor del destino con atracciones, tours, actividades y mucho más</p>
               </div>
             </div>
             <div className="feature-item">
               <span className="feature-icon">⏱️</span>
               <div>
-                <h4>Rápido y flexible</h4>
+                <h3>Rápido y flexible</h3>
                 <p>Puedes reservar los boletos online en pocos minutos y hay cancelación gratis en muchas atracciones</p>
               </div>
             </div>
             <div className="feature-item">
               <span className="feature-icon">🎧</span>
               <div>
-                <h4>Asistencia cuando lo necesites</h4>
+                <h3>Asistencia cuando lo necesites</h3>
                 <p>El equipo de Atención al cliente está a tu disposición para ayudarte las 24 horas, todos los días</p>
               </div>
             </div>
@@ -254,7 +309,7 @@ export function AtraccionesPage() {
               >
                 <img src={dest.img} alt={dest.nombre} />
                 <div className="ex-info">
-                  <h4>{dest.nombre}</h4>
+                  <h3>{dest.nombre}</h3>
                   <p>{dest.cosas}</p>
                 </div>
               </div>
@@ -262,7 +317,7 @@ export function AtraccionesPage() {
           </div>
         </section>
 
-      </main>
-    </>
+      </div>
+    </main>
   );
 }

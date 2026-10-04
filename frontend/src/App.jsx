@@ -35,7 +35,12 @@ import { NotFoundPage } from './pages/NotFoundPage';
 // --- Banner global de consentimiento ---
 import { BannerCookies } from './components/BannerCookies';
 
+// --- Estado Offline ---
+import { OfflineBanner } from './components/OfflineBanner';
+
 import { AuthProvider } from './hooks/useAuth';
+import { CurrencyProvider } from './hooks/CurrencyContext';
+import { LanguageProvider } from './hooks/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 
@@ -57,10 +62,12 @@ function App() {
 
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <a className="skip-link" href="#contenido-principal">
-          Saltar al contenido
-        </a>
+    <LanguageProvider>
+      <CurrencyProvider>
+        <BrowserRouter>
+          <a className="skip-link" href="#contenido-principal">
+            Saltar al contenido
+          </a>
 
         <div className="app-wrapper">
           <Navbar />
@@ -116,7 +123,10 @@ function App() {
           abiertoExternamente={preferenciasCookies}
           onCerrarExterno={cerrarPreferencias}
         />
+        <OfflineBanner />
       </BrowserRouter>
+    </CurrencyProvider>
+    </LanguageProvider>
     </AuthProvider>
   );
 }

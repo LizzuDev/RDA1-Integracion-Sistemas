@@ -138,6 +138,8 @@ export class AutosService {
     order.status = 'CONFIRMED';
     await this.orderRepo.save(order);
 
+    // El correo de confirmación ahora se maneja desde el frontend con EmailJS
+
     return this.buildOrderResponse(order);
   }
 

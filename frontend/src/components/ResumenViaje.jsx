@@ -1,4 +1,5 @@
 import { formatearMoneda, formatearFecha, extraerHora, extraerFecha } from '../services/formato';
+import { useCurrency } from '../hooks/CurrencyContext';
 
 const NOMBRES_CABINA = {
   ECONOMY: 'Económica',
@@ -8,6 +9,7 @@ const NOMBRES_CABINA = {
 };
 
 export function ResumenViaje({ oferta, tarifaSeleccionada, pasajeros, onContinuar, onModificar }) {
+  const { currency } = useCurrency();
   if (!oferta) return null;
 
   const ida = oferta.itineraries?.[0];
@@ -90,9 +92,9 @@ export function ResumenViaje({ oferta, tarifaSeleccionada, pasajeros, onContinua
               <span className="resumen-total-label">Total de tu reserva:</span>
               <div className="resumen-price-wrapper">
                 <span className="resumen-total-amount">
-                  {formatearMoneda(totalCalculado, 'USD')}
+                  {formatearMoneda(totalCalculado, oferta.grandTotal?.currency)}
                 </span>
-                <span className="resumen-currency">USD</span>
+                <span className="resumen-currency">{currency}</span>
               </div>
               <span className="resumen-taxes-note">Impuestos y cargos incluidos</span>
             </div>

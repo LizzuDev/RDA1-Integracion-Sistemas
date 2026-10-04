@@ -111,7 +111,7 @@ export class AtraccionesService {
           coordinates: { latitude: -0.22985, longitude: -78.52495 },
           type: 'STARTING_POINT'
         }],
-        photos: [{ url: 'https://via.placeholder.com/600x400?text=Tour+Quito' }],
+        photos: [{ url: 'https://picsum.photos/seed/tour/600/400' }],
         supported_languages: ['es', 'en'],
         free_cancellation: true,
         ratings: { number_of_reviews: 120, score: 4.8 },
@@ -218,7 +218,7 @@ export class AtraccionesService {
           coordinates: { latitude: -0.22985, longitude: -78.52495 },
           type: 'STARTING_POINT'
         }],
-        photos: [{ url: 'https://via.placeholder.com/600x400?text=Tour+Quito' }],
+        photos: [{ url: 'https://picsum.photos/seed/tour/600/400' }],
         supported_languages: ['es', 'en'],
         free_cancellation: true,
         ratings: { number_of_reviews: 120, score: 4.8 },

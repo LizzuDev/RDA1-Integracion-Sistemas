@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import emailjs from '@emailjs/browser';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { crearReserva } from '../services/vuelosApi';
-import { obtenerHuellaDispositivo } from '../services/formato';
+import { obtenerHuellaDispositivo, formatearMoneda } from '../services/formato';
+import { savePendingReservation } from '../services/offlineSync';
 
 const COUNTRIES = [
   { code: 'ECU', name: 'Ecuador' },
@@ -287,27 +289,68 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         // Simulando pasarela de pagos
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        const reserva = await crearReserva(
-          {
-            holdId: hold.holdId,
-            passengers: lista.map((p) => ({
-              passengerId: p.passengerId,
-              passengerType: p.passengerType,
-              ...(p.passengerType === 'INFANT' ? { associatedAdultId: p.associatedAdultId } : {}),
-              firstName: p.firstName.trim(),
-              lastName: p.lastName.trim(),
-              documentType: p.documentType,
-              documentNumber: p.documentNumber.trim(),
-              nationality: p.nationality.trim(),
-              birthDate: p.birthDate,
-              gender: p.gender,
-              contact: { email: p.email.trim(), phone: p.phone.trim() },
-            })),
-            payment: { paymentReference: `pay_${uuidv4().slice(0, 18)}` },
-          },
-          claveIdempotencia.current ?? uuidv4(),
-          obtenerHuellaDispositivo(),
-        );
+        const payload = {
+          holdId: hold.holdId,
+          passengers: lista.map((p) => ({
+            passengerId: p.passengerId,
+            passengerType: p.passengerType,
+            ...(p.passengerType === 'INFANT' ? { associatedAdultId: p.associatedAdultId } : {}),
+            firstName: p.firstName.trim(),
+            lastName: p.lastName.trim(),
+            documentType: p.documentType,
+            documentNumber: p.documentNumber.trim(),
+            nationality: p.nationality.trim(),
+            birthDate: p.birthDate,
+            gender: p.gender,
+            contact: { email: p.email.trim(), phone: p.phone.trim() },
+          })),
+          payment: { paymentReference: `pay_${uuidv4().slice(0, 18)}` },
+        };
+        const idempotencyKey = claveIdempotencia.current ?? uuidv4();
+        const fingerprint = obtenerHuellaDispositivo();
+
+        const primerPasajero = lista[0];
+        const correoDestino = primerPasajero?.email?.trim();
+        const pnrVuelo = idempotencyKey.toString().substring(0, 8).toUpperCase();
+        const totalVuelo = hold?.lockedPrice?.total
+          ? formatearMoneda(hold.lockedPrice.total, hold.lockedPrice.currency)
+          : 'Pendiente';
+        const nombrePasajero = `${primerPasajero?.firstName || ''} ${primerPasajero?.lastName || ''}`.trim() || 'Pasajero';
+
+        const emailParams = correoDestino ? {
+          to_email: correoDestino,
+          to_name: nombrePasajero,
+          email: correoDestino,
+          name: nombrePasajero,
+          reply_to: correoDestino,
+          pnr: pnrVuelo,
+          service_name: 'Reserva de Vuelo',
+          total_price: totalVuelo,
+          message: `Vuelo reservado. PNR: ${pnrVuelo}. Total: ${totalVuelo}.`,
+        } : null;
+
+        let reserva = null;
+
+        if (!navigator.onLine) {
+          await savePendingReservation('vuelo', { ...payload, fingerprint }, idempotencyKey, emailParams);
+          reserva = { bookingId: idempotencyKey, pnr: idempotencyKey, offline: true };
+        } else {
+          reserva = await crearReserva(payload, idempotencyKey, fingerprint);
+          
+          if (emailParams) {
+            emailjs.send(
+              'service_gc9gkdc',
+              'template_nlbgw3v',
+              emailParams,
+              'vZyuTrdLeGeWrTWLe'
+            ).then((res) => {
+              console.log('✅ CORREO VUELO ENVIADO!', res.status, res.text);
+            }).catch((err) => {
+              console.error('❌ ERROR CORREO VUELO:', err);
+            });
+          }
+        }
+
         onConfirmada?.(reserva, lista);
       } catch (fallo) {
         setErrorGeneral(
@@ -684,7 +727,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
             <div className="paso-pago" style={{ marginTop: '20px' }}>
               <h3 className="modal-title-secundario" style={{ fontSize: '1.25rem', marginBottom: '10px' }}>Pago Simulado</h3>
               <p className="modal-nota-bloque">
-                El total a pagar es de <strong>{(Number(hold.lockedPrice?.total)).toFixed(2)} {hold.lockedPrice?.currency}</strong>.
+                El total a pagar es de <strong>{formatearMoneda(hold.lockedPrice?.total, hold.lockedPrice?.currency)}</strong>.
               </p>
               
               <div className="tarjeta-simulada" style={{ background: '#f5f7f9', padding: '20px', borderRadius: '12px', border: '1px solid #e1e4e8', marginTop: '20px' }}>
@@ -717,7 +760,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
           <div className="modal-precio">
               <span className="modal-precio-etiqueta">Total a pagar</span>
               <span className="modal-precio-valor">
-                {(Number(hold.lockedPrice?.total)).toFixed(2)} {hold.lockedPrice?.currency}
+                {formatearMoneda(hold.lockedPrice?.total, hold.lockedPrice?.currency)}
               </span>
             </div>
           <div className="modal-acciones">

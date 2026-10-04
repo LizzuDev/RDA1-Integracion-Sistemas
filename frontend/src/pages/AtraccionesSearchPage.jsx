@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { getAtracciones } from '../services/atraccionesApi';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import { formatearMoneda } from '../services/formato';
 
 export function AtraccionesSearchPage() {
   const [searchParams] = useSearchParams();
@@ -194,7 +195,7 @@ export function AtraccionesSearchPage() {
                     <div className="sr-pricing">
                       <div className="price-info">
                         <span className="price-label">Desde</span>
-                        <span className="price-value">US${a.price?.total || 55}</span>
+                        <span className="price-value">{formatearMoneda(a.price?.total || 55, 'USD')}</span>
                       </div>
                       <div className="availability-info">Disponible desde el 28 sep</div>
                       <Link to={`/atracciones/${a.id}`} className="sr-btn">

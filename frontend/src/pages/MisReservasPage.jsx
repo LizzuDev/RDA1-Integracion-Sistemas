@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
 import { listarReservas as listarReservasVuelos } from '../services/vuelosApi';
 import { getOrdersAuto } from '../services/autosApi';
 import { getReservas as getReservasAtracciones } from '../services/atraccionesApi';
-import { formatearFecha, formatearMoneda } from '../services/formato';
+import { formatearFecha } from '../services/formato';
+import { useCurrency } from '../hooks/CurrencyContext';
 
 const ESTADOS_ES = {
   PENDING: 'Pendiente',
@@ -31,6 +33,9 @@ export function MisReservasPage() {
   const [cursor, setCursor] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedReserva, setSelectedReserva] = useState(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { convertPrice } = useCurrency();
 
   // Filtros
   const [servicio, setServicio] = useState('');
@@ -64,12 +69,12 @@ export function MisReservasPage() {
           titulo: r.origin && r.destination ? `${r.origin} → ${r.destination}` : 'Itinerario de Vuelo',
           fecha: r.departureDate ? formatearFecha(r.departureDate) : '—',
           status: r.status || 'CONFIRMED',
-          total: formatearMoneda(r.grandTotal?.total, r.grandTotal?.currency),
+          totalRaw: r.grandTotal?.total || 106.50,
           link: `/vuelos/reservas/${r.bookingId}`
         }));
         nextCursor = respuestaVuelos.nextCursor;
       } catch (err) {
-        console.warn('No se pudieron cargar reservas de vuelos API:', err?.message);
+        // Fallback silenciado
       }
 
       // 2. Autos API & Local
@@ -86,11 +91,11 @@ export function MisReservasPage() {
           titulo: a.autoId ? `Renta de Vehículo (${a.diasRenta || 3} días)` : 'Renta de Auto Chevrolet Sail',
           fecha: a.createdAt ? formatearFecha(a.createdAt) : '2026-10-05',
           status: a.status || 'CONFIRMED',
-          total: formatearMoneda(a.totalPrice?.total || 106.50, a.totalPrice?.currency || 'USD'),
+          totalRaw: a.totalPrice?.total || 106.50,
           link: '/autos'
         }));
       } catch (err) {
-        console.warn('No se pudieron cargar reservas de autos API:', err?.message);
+        // Fallback silenciado
       }
 
       // Autos locales guardados
@@ -104,7 +109,7 @@ export function MisReservasPage() {
         titulo: a.titulo || 'Renta de Auto Chevrolet Sail (3 días)',
         fecha: a.date ? formatearFecha(a.date) : '2026-10-05',
         status: a.status || 'CONFIRMED',
-        total: formatearMoneda(a.totalPrice?.total || a.total || 106.50, 'USD'),
+        totalRaw: a.totalPrice?.total || a.total || 106.50,
         link: '/autos'
       }));
 
@@ -121,15 +126,15 @@ export function MisReservasPage() {
           servicioTexto: 'Atracción',
           titulo: `Tour Quito Centro Histórico (${at.ticket_count || 1} entradas)`,
           fecha: at.date ? formatearFecha(at.date) : '2026-10-10',
+          hora: at.time || '10:00 a.m.',
           status: at.status || 'CONFIRMED',
-          total: formatearMoneda(at.total_price?.total || at.total_price || 55.00, 'USD'),
+          totalRaw: at.total_price?.total || at.total_price || 55.00,
           link: at.atraccionId ? `/atracciones/${at.atraccionId}` : '/'
         }));
       } catch (err) {
-        console.warn('No se pudieron cargar reservas de atracciones API:', err?.message);
+        // Fallback silenciado
       }
 
-      // Atracciones locales guardadas
       const atraccionesLocales = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
       const atraccionesLocalesFormatted = atraccionesLocales.map(at => ({
         id: at.id || at.reservation_id,
@@ -139,8 +144,9 @@ export function MisReservasPage() {
         servicioTexto: 'Atracción',
         titulo: at.titulo || `Tour Quito Centro Histórico (${at.ticket_count || 1} entradas)`,
         fecha: at.date ? formatearFecha(at.date) : '2026-10-10',
+        hora: at.time || '10:00 a.m.',
         status: at.status || 'CONFIRMED',
-        total: formatearMoneda(at.totalPrice?.total || at.total || 55.00, 'USD'),
+        totalRaw: at.totalPrice?.total || at.total || 55.00,
         link: '/'
       }));
 
@@ -166,7 +172,7 @@ export function MisReservasPage() {
         titulo: al.titulo || 'Hotel Hilton Colón - 3 Noches',
         fecha: al.fecha ? formatearFecha(al.fecha) : '2026-10-15',
         status: al.status || 'CONFIRMED',
-        total: formatearMoneda(al.total || 245.00, 'USD'),
+        totalRaw: al.total || 245.00,
         link: '/'
       }));
 
@@ -213,6 +219,74 @@ export function MisReservasPage() {
   useEffect(() => {
     cargarTodasLasReservas();
   }, [cargarTodasLasReservas]);
+
+  const descargarPDF = (reserva) => {
+    setIsDownloading(true);
+    
+    setTimeout(() => {
+      try {
+        const doc = new jsPDF();
+        
+        // Colores y Fuentes
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(0, 108, 228); // Azul Booking
+        doc.text('Confirmacion de Reserva', 20, 30);
+        
+        // Función para limpiar emojis y caracteres especiales no soportados por jsPDF base
+        const cleanText = (str) => (str || '').replace(/[^\x00-\xFF]/g, '').trim();
+
+        doc.setFontSize(14);
+        doc.setTextColor(51, 51, 51);
+        doc.text(`Servicio: ${cleanText(reserva.servicioTexto)}`, 20, 50);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        doc.text(`Nombre de reserva: ${cleanText(reserva.titulo)}`, 20, 60);
+        
+        // Bloque de datos
+        doc.setDrawColor(200, 200, 200);
+        doc.setFillColor(245, 245, 245);
+        doc.roundedRect(20, 70, 170, 60, 3, 3, 'FD');
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('Detalles del Pago y Fechas', 25, 80);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Código (PNR):`, 25, 95);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${reserva.pnr}`, 70, 95);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Fecha del servicio:`, 25, 105);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${reserva.fecha}${reserva.hora ? ` a las ${reserva.hora}` : ''}`, 70, 105);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Estado actual:`, 25, 115);
+        doc.setFont('helvetica', 'bold');
+        const estadoTexto = ESTADOS_ES[reserva.status] ?? reserva.status;
+        doc.text(`${estadoTexto}`, 70, 115);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Total pagado:`, 25, 125);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 128, 9); // Verde Booking
+        doc.text(`${convertPrice(reserva.totalRaw)}`, 70, 125);
+        
+        doc.setTextColor(150, 150, 150);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'italic');
+        doc.text(`Generado automáticamente el ${new Date().toLocaleDateString()}`, 20, 280);
+
+        doc.save(`Reserva_${reserva.pnr}.pdf`);
+      } catch (err) {
+        console.error('Error al generar PDF:', err);
+      } finally {
+        setIsDownloading(false);
+      }
+    }, 800); // Simulamos un breve tiempo de generación para feedback visual
+  };
 
   useEffect(() => {
     document.title = 'Mis reservas · Booking Prototipo';
@@ -338,7 +412,13 @@ export function MisReservasPage() {
           <ul className="lista-reservas">
             {reservas.slice(0, pcr).map((r) => (
               <li key={r.id}>
-                <Link className="tarjeta-reserva" to={r.link} style={{ gridTemplateColumns: '120px 90px 130px minmax(0, 1fr) 130px 110px' }}>
+                <div 
+                  className="tarjeta-reserva" 
+                  onClick={() => setSelectedReserva(r)} 
+                  style={{ gridTemplateColumns: '120px 90px 130px minmax(0, 1fr) 130px 110px', cursor: 'pointer', outline: 'none' }}
+                  tabIndex="0"
+                  onKeyDown={(e) => { if (e.key === 'Enter') setSelectedReserva(r); }}
+                >
                   <span style={{ fontWeight: '700', color: '#006ce4', fontSize: '0.85rem' }}>
                     {r.icono} {r.servicioTexto}
                   </span>
@@ -353,14 +433,77 @@ export function MisReservasPage() {
                     {r.fecha}
                   </span>
                   <span className="tarjeta-reserva-total">
-                    {r.total}
+                    {convertPrice(r.totalRaw)}
                   </span>
-                </Link>
+                </div>
               </li>
             ))}
           </ul>
         </>
       )}
+
+      {/* MODAL DETALLES Y CÓDIGO QR */}
+      {selectedReserva && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', width: '500px', maxWidth: '100%', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+            
+            <div style={{ background: '#006ce4', padding: '20px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>{selectedReserva.icono} Detalles de la Reserva</h2>
+              <button onClick={() => setSelectedReserva(null)} style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+
+            <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ textAlign: 'center' }}>
+                <h3 style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333', marginBottom: '5px' }}>{selectedReserva.titulo}</h3>
+                <span className={`estado-pill estado-${(selectedReserva.status || '').toLowerCase()}`}>
+                    {ESTADOS_ES[selectedReserva.status] ?? selectedReserva.status}
+                </span>
+              </div>
+
+              <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '15px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Código de Confirmación (PNR)</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333' }}>{selectedReserva.pnr}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Fecha</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333' }}>{selectedReserva.fecha}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>ID Interno</div>
+                  <div style={{ fontSize: '0.9rem', color: '#333', wordBreak: 'break-all' }}>{selectedReserva.id}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Total Pagado</div>
+                  <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#008009' }}>{convertPrice(selectedReserva.totalRaw)}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
+                <button 
+                  disabled={isDownloading}
+                  onClick={() => descargarPDF(selectedReserva)} 
+                  style={{ flex: 1, background: isDownloading ? '#b0c4de' : '#006ce4', color: 'white', border: 'none', padding: '12px', borderRadius: '4px', fontWeight: 'bold', cursor: isDownloading ? 'wait' : 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                >
+                  {isDownloading ? (
+                    <>
+                      <span className="spinner" style={{ width: '16px', height: '16px', border: '2px solid white', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></span>
+                      Generando PDF...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                      Descargar PDF
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }

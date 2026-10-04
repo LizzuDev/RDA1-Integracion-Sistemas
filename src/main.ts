@@ -101,7 +101,8 @@ async function bootstrap() {
     origin: [
       /^http:\/\/localhost:\d+$/,
       /^http:\/\/127\.0\.0\.1:\d+$/,
-      /^https:\/\/.*\.vercel\.app$/
+      /^https:\/\/.*\.vercel\.app$/,
+      /^https:\/\/.*\.onrender\.com$/
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -112,6 +113,7 @@ async function bootstrap() {
       'x-device-fingerprint',
       'X-Device-Fingerprint',
     ],
+    credentials: true,
   });
 
   app.setGlobalPrefix('api/v1');

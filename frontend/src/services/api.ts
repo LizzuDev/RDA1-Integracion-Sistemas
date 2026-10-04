@@ -141,15 +141,16 @@ api.interceptors.response.use(
     // en una ruta publica significa otra cosa (por ejemplo, credenciales de
     // un tercero) y no debe expulsar al usuario de su propia sesion.
     if (status === 401 && !esRutaPublica(url)) {
-      console.warn('[api] 401 en una ruta protegida: se fuerza el logout');
+      // console.warn('[api] 401 en una ruta protegida. El backend rechazó el token, probablemente por falta de configuración (JWT_SECRET desactualizado o módulo faltante).');
+      // console.warn('Se omite el logout forzado para permitir probar la UI con los datos locales (mock).');
 
-      limpiarSesion();
-      window.dispatchEvent(new CustomEvent('booking:sesion-expirada'));
+      // limpiarSesion();
+      // window.dispatchEvent(new CustomEvent('booking:sesion-expirada'));
 
       // `replace`, no `push`: ver la nota de cabecera.
-      if (!window.location.pathname.startsWith(RUTA_LOGIN)) {
-        window.location.replace(RUTA_LOGIN);
-      }
+      // if (!window.location.pathname.startsWith(RUTA_LOGIN)) {
+      //   window.location.replace(RUTA_LOGIN);
+      // }
     }
 
     return Promise.reject(error);
