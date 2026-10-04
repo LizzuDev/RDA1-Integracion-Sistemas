@@ -110,21 +110,30 @@ export function RegisterPage() {
     setLoading(true);
     let sessionEstablished = false;
 
+    const userMeta = {
+      nombre: nombre.trim(),
+      apellido: apellido.trim(),
+      name: `${nombre.trim()} ${apellido.trim()}`,
+      full_name: `${nombre.trim()} ${apellido.trim()}`,
+      cedula,
+      telefono
+    };
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { nombre: nombre.trim(), apellido: apellido.trim(), cedula, telefono }
+        data: userMeta
       }
     });
 
-    if (error && (error.status === 429 || error.message?.includes('rate limit')) && supabaseAdmin) {
+    if (error && (error.status === 429 || error.message?.includes('rate limit') || error.message?.includes('Database error')) && supabaseAdmin) {
       try {
         const adminRes = await supabaseAdmin.auth.admin.createUser({
           email,
           password,
           email_confirm: true,
-          user_metadata: { nombre: nombre.trim(), apellido: apellido.trim(), cedula, telefono }
+          user_metadata: userMeta
         });
         if (adminRes.error) {
           let errorMsg = adminRes.error.message;
@@ -155,6 +164,8 @@ export function RegisterPage() {
         errorMsg = 'Has intentado registrarte demasiadas veces (límite de seguridad). Espera una hora o intenta con otro correo.';
       } else if (error.status === 400) {
         errorMsg = 'Solicitud inválida. Es probable que este correo ya esté en uso o tenga un formato bloqueado. Prueba con otro correo.';
+      } else if (errorMsg.includes('Database error saving new user')) {
+        errorMsg = 'Error al registrar usuario en la base de datos. Por favor, intenta de nuevo.';
       }
       setErrors(prev => ({ ...prev, general: errorMsg }));
       setLoading(false);

@@ -7,13 +7,13 @@ export class Usuario {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ length: 150 })
+  @Column({ length: 150, nullable: true })
   nombre: string;
 
   @Column({ length: 255, unique: true })
   email: string;
 
-  @Column('text')
+  @Column('text', { nullable: true })
   password_hash: string;
 
   @Column({ length: 20, nullable: true })
