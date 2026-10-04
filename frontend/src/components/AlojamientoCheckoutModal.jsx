@@ -1,4 +1,4 @@
-import { useState, useId } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { jsPDF } from 'jspdf';
@@ -87,6 +87,21 @@ export function AlojamientoCheckoutModal({
   const cancellationCost = Math.round(totalPrice * 0.5 * 100) / 100;
   const ivaAmount = Math.round(totalPrice * 0.15 * 100) / 100;
   const cleaningFee = Math.max(0, Math.round((taxes - ivaAmount) * 100) / 100) || 20.00;
+
+  // Safe hotel address formatting (handles string, object with address/city/country)
+  const hotelAddress = useMemo(() => {
+    if (!alojamiento?.ubicacion) return 'Quito, Ecuador';
+    if (typeof alojamiento.ubicacion === 'string') return alojamiento.ubicacion;
+    if (typeof alojamiento.ubicacion === 'object') {
+      const parts = [
+        alojamiento.ubicacion.address,
+        alojamiento.ubicacion.city,
+        alojamiento.ubicacion.country,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(', ') : 'Quito, Ecuador';
+    }
+    return 'Quito, Ecuador';
+  }, [alojamiento?.ubicacion]);
 
   // Auto pre-fill titular tarjeta when moving to Step 2
   const handleAvanzarPaso2 = (e) => {
@@ -479,7 +494,7 @@ export function AlojamientoCheckoutModal({
                 <span style={{ background: '#febb02', color: '#1a1a1a', fontSize: '10px', padding: '1px 4px', borderRadius: '2px', fontWeight: 700, marginLeft: '4px' }}>👍</span>
               </div>
               <h3 className="bkg-hotel-name">{alojamiento.nombre}</h3>
-              <p className="bkg-hotel-address">{alojamiento.ubicacion || 'Quito, Ecuador'}</p>
+              <p className="bkg-hotel-address">{hotelAddress}</p>
               <div className="bkg-hotel-location-score">Excelente ubicación — 9.5</div>
 
               <div className="bkg-score-badge-row">
