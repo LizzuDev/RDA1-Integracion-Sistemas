@@ -9,6 +9,7 @@ import { formatearFecha } from '../services/formato';
 import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { jsPDF } from 'jspdf';
 import { v4 as uuidv4 } from 'uuid';
+import { AlojamientoCheckoutModal } from '../components/AlojamientoCheckoutModal';
 
 const ESTADOS_ES = {
   PENDING: 'Pendiente',
@@ -160,6 +161,7 @@ export function AlojamientoDetail() {
   const [surveyResponse, setSurveyResponse] = useState('');
 
   // Booking Form State
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [bookingLoading, setBookingLoading] = useState(false);
@@ -1074,62 +1076,138 @@ export function AlojamientoDetail() {
           </div>
 
           {/* Room Type and Rates Table */}
-          <table className="dt-rooms-table">
-            <thead>
-              <tr>
-                <th style={{ width: '40%' }}>Tipo de alojamiento</th>
-                <th style={{ width: '15%' }}>Capacidad</th>
-                <th style={{ width: '25%' }}>Precio para {nightsCount} noches</th>
-                <th style={{ width: '20%' }}>Tus opciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <span className="dt-room-title-link">
-                    {alojamiento.tipo_alojamiento || 'Departamento de 2 dormitorios'}
-                  </span>
-                  <div className="dt-room-features-list">
-                    <span>Departamento entero · {alojamiento.habitaciones || 2} dormitorios · 1 sala de estar · {alojamiento.banos || 2} baños</span>
-                    <span>1 cocina · 95 m²</span>
-                    <span>{alojamiento.camas || 3} camas (2 individuales, 1 doble)</span>
-                    <span style={{ color: '#008009', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <CheckmarkIcon size={14} /> WiFi gratis incluido
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: '16px', alignItems: 'start' }}>
+            <table className="dt-rooms-table" style={{ margin: 0 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '35%' }}>Tipo de alojamiento</th>
+                  <th style={{ width: '12%' }}>Capacidad</th>
+                  <th style={{ width: '23%' }}>Precio para {nightsCount} noches</th>
+                  <th style={{ width: '18%' }}>Tus opciones</th>
+                  <th style={{ width: '12%' }}>Habitaciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <span className="dt-room-title-link">
+                      {alojamiento.tipo_alojamiento || 'Departamento de 2 dormitorios'}
                     </span>
-                  </div>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: '2px' }}>
-                    <UserIcon size={18} color="#1a1a1a" />
-                    <UserIcon size={18} color="#1a1a1a" />
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#595959' }}>Para {adults} adultos</div>
-                </td>
-                <td>
-                  <div style={{ fontSize: '0.85rem', color: '#d4111e', textDecoration: 'line-through' }}>
-                    {currency} {convertPrice(originalPrice)}
-                  </div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1a1a1a' }}>
-                    {currency} {convertPrice(totalPrice)}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#595959' }}>
-                    +{currency} {convertPrice(taxes)} de impuestos y cargos
-                  </div>
-                </td>
-                <td>
-                  <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <CheckmarkIcon size={14} /> Desayuno incluido
-                  </div>
-                  <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <CheckmarkIcon size={14} /> Cancelación gratis
-                  </div>
-                  <div style={{ color: '#d4111e', fontWeight: 700, fontSize: '0.78rem', marginBottom: '8px' }}>
-                    ¡Solo quedan 2 a este precio en nuestra web!
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                    <div className="dt-room-features-list">
+                      <span>Departamento entero · {alojamiento.habitaciones || 2} dormitorios · 1 sala de estar · {alojamiento.banos || 2} baños</span>
+                      <span>1 cocina · 95 m²</span>
+                      <span>{alojamiento.camas || 3} camas (2 individuales, 1 doble)</span>
+                      <span style={{ color: '#008009', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <CheckmarkIcon size={14} /> WiFi gratis incluido
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '2px' }}>
+                      <UserIcon size={18} color="#1a1a1a" />
+                      <UserIcon size={18} color="#1a1a1a" />
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#595959' }}>Para {adults} adultos</div>
+                  </td>
+                  <td>
+                    <div style={{ fontSize: '0.85rem', color: '#d4111e', textDecoration: 'line-through' }}>
+                      {currency} {convertPrice(originalPrice)}
+                    </div>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1a1a1a' }}>
+                      {currency} {convertPrice(totalPrice)}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#595959' }}>
+                      +{currency} {convertPrice(taxes)} de impuestos y cargos
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckmarkIcon size={14} /> Desayuno incluido
+                    </div>
+                    <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckmarkIcon size={14} /> Cancelación gratis
+                    </div>
+                    <div style={{ color: '#d4111e', fontWeight: 700, fontSize: '0.75rem' }}>
+                      ¡Solo quedan 2 a este precio en nuestra web!
+                    </div>
+                  </td>
+                  <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
+                    <select
+                      value={rooms}
+                      onChange={(e) => setRooms(Number(e.target.value))}
+                      style={{
+                        padding: '8px 10px',
+                        border: '1px solid #003580',
+                        borderRadius: '4px',
+                        fontWeight: 700,
+                        fontSize: '14px',
+                        width: '100%',
+                        background: '#ffffff',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {[1, 2, 3, 4, 5].map((num) => (
+                        <option key={num} value={num}>
+                          {num}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Sticky/Floating Booking.com Confirmation CTA Box */}
+            <div
+              style={{
+                background: '#ebf3ff',
+                border: '1px solid #cce0ff',
+                borderRadius: '6px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#003580' }}>
+                {rooms} {rooms === 1 ? 'apartamento' : 'apartamentos'} para {adults} adultos
+              </div>
+              <div style={{ fontSize: '22px', fontWeight: 800, color: '#1a1a1a', lineHeight: 1.1 }}>
+                {currency} {convertPrice(totalPrice)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#595959', marginBottom: '4px' }}>
+                +{currency} {convertPrice(taxes)} de impuestos y cargos
+              </div>
+
+              <button
+                type="button"
+                className="dt-reserve-btn-primary"
+                onClick={() => setShowCheckoutModal(true)}
+                style={{
+                  width: '100%',
+                  fontSize: '16px',
+                  padding: '12px 16px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '2px',
+                }}
+              >
+                <span>Reservaré</span>
+                <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.9 }}>
+                  Confirmación inmediata
+                </span>
+              </button>
+
+              <div style={{ fontSize: '11px', color: '#4b5563', lineHeight: 1.4, marginTop: '4px' }}>
+                <div>✓ ¡Solo te llevará 2 minutos!</div>
+                <div>✓ No pagas nada hoy</div>
+                <div>✓ Cancelación gratuita</div>
+              </div>
+            </div>
+          </div>
 
           {/* Interactive Reservation Form */}
           <div className="dt-reservation-box">
@@ -1706,6 +1784,29 @@ export function AlojamientoDetail() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Booking.com Authentic Checkout Modal Flow */}
+      {showCheckoutModal && (
+        <AlojamientoCheckoutModal
+          alojamiento={alojamiento}
+          checkin={checkin}
+          checkout={checkout}
+          adults={adults}
+          rooms={rooms}
+          nightsCount={nightsCount}
+          originalPrice={originalPrice}
+          totalPrice={totalPrice}
+          taxes={taxes}
+          currency={currency}
+          convertPrice={convertPrice}
+          user={user}
+          onClose={() => setShowCheckoutModal(false)}
+          onSuccess={(booking) => {
+            setBookingSuccess(booking);
+            setShowCheckoutModal(false);
+          }}
+        />
       )}
     </div>
   );
