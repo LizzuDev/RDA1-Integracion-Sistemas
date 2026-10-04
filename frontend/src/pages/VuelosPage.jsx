@@ -8,6 +8,38 @@ import { PantallaReservaConfirmada } from '../components/PantallaReservaConfirma
 import { formatearFecha, obtenerHuellaDispositivo } from '../services/formato';
 import { buscarVuelos } from '../services/vuelosApi';
 
+// Destinos nacionales de Ecuador que el API soporta
+const DESTINOS_ECUADOR = [
+  {
+    codigo: 'GYE',
+    nombre: 'Guayaquil',
+    descripcion: 'La Perla del Pacífico',
+    imagen: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=240&fit=crop',
+    desde: '$49',
+  },
+  {
+    codigo: 'CUE',
+    nombre: 'Cuenca',
+    descripcion: 'Ciudad Patrimonio de la Humanidad',
+    imagen: 'https://images.unsplash.com/photo-1519451241324-20b4ea2c4220?w=400&h=240&fit=crop',
+    desde: '$59',
+  },
+  {
+    codigo: 'LOH',
+    nombre: 'Loja',
+    descripcion: 'La Capital Musical del Ecuador',
+    imagen: 'https://images.unsplash.com/photo-1465447142348-e9952c393450?w=400&h=240&fit=crop',
+    desde: '$69',
+  },
+  {
+    codigo: 'GPS',
+    nombre: 'Galápagos',
+    descripcion: 'Paraíso natural único en el mundo',
+    imagen: 'https://images.unsplash.com/photo-1547459124-e23883747a40?w=400&h=240&fit=crop',
+    desde: '$119',
+  },
+];
+
 /**
  * Pagina de Busqueda de Vuelos (Fase 4) + Bloqueo de Cupos (Fase 6).
  *
@@ -31,6 +63,10 @@ export function VuelosPage() {
   const [holdActivo, setHoldActivo] = useState(null);
   const [creandoHold, setCreandoHold] = useState(false);
   const [reserva, setReserva] = useState(null);
+  // Pre-fill state for destination cards
+  const [preOrigen, setPreOrigen] = useState('UIO');
+  const [preDestino, setPreDestino] = useState('');
+  const [formKey, setFormKey] = useState(0); // Force remount when destination is clicked
 
   // ── NOTA: ningun `return` ANTES de la ultima llamada a un hook ─────────────
   // Este `return` estaba antes de los `useCallback` de mas abajo, y React
@@ -64,6 +100,14 @@ export function VuelosPage() {
     } finally {
       setCargando(false);
     }
+  }
+
+  function seleccionarDestino(codigoDestino) {
+    setPreOrigen('UIO');
+    setPreDestino(codigoDestino);
+    setFormKey(k => k + 1); // remount to apply new props
+    // Scroll to the search form
+    document.querySelector('.buscador-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   const ofertas = resultados?.offers ?? [];
@@ -148,41 +192,59 @@ export function VuelosPage() {
     );
   }
 
-  return (
-    <main className="main-content main-content-vuelos" id="contenido-principal">
-      <section aria-labelledby="vuelos-titulo">
-        <h1 className="section-title" id="vuelos-titulo">
-          Busqueda de vuelos
-        </h1>
-        <p className="section-subtitle">
-          Indica el origen, el destino, la fecha y cuantos viajan.
-        </p>
+  const hayResultados = !cargando && !error && ofertas.length > 0;
+  const sinResultados = !cargando && !error && resultados && ofertas.length === 0;
 
-        <div className="card buscador-card">
-          <div className="card-body">
-            <FormularioBusquedaVuelos onBuscar={manejarBusqueda} cargando={cargando} />
-          </div>
+  return (
+    <main id="contenido-principal">
+
+      {/* ── BUSCADOR ────────────────────────────────────────────────────── */}
+      <section
+        aria-labelledby="vuelos-titulo"
+        style={{
+          background: '#003b95',
+          padding: '60px 0 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          color: 'white'
+        }}
+      >
+        <div style={{ maxWidth: '1100px', width: '100%', padding: '0 20px' }}>
+          <h1
+            id="vuelos-titulo"
+            style={{
+              fontSize: '3rem',
+              fontWeight: 'bold',
+              marginBottom: '10px',
+              textAlign: 'left',
+              lineHeight: '1.2'
+            }}
+          >
+            Vuelos nacionales
+          </h1>
+          <p style={{ fontSize: '1.4rem', marginBottom: '30px', textAlign: 'left' }}>
+            Encuentra y reserva tu vuelo en Ecuador al mejor precio.
+          </p>
+
+          <FormularioBusquedaVuelos
+            key={formKey}
+            onBuscar={manejarBusqueda}
+            cargando={cargando}
+            origenInicial={preOrigen}
+            destinoInicial={preDestino}
+          />
         </div>
       </section>
 
-      {/*
-        Region `aria-live="polite"`: los resultados aparecen SIN quitar el foco
-        de donde estaba, y el screen reader anuncia el cambio de forma
-        interruptiva solo cuando tiene sentido. Es lo que evita que un usuario
-        de lector de pantalla pierda el contexto de la pagina.
-
-        `aria-busy` comunica que la region se esta actualizando.
-      */}
+      {/* ── RESULTADOS ──────────────────────────────────────────────────── */}
       <section
         className="vuelo-resultados"
         aria-labelledby="resultados-titulo"
         aria-live="polite"
         aria-busy={cargando}
+        style={{ maxWidth: '1100px', margin: '0 auto', padding: '24px' }}
       >
-        <h2 className="section-title" id="resultados-titulo">
-          Resultados
-        </h2>
-
         {cargando && (
           <div className="state-container">
             <div className="spinner" aria-hidden="true" />
@@ -194,9 +256,7 @@ export function VuelosPage() {
 
         {!cargando && error && (
           <div className="state-container" role="alert">
-            <div className="error-icon" aria-hidden="true">
-              ⚠️
-            </div>
+            <div className="error-icon" aria-hidden="true">⚠️</div>
             <h3 className="state-title">{error.title}</h3>
             {error.code && (
               <p className="state-subtitle">
@@ -216,22 +276,20 @@ export function VuelosPage() {
           </div>
         )}
 
-        {!cargando && !error && resultados && ofertas.length === 0 && (
+        {sinResultados && (
           <div className="state-container">
-            <div className="error-icon" aria-hidden="true">
-              🔎
-            </div>
+            <div className="error-icon" aria-hidden="true">🔎</div>
             <h3 className="state-title">No encontramos vuelos</h3>
             <p className="state-subtitle">
-              No encontramos vuelos para esta ruta en la fecha seleccionada.<br/><br/>
+              No encontramos vuelos para esta ruta en la fecha seleccionada.<br /><br />
               <b>💡 Consejo:</b> Intenta mover tu fecha de salida un día antes o un día después.
             </p>
           </div>
         )}
 
-        {!cargando && !error && ofertas.length > 0 && (
+        {hayResultados && (
           <>
-            <p className="section-subtitle" role="status">
+            <p className="section-subtitle" role="status" style={{ marginBottom: '16px' }}>
               {resultados.totalOffers}{' '}
               {resultados.totalOffers === 1 ? 'oferta encontrada' : 'ofertas encontradas'}
               {busquedaActiva && (
@@ -246,7 +304,6 @@ export function VuelosPage() {
               .
             </p>
 
-            {/* Tarjetas tipo ticket a ancho completo, apiladas verticalmente. */}
             <div className="atracciones-grid vuelo-grid">
               {ofertasAgrupadas.map((grupoOfertas, indice) => (
                 <VueloGroupCard
@@ -258,24 +315,287 @@ export function VuelosPage() {
             </div>
           </>
         )}
-
-        {!cargando && !error && !resultados && (
-          <div className="state-container">
-            <p className="state-subtitle">
-              Completa el formulario para ver las ofertas disponibles.
-            </p>
-          </div>
-        )}
       </section>
+
+      {/* ── HERO BANNER (visible cuando no hay búsqueda activa) ─────────── */}
+      {!resultados && !cargando && (
+        <>
+          {/* Hero */}
+          <section
+            style={{
+              maxWidth: '1024px',
+              margin: '0 auto 0',
+              padding: '0 24px 24px',
+            }}
+          >
+            <div
+              style={{
+                borderRadius: '16px',
+                overflow: 'hidden',
+                position: 'relative',
+                minHeight: '300px',
+                background: '#1a2a4a',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              {/* Background image */}
+              <img
+                src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=1200&h=400&fit=crop"
+                alt="Viaje aéreo"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  opacity: 0.45,
+                }}
+              />
+              {/* Text overlay */}
+              <div
+                style={{
+                  position: 'relative',
+                  zIndex: 1,
+                  padding: '40px 48px',
+                  maxWidth: '520px',
+                }}
+              >
+                <h2
+                  style={{
+                    color: '#fff',
+                    fontSize: '2.2rem',
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                    marginBottom: '12px',
+                    textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  Hay un Ecuador esperándote
+                </h2>
+                <p
+                  style={{
+                    color: 'rgba(255,255,255,0.9)',
+                    fontSize: '1.05rem',
+                    lineHeight: 1.6,
+                    textShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  Te llevamos a los mejores destinos dentro del país para que encuentres los lugares que te muevan. Reserva hoy tu próximo vuelo nacional.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* ── DESTINOS ────────────────────────────────────────────────── */}
+          <section
+            style={{
+              maxWidth: '1024px',
+              margin: '0 auto',
+              padding: '0 24px 32px',
+            }}
+          >
+            <h2
+              style={{
+                fontSize: '1.4rem',
+                fontWeight: 700,
+                color: '#1a1a1a',
+                marginBottom: '4px',
+              }}
+            >
+              Ofertas desde{' '}
+              <span style={{ color: '#0057b8' }}>Quito ▾</span>
+            </h2>
+            <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '20px' }}>
+              Haz clic en un destino para iniciar tu búsqueda directamente.
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: '16px',
+              }}
+            >
+              {DESTINOS_ECUADOR.map((dest) => (
+                <button
+                  key={dest.codigo}
+                  type="button"
+                  onClick={() => seleccionarDestino(dest.codigo)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    textAlign: 'left',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.18)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.1)';
+                  }}
+                  aria-label={`Buscar vuelos a ${dest.nombre}`}
+                >
+                  {/* Card image */}
+                  <div style={{ position: 'relative', height: '150px' }}>
+                    <img
+                      src={dest.imagen}
+                      alt={dest.nombre}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                      onError={(e) => {
+                        e.target.src = `https://picsum.photos/seed/${dest.codigo}/400/240`;
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        background: 'rgba(255,255,255,0.92)',
+                        color: '#0057b8',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      Acumula millas
+                    </span>
+                  </div>
+                  {/* Card info */}
+                  <div style={{ padding: '14px 16px', background: '#fff' }}>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '1.05rem',
+                        color: '#1a1a1a',
+                        marginBottom: '2px',
+                      }}
+                    >
+                      {dest.nombre}
+                    </div>
+                    <div style={{ color: '#666', fontSize: '0.82rem', marginBottom: '8px' }}>
+                      {dest.descripcion}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: '#888', fontSize: '0.8rem' }}>Desde</span>
+                      <span
+                        style={{
+                          color: '#0057b8',
+                          fontWeight: 700,
+                          fontSize: '1rem',
+                        }}
+                      >
+                        {dest.desde}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* ── CHECK-IN ────────────────────────────────────────────────── */}
+          <section
+            style={{
+              background: '#f8f8f8',
+              borderTop: '1px solid #e7e7e7',
+              padding: '32px 24px',
+            }}
+          >
+            <div style={{ maxWidth: '1024px', margin: '0 auto' }}>
+              <h2
+                style={{
+                  fontSize: '1.3rem',
+                  fontWeight: 700,
+                  color: '#1a1a1a',
+                  textAlign: 'center',
+                  marginBottom: '24px',
+                }}
+              >
+                Prepárate para viajar
+              </h2>
+              <div style={{ maxWidth: '340px', margin: '0 auto' }}>
+                <a
+                  href="/mis-reservas"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '16px',
+                    background: '#fff',
+                    borderRadius: '12px',
+                    padding: '20px 24px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+                    border: '1px solid #e7e7e7',
+                    textDecoration: 'none',
+                    transition: 'box-shadow 0.2s, border-color 0.2s',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.14)';
+                    e.currentTarget.style.borderColor = '#0057b8';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
+                    e.currentTarget.style.borderColor = '#e7e7e7';
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      background: '#fff3f3',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.6rem',
+                      flexShrink: 0,
+                    }}
+                  >
+                    🎫
+                  </div>
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        color: '#1a1a1a',
+                        marginBottom: '4px',
+                      }}
+                    >
+                      Check-in online
+                    </div>
+                    <div style={{ color: '#0057b8', fontSize: '0.85rem', lineHeight: 1.4 }}>
+                      Obtén tu pase de abordar y ahorra tiempo en el aeropuerto.
+                    </div>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
       {/* Resumen de Viaje flotante al seleccionar una tarifa */}
       {ofertaAbierta && !holdActivo && (
-        <ResumenViaje 
-          oferta={ofertaAbierta?.oferta} 
+        <ResumenViaje
+          oferta={ofertaAbierta?.oferta}
           tarifaSeleccionada={ofertaAbierta?.tarifa}
           pasajeros={busquedaActiva?.passengers}
-          onContinuar={(o) => confirmarResumen(o, ofertaAbierta.tarifa)} 
-          onModificar={cerrarBloqueo} 
+          onContinuar={(o) => confirmarResumen(o, ofertaAbierta.tarifa)}
+          onModificar={cerrarBloqueo}
         />
       )}
 

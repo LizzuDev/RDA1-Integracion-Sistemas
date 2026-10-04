@@ -148,6 +148,7 @@ export class VuelosController {
   searchFlights(
     @Body() body: SearchRequestDto,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<SearchResponseDto> {
     return this.vuelosService.searchFlights(body);
   }
@@ -303,12 +304,12 @@ export class VuelosController {
   @ApiOperation({ summary: 'Listar reservas del usuario actual (paginado por cursor)' })
   @ApiResponse({ status: 200, description: 'Pagina de reservas', type: ReservaListResponseDto })
   @ApiResponse({ status: 400, description: 'Filtros o paginacion invalidos' })
-  @UseGuards(SupabaseAuthGuard)
   listarReservas(
     @Query() query: ListarReservasQueryDto,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<ReservaListResponseDto> {
-    return this.vuelosService.listarReservas(query, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.listarReservas(query, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -324,12 +325,12 @@ export class VuelosController {
   @ApiParam({ name: 'bookingId', description: 'UUID de la reserva' })
   @ApiResponse({ status: 200, description: 'Detalle de la reserva', type: BookingDetailResponseDto })
   @ApiResponse({ status: 404, description: 'La reserva no existe' })
-  @UseGuards(SupabaseAuthGuard)
   obtenerReserva(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<BookingDetailResponseDto> {
-    return this.vuelosService.obtenerReserva(bookingId, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.obtenerReserva(bookingId, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -345,12 +346,12 @@ export class VuelosController {
   @ApiParam({ name: 'bookingId', description: 'UUID de la reserva' })
   @ApiResponse({ status: 200, description: 'Tickets de la reserva', type: TicketListResponseDto })
   @ApiResponse({ status: 404, description: 'La reserva no existe' })
-  @UseGuards(SupabaseAuthGuard)
   listarTickets(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<TicketListResponseDto> {
-    return this.vuelosService.listarTickets(bookingId, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.listarTickets(bookingId, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -384,12 +385,12 @@ export class VuelosController {
   @ApiResponse({ status: 409, description: 'La reserva no admite emision (cancelada, fallida...)' })
   @ApiResponse({ status: 422, description: 'La reserva no tiene segmentos que emitir' })
   @HttpCode(HttpStatus.OK)
-  @UseGuards(SupabaseAuthGuard)
   emitirTickets(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<TicketIssuanceResponseDto> {
-    return this.vuelosService.emitirBoletos(bookingId, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.emitirBoletos(bookingId, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -409,14 +410,15 @@ export class VuelosController {
   @ApiResponse({ status: 200, description: 'Detalle del boleto', type: TicketDetailDto })
   @ApiResponse({ status: 400, description: 'bookingId no es UUID o ticketId no tiene el formato admitido' })
   @ApiResponse({ status: 404, description: 'La reserva o el ticket no existen' })
-  @UseGuards(SupabaseAuthGuard) async obtenerTicket(
+  async obtenerTicket(
     @Param() params: TicketRouteParamDto,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<TicketDetailDto> {
     return this.vuelosService.obtenerTicket(
       params.bookingId,
       params.ticketId,
-      propietarioDesde(deviceFingerprint),
+      propietarioDesde(deviceFingerprint, authHeader),
     );
   }
 
@@ -436,12 +438,12 @@ export class VuelosController {
   @ApiParam({ name: 'bookingId', description: 'UUID de la reserva' })
   @ApiResponse({ status: 200, description: 'Pases de abordar', type: BoardingPassListResponseDto })
   @ApiResponse({ status: 404, description: 'La reserva no existe' })
-  @UseGuards(SupabaseAuthGuard)
   listarPases(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<BoardingPassListResponseDto> {
-    return this.vuelosService.listarPases(bookingId, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.listarPases(bookingId, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -466,16 +468,16 @@ export class VuelosController {
   @ApiResponse({ status: 404, description: 'La reserva o el itinerario no existen' })
   @ApiResponse({ status: 409, description: 'La reserva no esta confirmada' })
   @HttpCode(HttpStatus.OK)
-  @UseGuards(SupabaseAuthGuard)
   buscarCambioFecha(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Body() dto: DateChangeSearchRequestDto,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<DateChangeOfferDto[]> {
     return this.vuelosService.buscarCambioFecha(
       bookingId,
       dto,
-      propietarioDesde(deviceFingerprint),
+      propietarioDesde(deviceFingerprint, authHeader),
     );
   }
 
@@ -510,18 +512,19 @@ export class VuelosController {
   @ApiResponse({ status: 409, description: 'Estado invalido, oferta ajena o ya consumida' })
   @ApiResponse({ status: 410, description: 'La oferta de cambio ha caducado' })
   @ApiResponse({ status: 422, description: 'Hay importe a pagar y falta la referencia de pago' })
-  @UseGuards(SupabaseAuthGuard) async confirmarCambioFecha(
+  async confirmarCambioFecha(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Body() dto: DateChangeRequestDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Headers('x-device-fingerprint') deviceFingerprint: string | undefined,
+    @Headers('authorization') authHeader: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<BookingDetailResponseDto> {
     const resultado = await this.vuelosService.confirmarCambioFecha(
       bookingId,
       dto,
       exigirIdempotencyKey(idempotencyKey),
-      propietarioDesde(deviceFingerprint),
+      propietarioDesde(deviceFingerprint, authHeader),
     );
     res.status(resultado.codigo);
     return resultado.cuerpo;
@@ -541,8 +544,9 @@ export class VuelosController {
   opcionesEquipaje(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<BaggageOptionDto[]> {
-    return this.vuelosService.opcionesEquipaje(bookingId, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.opcionesEquipaje(bookingId, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -572,8 +576,9 @@ export class VuelosController {
   checkIn(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<CheckInResponseDto> {
-    return this.vuelosService.hacerCheckIn(bookingId, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.hacerCheckIn(bookingId, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -589,12 +594,12 @@ export class VuelosController {
   @ApiParam({ name: 'bookingId', description: 'UUID de la reserva' })
   @ApiResponse({ status: 200, description: 'Cotizacion vigente', type: CancellationQuoteResponseDto })
   @ApiResponse({ status: 404, description: 'La reserva no existe' })
-  @UseGuards(SupabaseAuthGuard)
   cotizarCancelacion(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<CancellationQuoteResponseDto> {
-    return this.vuelosService.cotizarCancelacion(bookingId, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.cotizarCancelacion(bookingId, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -631,13 +636,14 @@ export class VuelosController {
     @Body() dto: CancelBookingRequestDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Headers('x-device-fingerprint') deviceFingerprint: string | undefined,
+    @Headers('authorization') authHeader: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ): Promise<CancelBookingResponseDto> {
     const resultado = await this.vuelosService.cancelarReserva(
       bookingId,
       dto,
       exigirIdempotencyKey(idempotencyKey),
-      propietarioDesde(deviceFingerprint),
+      propietarioDesde(deviceFingerprint, authHeader),
     );
     res.status(resultado.codigo);
     return resultado.cuerpo;
@@ -667,18 +673,18 @@ export class VuelosController {
   @ApiResponse({ status: 409, description: 'La reserva esta cancelada' })
   @ApiResponse({ status: 422, description: 'No hay tarifa de equipaje para el itinerario' })
   @HttpCode(HttpStatus.OK)
-  @UseGuards(SupabaseAuthGuard)
   agregarEquipaje(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
     @Body() dto: AddBaggageRequestDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<BaggageAddedResponseDto> {
     return this.vuelosService.agregarEquipaje(
       bookingId,
       dto,
       exigirIdempotencyKey(idempotencyKey),
-      propietarioDesde(deviceFingerprint),
+      propietarioDesde(deviceFingerprint, authHeader),
     );
   }
 
@@ -730,8 +736,9 @@ export class VuelosController {
   @ApiResponse({ status: 200, description: 'Suscripciones activas', type: [WebhookSubscriptionDto] })
   listarWebhooks(
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<WebhookSubscriptionDto[]> {
-    return this.vuelosService.listarWebhooks(propietarioDesde(deviceFingerprint));
+    return this.vuelosService.listarWebhooks(propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -758,8 +765,9 @@ export class VuelosController {
   crearWebhook(
     @Body() dto: CreateWebhookDto,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<WebhookSubscriptionDto> {
-    return this.vuelosService.crearWebhook(dto, propietarioDesde(deviceFingerprint));
+    return this.vuelosService.crearWebhook(dto, propietarioDesde(deviceFingerprint, authHeader));
   }
 
   /**
@@ -782,8 +790,9 @@ export class VuelosController {
   async eliminarWebhook(
     @Param('id', ParseUUIDPipe) id: string,
     @Headers('x-device-fingerprint') deviceFingerprint?: string,
+    @Headers('authorization') authHeader?: string,
   ): Promise<void> {
-    await this.vuelosService.eliminarWebhook(id, propietarioDesde(deviceFingerprint));
+    await this.vuelosService.eliminarWebhook(id, propietarioDesde(deviceFingerprint, authHeader));
   }
 
 }

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { jsPDF } from 'jspdf';
 import { listarReservas as listarReservasVuelos } from '../services/vuelosApi';
 import { getOrdersAuto } from '../services/autosApi';
 import { getReservas as getReservasAtracciones } from '../services/atraccionesApi';
-import { getReservasAlojamientos } from '../services/alojamientosApi';
+import { descargarFactura } from '../utils/facturaPdf';
 import { formatearFecha } from '../services/formato';
 import { useCurrency } from '../hooks/CurrencyContext';
+import { useAuth } from '../hooks/useAuth';
 
 const ESTADOS_ES = {
   PENDING: 'Pendiente',
@@ -36,7 +36,9 @@ export function MisReservasPage() {
   const [error, setError] = useState(null);
   const [selectedReserva, setSelectedReserva] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [avisoDescarga, setAvisoDescarga] = useState('');
   const { convertPrice } = useCurrency();
+  const { user } = useAuth();
 
   // Filtros
   const [servicio, setServicio] = useState('');
@@ -68,9 +70,11 @@ export function MisReservasPage() {
           icono: '✈️',
           servicioTexto: 'Vuelo',
           titulo: r.origin && r.destination ? `${r.origin} → ${r.destination}` : 'Itinerario de Vuelo',
-          fecha: r.departureDate ? formatearFecha(r.departureDate) : '—',
+          fecha: r.createdAt ? formatearFecha(r.createdAt.split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0]),
+          rawDate: r.createdAt ? new Date(r.createdAt).getTime() : new Date().getTime(),
           status: r.status || 'CONFIRMED',
           totalRaw: r.grandTotal?.total || 106.50,
+          raw: r,
           link: `/vuelos/reservas/${r.bookingId}`
         }));
         nextCursor = respuestaVuelos.nextCursor;
@@ -89,10 +93,11 @@ export function MisReservasPage() {
           tipo: 'auto',
           icono: '🚗',
           servicioTexto: 'Auto',
-          titulo: a.autoId ? `Renta de Vehículo (${a.diasRenta || 3} días)` : 'Renta de Auto Chevrolet Sail',
-          fecha: a.createdAt ? formatearFecha(a.createdAt) : '2026-10-05',
+          titulo: (a.auto_id || a.autoId) ? `Renta de Vehículo (${a.dias_renta || a.diasRenta || 3} días)` : 'Renta de Auto Chevrolet Sail',
+          fecha: a.createdAt ? formatearFecha(String(a.createdAt).split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0]),
+          rawDate: a.createdAt ? new Date(a.createdAt).getTime() : new Date().getTime(),
           status: a.status || 'CONFIRMED',
-          totalRaw: a.totalPrice?.total || 106.50,
+          totalRaw: a.total_price?.total || a.totalPrice?.total || 106.50,
           link: '/autos'
         }));
       } catch (err) {
@@ -108,7 +113,8 @@ export function MisReservasPage() {
         icono: '🚗',
         servicioTexto: 'Auto',
         titulo: a.titulo || 'Renta de Auto Chevrolet Sail (3 días)',
-        fecha: a.date ? formatearFecha(a.date) : '2026-10-05',
+        fecha: a.createdAt || a.date ? formatearFecha(String(a.createdAt || a.date).split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0]),
+        rawDate: a.createdAt || a.date ? new Date(a.createdAt || a.date).getTime() : new Date().getTime(),
         status: a.status || 'CONFIRMED',
         totalRaw: a.totalPrice?.total || a.total || 106.50,
         link: '/autos'
@@ -126,7 +132,8 @@ export function MisReservasPage() {
           icono: '🎡',
           servicioTexto: 'Atracción',
           titulo: `Tour Quito Centro Histórico (${at.ticket_count || 1} entradas)`,
-          fecha: at.date ? formatearFecha(at.date) : '2026-10-10',
+          fecha: at.createdAt ? formatearFecha(String(at.createdAt).split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0]),
+          rawDate: at.createdAt ? new Date(at.createdAt).getTime() : new Date().getTime(),
           hora: at.time || '10:00 a.m.',
           status: at.status || 'CONFIRMED',
           totalRaw: at.total_price?.total || at.total_price || 55.00,
@@ -144,7 +151,8 @@ export function MisReservasPage() {
         icono: '🎡',
         servicioTexto: 'Atracción',
         titulo: at.titulo || `Tour Quito Centro Histórico (${at.ticket_count || 1} entradas)`,
-        fecha: at.date ? formatearFecha(at.date) : '2026-10-10',
+        fecha: at.createdAt ? formatearFecha(String(at.createdAt).split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0]),
+        rawDate: at.createdAt ? new Date(at.createdAt).getTime() : new Date().getTime(),
         hora: at.time || '10:00 a.m.',
         status: at.status || 'CONFIRMED',
         totalRaw: at.totalPrice?.total || at.total || 55.00,
@@ -179,8 +187,9 @@ export function MisReservasPage() {
         tipo: 'alojamiento',
         icono: '🛏️',
         servicioTexto: 'Alojamiento',
-        titulo: al.titulo || 'Estadía en Alojamiento',
-        fecha: al.fecha ? formatearFecha(al.fecha) : '2026-10-15',
+        titulo: al.titulo || 'Hotel Hilton Colón - 3 Noches',
+        fecha: al.createdAt ? formatearFecha(String(al.createdAt).split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0]),
+        rawDate: al.createdAt ? new Date(al.createdAt).getTime() : new Date().getTime(),
         status: al.status || 'CONFIRMED',
         totalRaw: al.totalPrice || al.total || 180.00,
         link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/'
@@ -197,6 +206,9 @@ export function MisReservasPage() {
       });
 
       let listaFinal = Array.from(mapaCombinado.values());
+
+      // Ordenar por fecha descendente (las más nuevas primero)
+      listaFinal.sort((a, b) => b.rawDate - a.rawDate);
 
       // Aplicar filtros locales
       if (servicio) {
@@ -230,72 +242,35 @@ export function MisReservasPage() {
     cargarTodasLasReservas();
   }, [cargarTodasLasReservas]);
 
+  /**
+   * Genera el PDF en segundo plano y lo descarga.
+   *
+   * El layout vive en `utils/facturaPdf.js`; aquí solo se conserva el retardo de
+   * 800 ms para que el spinner del botón sea visible. `descargarFactura` es
+   * SÍNCRONA, así que el `try/catch` va DENTRO del `setTimeout`: si el layout
+   * lanzara fuera, la excepción moriría en el temporizador, el `catch` no la vería
+   * y el spinner se quedaría girando para siempre.
+   */
   const descargarPDF = (reserva) => {
     setIsDownloading(true);
-    
+
     setTimeout(() => {
       try {
-        const doc = new jsPDF();
-        
-        // Colores y Fuentes
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(22);
-        doc.setTextColor(0, 108, 228); // Azul Booking
-        doc.text('Confirmacion de Reserva', 20, 30);
-        
-        // Función para limpiar emojis y caracteres especiales no soportados por jsPDF base
-        const cleanText = (str) => (str || '').replace(/[^\x00-\xFF]/g, '').trim();
-
-        doc.setFontSize(14);
-        doc.setTextColor(51, 51, 51);
-        doc.text(`Servicio: ${cleanText(reserva.servicioTexto)}`, 20, 50);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        doc.text(`Nombre de reserva: ${cleanText(reserva.titulo)}`, 20, 60);
-        
-        // Bloque de datos
-        doc.setDrawColor(200, 200, 200);
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(20, 70, 170, 60, 3, 3, 'FD');
-        
-        doc.setFont('helvetica', 'bold');
-        doc.text('Detalles del Pago y Fechas', 25, 80);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Código (PNR):`, 25, 95);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${reserva.pnr}`, 70, 95);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Fecha del servicio:`, 25, 105);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${reserva.fecha}${reserva.hora ? ` a las ${reserva.hora}` : ''}`, 70, 105);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Estado actual:`, 25, 115);
-        doc.setFont('helvetica', 'bold');
-        const estadoTexto = ESTADOS_ES[reserva.status] ?? reserva.status;
-        doc.text(`${estadoTexto}`, 70, 115);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Total pagado:`, 25, 125);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 128, 9); // Verde Booking
-        doc.text(`${convertPrice(reserva.totalRaw)}`, 70, 125);
-        
-        doc.setTextColor(150, 150, 150);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'italic');
-        doc.text(`Generado automáticamente el ${new Date().toLocaleDateString()}`, 20, 280);
-
-        doc.save(`Reserva_${reserva.pnr}.pdf`);
+        descargarFactura(reserva);
       } catch (err) {
         console.error('Error al generar PDF:', err);
+        setAvisoDescarga('No se pudo generar el PDF de la factura.');
       } finally {
         setIsDownloading(false);
       }
     }, 800); // Simulamos un breve tiempo de generación para feedback visual
+  };
+
+  // El aviso se limpia al abrir otra reserva: si no, el error de la descarga
+  // anterior seguiría en pantalla junto al detalle de una reserva sin relación.
+  const abrirDetalle = (reserva) => {
+    setAvisoDescarga('');
+    setSelectedReserva(reserva);
   };
 
   useEffect(() => {
@@ -304,6 +279,16 @@ export function MisReservasPage() {
       document.title = 'Booking Prototipo';
     };
   }, []);
+
+  if (!user) {
+    return (
+      <div style={{ maxWidth: '1024px', margin: '60px auto', padding: '40px 20px', textAlign: 'center', background: '#fff', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', minHeight: '50vh' }}>
+        <h2 style={{ fontSize: '1.8rem', color: '#333', marginBottom: '16px' }}>Debes iniciar sesión</h2>
+        <p style={{ color: '#666', marginBottom: '32px' }}>Para poder ver y gestionar tus reservas necesitas acceder a tu cuenta.</p>
+        <Link to="/login" style={{ display: 'inline-block', padding: '12px 24px', background: 'var(--booking-blue)', color: '#fff', borderRadius: '4px', textDecoration: 'none', fontWeight: 'bold' }}>Iniciar sesión</Link>
+      </div>
+    );
+  }
 
   return (
     <main className="main-content main-content-vuelos">
@@ -416,18 +401,39 @@ export function MisReservasPage() {
 
       {!cargando && !error && reservas.length > 0 && (
         <>
-          <p className="state-subtitle" role="status">
+          <p className="state-subtitle" role="status" style={{ marginBottom: '16px' }}>
             {reservas.length} reserva(s) encontrada(s)
           </p>
+
+          {/* Cabecera de la tabla */}
+          <div style={{
+            display: 'grid', 
+            gridTemplateColumns: '120px 90px 130px minmax(0, 1fr) 130px 110px', 
+            padding: '10px 16px',
+            background: '#e0e0e0',
+            borderRadius: '8px',
+            fontWeight: 'bold',
+            color: '#333',
+            fontSize: '0.9rem',
+            marginBottom: '10px'
+          }}>
+            <span>Servicio</span>
+            <span>Código</span>
+            <span>Estado</span>
+            <span>Detalles</span>
+            <span>Fecha Compra</span>
+            <span>Total</span>
+          </div>
+
           <ul className="lista-reservas">
             {reservas.slice(0, pcr).map((r) => (
               <li key={r.id}>
                 <div 
                   className="tarjeta-reserva" 
-                  onClick={() => setSelectedReserva(r)} 
+                  onClick={() => abrirDetalle(r)} 
                   style={{ gridTemplateColumns: '120px 90px 130px minmax(0, 1fr) 130px 110px', cursor: 'pointer', outline: 'none' }}
                   tabIndex="0"
-                  onKeyDown={(e) => { if (e.key === 'Enter') setSelectedReserva(r); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') abrirDetalle(r); }}
                 >
                   <span style={{ fontWeight: '700', color: '#006ce4', fontSize: '0.85rem' }}>
                     {r.icono} {r.servicioTexto}
@@ -476,7 +482,7 @@ export function MisReservasPage() {
                   <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333' }}>{selectedReserva.pnr}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Fecha</div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '2px' }}>Fecha de Compra</div>
                   <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#333' }}>{selectedReserva.fecha}</div>
                 </div>
                 <div>
@@ -489,11 +495,29 @@ export function MisReservasPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '15px', marginTop: '10px' }}>
+              {/* ── Aviso de la descarga ─────────────────────────────────── */}
+              {avisoDescarga && (
+                <p
+                  role="alert"
+                  style={{
+                    margin: 0,
+                    padding: '12px 14px',
+                    borderRadius: '6px',
+                    fontSize: '0.9rem',
+                    background: '#fdecea',
+                    color: '#b71c1c',
+                    border: '1px solid #ef9a9a',
+                  }}
+                >
+                  ⚠️ {avisoDescarga}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: '15px', marginTop: '10px', flexWrap: 'wrap' }}>
                 <button 
                   disabled={isDownloading}
                   onClick={() => descargarPDF(selectedReserva)} 
-                  style={{ flex: 1, background: isDownloading ? '#b0c4de' : '#006ce4', color: 'white', border: 'none', padding: '12px', borderRadius: '4px', fontWeight: 'bold', cursor: isDownloading ? 'wait' : 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                  style={{ flex: 1, minWidth: '120px', background: isDownloading ? '#b0c4de' : '#006ce4', color: 'white', border: 'none', padding: '12px', borderRadius: '4px', fontWeight: 'bold', cursor: isDownloading ? 'wait' : 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
                 >
                   {isDownloading ? (
                     <>
@@ -503,10 +527,19 @@ export function MisReservasPage() {
                   ) : (
                     <>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                      Descargar PDF
+                      Descargar factura
                     </>
                   )}
                 </button>
+
+                {selectedReserva.tipo === 'vuelo' && (
+                  <Link
+                    to={`/vuelos/reservas/${selectedReserva.id}`}
+                    style={{ flex: 1, minWidth: '120px', background: '#003b95', color: 'white', border: 'none', padding: '12px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', textDecoration: 'none', textAlign: 'center' }}
+                  >
+                    🎫 Check-in online
+                  </Link>
+                )}
               </div>
 
             </div>
@@ -517,4 +550,3 @@ export function MisReservasPage() {
     </main>
   );
 }
-

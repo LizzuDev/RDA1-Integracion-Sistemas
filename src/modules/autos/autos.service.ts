@@ -192,6 +192,7 @@ export class AutosService {
       auto_id: order.autoId,
       total_price: order.totalPrice,
       dias_renta: order.diasRenta,
+      createdAt: order.createdAt,
       _links: {
         self: { href: `/api/v1/autos/orders/${order.id}`, type: 'GET' },
         cancelar: { href: `/api/v1/autos/orders/${order.id}/cancel`, type: 'POST' }

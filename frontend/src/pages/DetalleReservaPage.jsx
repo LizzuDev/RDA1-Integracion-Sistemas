@@ -349,41 +349,7 @@ export function DetalleReservaPage({ bookingId }) {
           >
             {checkinHecho ? 'Check-in hecho' : 'Hacer check-in'}
           </button>
-          <button
-            type="button"
-            className="btn-secundario"
-            onClick={() => setModal('cambiar-fecha')}
-            disabled={!cambiable}
-            title={
-              cambiable
-                ? 'Buscar otro vuelo para otra fecha'
-                : 'Solo las reservas confirmadas pueden cambiar de fecha.'
-            }
-          >
-            Modificar fecha
-          </button>
-          <button
-            type="button"
-            className="btn-secundario"
-            onClick={() => setModal('equipaje')}
-            disabled={!confirmada || equipaje.length === 0}
-            title={
-              !confirmada
-                ? 'La reserva ya no admite equipaje.'
-                : 'Añadir maleta extra'
-            }
-          >
-            Añadir equipaje
-          </button>
-          <button
-            type="button"
-            className="btn-peligro"
-            onClick={() => setModal('cancelar')}
-            disabled={!cancelable}
-            title={!cancelable ? 'Esta reserva ya no se puede cancelar.' : undefined}
-          >
-            Cancelar reserva
-          </button>
+
         </div>
       )}
 
