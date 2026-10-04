@@ -2,13 +2,9 @@ import { Injectable, Logger, HttpException, HttpStatus, OnModuleInit } from '@ne
 import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
-import { firstValueFrom } from 'rxjs';
 
 import { Alojamiento } from './entities/alojamiento.entity';
 import { ReservaAlojamiento } from './entities/reserva.entity';
-import { Host } from './entities/host.entity';
-import { Amenidad } from './entities/amenidad.entity';
-import { FotoAlojamiento } from './entities/foto.entity';
 import { ResenaAlojamiento } from './entities/resena.entity';
 
 import { SearchAlojamientosRequestDto } from './dto/search-alojamientos.dto';
@@ -21,7 +17,6 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 @Injectable()
 export class AlojamientosService implements OnModuleInit {
   private readonly logger = new Logger(AlojamientosService.name);
-  private readonly EXTERNAL_API_URL = 'https://jsonplaceholder.typicode.com/posts';
 
   constructor(
     private readonly httpService: HttpService,
@@ -29,12 +24,6 @@ export class AlojamientosService implements OnModuleInit {
     private readonly alojamientoRepo: Repository<Alojamiento>,
     @InjectRepository(ReservaAlojamiento)
     private readonly reservaRepo: Repository<ReservaAlojamiento>,
-    @InjectRepository(Host)
-    private readonly hostRepo: Repository<Host>,
-    @InjectRepository(Amenidad)
-    private readonly amenidadRepo: Repository<Amenidad>,
-    @InjectRepository(FotoAlojamiento)
-    private readonly fotoRepo: Repository<FotoAlojamiento>,
     @InjectRepository(ResenaAlojamiento)
     private readonly resenaRepo: Repository<ResenaAlojamiento>,
   ) {}
@@ -49,10 +38,8 @@ export class AlojamientosService implements OnModuleInit {
   }
 
   private transformAlojamiento(l: Alojamiento) {
-    const photos = (l.fotos && l.fotos.length > 0)
-      ? l.fotos.sort((a, b) => (b.esPrincipal ? 1 : 0) - (a.esPrincipal ? 1 : 0) || a.orden - b.orden)
-          .map((f) => ({ url: f.url, caption: f.titulo }))
-      : [{ url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800' }];
+    const defaultPhoto = [{ url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800', caption: 'Vista Principal' }];
+    const photos = Array.isArray(l.photos) && l.photos.length > 0 ? l.photos : defaultPhoto;
 
     const countryCode =
       l.destino === 'Cancún' ? 'MX' :
@@ -67,8 +54,6 @@ export class AlojamientosService implements OnModuleInit {
       tipo_propiedad: l.tipoPropiedad,
       tipo_alojamiento: l.tipoAlojamiento,
       destino: l.destino,
-      barrio: l.barrio,
-      direccion: l.direccion,
       precioPorNoche: Number(l.precioPorNoche),
       moneda: l.moneda || 'USD',
       capacidadAdultos: l.capacidadAdultos || 2,
@@ -76,38 +61,23 @@ export class AlojamientosService implements OnModuleInit {
       habitaciones: l.habitaciones || 1,
       camas: l.camas || 1,
       banos: Number(l.banos) || 1.0,
-      tienePiscina: l.tienePiscina,
-      host: l.host ? {
-        id: l.host.id,
-        nombre: l.host.nombre,
-        tiempo_respuesta: l.host.tiempoRespuesta,
-        es_superhost: l.host.esSuperhost,
-        foto_perfil: l.host.fotoPerfil,
-      } : null,
+      tienePiscina: Boolean(l.tienePiscina),
+      host: l.host || null,
       photos,
-      ratings: {
-        score: Number(l.rating) || 9.0,
-        limpieza: Number(l.ratingLimpieza) || 9.0,
-        ubicacion: Number(l.ratingUbicacion) || 9.0,
-        servicio: Number(l.ratingServicio) || 9.0,
-        number_of_reviews: l.totalReviews || l.resenas?.length || 0,
+      ratings: l.ratings || {
+        score: 9.0,
+        limpieza: 9.0,
+        ubicacion: 9.0,
+        servicio: 9.0,
+        number_of_reviews: 0,
       },
-      amenidades: l.amenidades?.map((a) => a.nombre) || [],
-      ubicacion: {
-        address: l.direccion || l.barrio || l.destino,
+      amenidades: Array.isArray(l.amenidades) ? l.amenidades : [],
+      ubicacion: l.ubicacion || {
+        address: l.destino,
         city: l.destino,
         country: countryCode,
-        coordinates: {
-          latitude: Number(l.latitud) || 0,
-          longitude: Number(l.longitud) || 0,
-        },
+        coordinates: { latitude: 0, longitude: 0 },
       },
-      resenas: l.resenas?.map((r) => ({
-        autor: r.reviewerName,
-        fecha: r.fecha,
-        puntuacion: Number(r.puntuacion),
-        comentario: r.comentario,
-      })) || [],
       url: { web: `/alojamientos/${l.id}` },
       _links: {
         self: { href: `/api/v1/alojamientos/${l.id}`, type: 'GET' },
@@ -117,7 +87,7 @@ export class AlojamientosService implements OnModuleInit {
   }
 
   async search(dto: SearchAlojamientosRequestDto): Promise<any> {
-    this.logger.log('Búsqueda avanzada de alojamientos', dto);
+    this.logger.log('Búsqueda de alojamientos con filtros', dto);
 
     const where: any = {};
     if (dto.destino) {
@@ -126,7 +96,6 @@ export class AlojamientosService implements OnModuleInit {
 
     const [items, total] = await this.alojamientoRepo.findAndCount({
       where,
-      relations: ['host', 'fotos', 'amenidades', 'resenas'],
       take: dto.rows || 10,
     });
 
@@ -178,10 +147,8 @@ export class AlojamientosService implements OnModuleInit {
     this.logger.log(`Consultando catálogo de alojamientos`);
 
     const locales = await this.alojamientoRepo.find({
-      relations: ['host', 'fotos', 'amenidades', 'resenas'],
       take: query.limit || 10,
       skip: ((query.page || 1) - 1) * (query.limit || 10),
-      order: { rating: 'DESC' },
     });
 
     if (locales.length > 0) {
@@ -197,7 +164,6 @@ export class AlojamientosService implements OnModuleInit {
       };
     }
 
-    // Fallback externo si no hubiera datos
     return {
       data: [],
       meta: { total: 0, limit: query.limit || 10, page: query.page || 1 },
@@ -205,11 +171,10 @@ export class AlojamientosService implements OnModuleInit {
   }
 
   async findOne(id: string): Promise<any> {
-    this.logger.log(`Consultando detalle granular de Alojamiento ID ${id}`);
+    this.logger.log(`Consultando detalle de Alojamiento ID ${id}`);
 
     const local = await this.alojamientoRepo.findOne({
       where: { id },
-      relations: ['host', 'fotos', 'amenidades', 'resenas'],
     });
 
     if (local) {
@@ -233,7 +198,7 @@ export class AlojamientosService implements OnModuleInit {
   }
 
   async reservar(id: string, dto: ReservationRequestDto, idempotencyKey: string): Promise<any> {
-    this.logger.log(`Iniciando reserva granular para Alojamiento ${id} con idempotency key ${idempotencyKey}`);
+    this.logger.log(`Iniciando reserva para Alojamiento ${id} con idempotency key ${idempotencyKey}`);
 
     // Verificación de Idempotencia estricta
     const existing = await this.reservaRepo.findOne({ where: { idempotencyKey } });
@@ -258,6 +223,9 @@ export class AlojamientosService implements OnModuleInit {
       idempotencyKey,
       status: ReservationStatus.CONFIRMED,
       total,
+      totalPrice: { currency: 'USD', total },
+      noches: nights,
+      habitacionesCount: roomsCount,
       customerName: dto.customer_name,
       customerEmail: dto.customer_email || 'cliente@example.com',
       checkin: dto.checkin || new Date().toISOString().split('T')[0],
@@ -299,7 +267,16 @@ export class AlojamientosService implements OnModuleInit {
   }
 
   async create(dto: CreateAlojamientoDto): Promise<any> {
-    const entity = this.alojamientoRepo.create(dto as any);
+    const id = (dto as any).id || `aloj-${Date.now()}`;
+    const entity = this.alojamientoRepo.create({
+      id,
+      ...dto,
+      photos: (dto as any).photos || [{ url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800' }],
+      amenidades: (dto as any).amenidades || [],
+      ratings: (dto as any).ratings || { score: 9.0, number_of_reviews: 0 },
+      host: (dto as any).host || null,
+      ubicacion: (dto as any).ubicacion || { city: dto.destino },
+    } as any);
     return this.alojamientoRepo.save(entity);
   }
 
@@ -331,8 +308,10 @@ export class AlojamientosService implements OnModuleInit {
       customer_email: reserva.customerEmail,
       checkin: reserva.checkin,
       checkout: reserva.checkout,
+      noches: reserva.noches,
       huespedes: reserva.huespedes,
-      total_price: { currency: 'USD', total: Number(reserva.total) },
+      habitaciones_count: reserva.habitacionesCount,
+      total_price: reserva.totalPrice || { currency: 'USD', total: Number(reserva.total) },
       created_at: reserva.createdAt,
       _links: {
         self: { href: `/api/v1/alojamientos/reservations/${reserva.id}`, type: 'GET' },

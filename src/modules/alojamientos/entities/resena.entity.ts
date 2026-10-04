@@ -1,31 +1,42 @@
-import { Column, Entity, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { ColumnNumericTransformer } from '../../../common/transformers/column-numeric.transformer';
-import { Alojamiento } from './alojamiento.entity';
+import {
+  Column,
+  Entity,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+} from 'typeorm';
 
 @Entity('resenas_alojamiento')
 export class ResenaAlojamiento {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({ name: 'alojamiento_id', type: 'varchar', length: 50 })
   alojamientoId: string;
 
-  @Column({ name: 'reviewer_name', type: 'varchar', length: 100 })
-  reviewerName: string;
+  @Column({ name: 'usuario_id', type: 'varchar', length: 100 })
+  usuarioId: string;
 
-  @Column({ type: 'date', default: () => 'CURRENT_DATE' })
-  fecha: string;
+  @Column({ name: 'usuario_nombre', type: 'varchar', length: 100, default: 'Anónimo' })
+  usuarioNombre: string;
 
-  @Column('numeric', { precision: 3, scale: 1, transformer: new ColumnNumericTransformer() })
-  puntuacion: number;
+  @Column({ name: 'usuario_pais', type: 'varchar', length: 100, default: 'Ecuador' })
+  usuarioPais: string;
 
   @Column({ type: 'text' })
   comentario: string;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
-  creadoEn: Date;
+  @Column({ type: 'float', default: 10.0 })
+  puntuacion: number;
 
-  @ManyToOne(() => Alojamiento, (a) => a.resenas, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'alojamiento_id' })
-  alojamiento?: Alojamiento;
+  @Column({ type: 'float', default: 10.0 })
+  limpieza: number;
+
+  @Column({ type: 'float', default: 10.0 })
+  servicio: number;
+
+  @Column({ type: 'float', default: 10.0 })
+  calidad: number;
+
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
+  createdAt: Date;
 }

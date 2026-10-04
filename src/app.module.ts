@@ -28,9 +28,9 @@ import { VuelosModule } from './modules/vuelos/vuelos.module';
           type: 'postgres',
           url: dbUrl,
           autoLoadEntities: true,
-          synchronize: configService.get<string>('NODE_ENV') !== 'production',
+          synchronize: isCloudDb ? false : configService.get<string>('NODE_ENV') !== 'production',
           ssl: isCloudDb || process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-          extra: { max: 1 },
+          extra: { max: 5 },
         };
       },
     }),

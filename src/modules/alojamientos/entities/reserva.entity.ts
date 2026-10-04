@@ -1,4 +1,10 @@
-import { Column, Entity, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { ColumnNumericTransformer } from '../../../common/transformers/column-numeric.transformer';
 
 @Entity('reservas_alojamiento')
@@ -12,14 +18,11 @@ export class ReservaAlojamiento {
   @Column({ name: 'alojamiento_id', type: 'varchar', length: 50 })
   alojamientoId: string;
 
-  @Column({ name: 'huesped_id', type: 'uuid', nullable: true })
-  huespedId?: string;
-
   @Column({ name: 'cliente_nombre', type: 'varchar', length: 150 })
   customerName: string;
 
-  @Column({ name: 'cliente_email', type: 'varchar', length: 150 })
-  customerEmail: string;
+  @Column({ name: 'cliente_email', type: 'varchar', length: 150, nullable: true })
+  customerEmail?: string;
 
   @Column({ name: 'fecha_inicio', type: 'date' })
   checkin: string;
@@ -27,8 +30,14 @@ export class ReservaAlojamiento {
   @Column({ name: 'fecha_fin', type: 'date' })
   checkout: string;
 
+  @Column({ name: 'noches', type: 'int', default: 1 })
+  noches: number;
+
   @Column({ name: 'huespedes', type: 'int', default: 1 })
   huespedes: number;
+
+  @Column({ name: 'habitaciones_count', type: 'int', default: 1 })
+  habitacionesCount: number;
 
   @Column('numeric', {
     name: 'total',
@@ -38,12 +47,18 @@ export class ReservaAlojamiento {
   })
   total: number;
 
+  @Column('jsonb', { name: 'total_price', nullable: true })
+  totalPrice?: { currency: string; total: number };
+
   @Column({ name: 'estado', type: 'varchar', length: 50, default: 'CONFIRMADA' })
   status: string;
 
   @Column({ name: 'idempotency_key', type: 'varchar', length: 255, unique: true, nullable: true })
   idempotencyKey?: string;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'actualizado_en', type: 'timestamp', nullable: true })
+  updatedAt?: Date;
 }

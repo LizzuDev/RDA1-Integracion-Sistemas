@@ -25,7 +25,9 @@ export class SupabaseOrquestadorService {
     const key = this.config.get<string>('SUPABASE_SECRET_KEY');
 
     if (!url || !key) {
-      throw new Error('SUPABASE_URL y SUPABASE_SECRET_KEY son obligatorios.');
+      this.logger.warn('SUPABASE_URL o SUPABASE_SECRET_KEY no definidos en variables de entorno. SupabaseOrquestadorService inicializado con cliente placeholder.');
+      this.supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
+      return;
     }
 
     this.supabase = createClient(url, key);

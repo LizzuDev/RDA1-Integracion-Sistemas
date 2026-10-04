@@ -5,9 +5,6 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import { AlojamientosService } from './alojamientos.service';
 import { Alojamiento } from './entities/alojamiento.entity';
 import { ReservaAlojamiento } from './entities/reserva.entity';
-import { Host } from './entities/host.entity';
-import { Amenidad } from './entities/amenidad.entity';
-import { FotoAlojamiento } from './entities/foto.entity';
 import { ResenaAlojamiento } from './entities/resena.entity';
 import { ReservationStatus } from './dto/reservation.dto';
 
@@ -15,6 +12,7 @@ describe('AlojamientosService', () => {
   let service: AlojamientosService;
   let alojamientoRepo: any;
   let reservaRepo: any;
+  let resenaRepo: any;
 
   const mockAlojamiento: Partial<Alojamiento> = {
     id: 'test-uuid-1',
@@ -27,12 +25,11 @@ describe('AlojamientosService', () => {
     camas: 4,
     banos: 2,
     tienePiscina: true,
-    rating: 9.5,
-    fotos: [
-      { id: 'f1', url: 'https://img.com/1.jpg', titulo: 'Vista', esPrincipal: true, orden: 1 } as any,
-    ],
-    amenidades: [{ id: 'a1', nombre: 'WiFi' } as any],
-    resenas: [],
+    photos: [{ url: 'https://img.com/1.jpg', caption: 'Vista' }],
+    amenidades: ['WiFi', 'Piscina'],
+    ratings: { score: 9.5, number_of_reviews: 10 },
+    host: { id: 'h1', nombre: 'Carlos', es_superhost: true },
+    ubicacion: { city: 'Cancún', country: 'MX' },
   };
 
   beforeEach(async () => {
@@ -55,6 +52,10 @@ describe('AlojamientosService', () => {
       save: jest.fn().mockImplementation((entity) => Promise.resolve({ id: 'res-uuid-1', ...entity })),
     };
 
+    resenaRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AlojamientosService,
@@ -64,10 +65,7 @@ describe('AlojamientosService', () => {
         },
         { provide: getRepositoryToken(Alojamiento), useValue: alojamientoRepo },
         { provide: getRepositoryToken(ReservaAlojamiento), useValue: reservaRepo },
-        { provide: getRepositoryToken(Host), useValue: {} },
-        { provide: getRepositoryToken(Amenidad), useValue: {} },
-        { provide: getRepositoryToken(FotoAlojamiento), useValue: {} },
-        { provide: getRepositoryToken(ResenaAlojamiento), useValue: {} },
+        { provide: getRepositoryToken(ResenaAlojamiento), useValue: resenaRepo },
       ],
     }).compile();
 
@@ -128,7 +126,6 @@ describe('AlojamientosService', () => {
 
       expect(result.status).toBe(ReservationStatus.CONFIRMED);
       expect(result.customer_name).toBe('Juan Pérez');
-      // Precio por noche = 200 * 3 noches * 2 habitaciones = 1200
       expect(result.total_price.total).toBe(1200);
       expect(result._links.cancelar).toBeDefined();
     });

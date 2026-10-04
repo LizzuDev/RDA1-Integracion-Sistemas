@@ -4,25 +4,14 @@ import {
   PrimaryColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  OneToMany,
-  ManyToMany,
-  JoinColumn,
-  JoinTable,
+  DeleteDateColumn,
 } from 'typeorm';
 import { ColumnNumericTransformer } from '../../../common/transformers/column-numeric.transformer';
-import { Host } from './host.entity';
-import { Amenidad } from './amenidad.entity';
-import { FotoAlojamiento } from './foto.entity';
-import { ResenaAlojamiento } from './resena.entity';
 
 @Entity('alojamientos')
 export class Alojamiento {
   @PrimaryColumn({ type: 'varchar', length: 50 })
   id: string;
-
-  @Column({ name: 'host_id', type: 'varchar', length: 50, nullable: true })
-  hostId?: string;
 
   @Column({ type: 'varchar', length: 255 })
   nombre: string;
@@ -39,34 +28,21 @@ export class Alojamiento {
   @Column({ type: 'varchar', length: 100 })
   destino: string;
 
-  @Column({ type: 'varchar', length: 150, nullable: true })
-  barrio?: string;
-
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  direccion?: string;
-
   @Column('numeric', {
-    name: 'latitud',
+    name: 'precio_noche',
     precision: 10,
-    scale: 7,
-    nullable: true,
+    scale: 2,
     transformer: new ColumnNumericTransformer(),
   })
-  latitud?: number;
+  precioPorNoche: number;
 
-  @Column('numeric', {
-    name: 'longitud',
-    precision: 10,
-    scale: 7,
-    nullable: true,
-    transformer: new ColumnNumericTransformer(),
-  })
-  longitud?: number;
+  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  moneda: string;
 
-  @Column({ name: 'capacidad_maxima', type: 'int', default: 2 })
+  @Column({ name: 'capacidad_adultos', type: 'int', default: 2 })
   capacidadAdultos: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'capacidad_ninos', type: 'int', default: 0 })
   capacidadNinos: number;
 
   @Column({ type: 'int', default: 1 })
@@ -84,83 +60,50 @@ export class Alojamiento {
   })
   banos: number;
 
-  @Column('numeric', {
-    name: 'precio_noche',
-    precision: 10,
-    scale: 2,
-    transformer: new ColumnNumericTransformer(),
-  })
-  precioPorNoche: number;
+  @Column({ name: 'tiene_piscina', type: 'boolean', default: false })
+  tienePiscina: boolean;
 
-  @Column({ type: 'varchar', length: 10, default: 'USD' })
-  moneda: string;
+  @Column('jsonb', { nullable: true, default: () => "'[]'::jsonb" })
+  photos: { url: string; caption?: string }[];
 
-  @Column('numeric', {
-    name: 'rating',
-    precision: 3,
-    scale: 2,
-    default: 9.0,
-    transformer: new ColumnNumericTransformer(),
-  })
-  rating: number;
+  @Column('jsonb', { nullable: true, default: () => "'[]'::jsonb" })
+  amenidades: string[];
 
-  @Column('numeric', {
-    name: 'rating_limpieza',
-    precision: 3,
-    scale: 2,
-    default: 9.0,
-    transformer: new ColumnNumericTransformer(),
-  })
-  ratingLimpieza: number;
+  @Column('jsonb', { nullable: true, default: () => "'{}'::jsonb" })
+  host: {
+    id?: string;
+    nombre?: string;
+    tiempo_respuesta?: string;
+    es_superhost?: boolean;
+    foto_perfil?: string;
+  };
 
-  @Column('numeric', {
-    name: 'rating_ubicacion',
-    precision: 3,
-    scale: 2,
-    default: 9.0,
-    transformer: new ColumnNumericTransformer(),
-  })
-  ratingUbicacion: number;
+  @Column('jsonb', { nullable: true, default: () => "'{}'::jsonb" })
+  ratings: {
+    score?: number;
+    limpieza?: number;
+    ubicacion?: number;
+    servicio?: number;
+    number_of_reviews?: number;
+  };
 
-  @Column('numeric', {
-    name: 'rating_servicio',
-    precision: 3,
-    scale: 2,
-    default: 9.0,
-    transformer: new ColumnNumericTransformer(),
-  })
-  ratingServicio: number;
+  @Column('jsonb', { nullable: true, default: () => "'{}'::jsonb" })
+  ubicacion: {
+    address?: string;
+    city?: string;
+    country?: string;
+    coordinates?: {
+      latitude?: number;
+      longitude?: number;
+    };
+  };
 
-  @Column({ name: 'total_reviews', type: 'int', default: 0 })
-  totalReviews: number;
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
+  createdAt: Date;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz', nullable: true })
-  createdAt?: Date;
+  @UpdateDateColumn({ name: 'actualizado_en', type: 'timestamp' })
+  updatedAt: Date;
 
-  @UpdateDateColumn({ name: 'actualizado_en', type: 'timestamptz', nullable: true })
-  updatedAt?: Date;
-
-  // Relaciones
-  @ManyToOne(() => Host, { nullable: true })
-  @JoinColumn({ name: 'host_id' })
-  host?: Host;
-
-  @OneToMany(() => FotoAlojamiento, (f) => f.alojamiento)
-  fotos?: FotoAlojamiento[];
-
-  @ManyToMany(() => Amenidad)
-  @JoinTable({
-    name: 'alojamiento_amenidades',
-    joinColumn: { name: 'alojamiento_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'amenidad_id', referencedColumnName: 'id' },
-  })
-  amenidades?: Amenidad[];
-
-  @OneToMany(() => ResenaAlojamiento, (r) => r.alojamiento)
-  resenas?: ResenaAlojamiento[];
-
-  // Helpers computados para retrocompatibilidad con la API
-  get tienePiscina(): boolean {
-    return this.amenidades?.some((a) => a.nombre.toLowerCase().includes('piscina')) ?? true;
-  }
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
+  deletedAt?: Date;
 }
