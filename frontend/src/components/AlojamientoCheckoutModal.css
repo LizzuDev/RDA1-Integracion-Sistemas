@@ -1,0 +1,779 @@
+/* ==========================================================================
+   BOOKING.COM OFFICIAL CHECKOUT FLOW - STYLES
+   Replicating the authentic Booking.com multi-step checkout experience
+   ========================================================================== */
+
+.bkg-checkout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: #f5f5f5;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* TOP NAVBAR */
+.bkg-checkout-nav {
+  background-color: #003580;
+  color: #ffffff;
+  padding: 12px 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.bkg-checkout-nav-inner {
+  max-width: 1140px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bkg-checkout-logo {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bkg-checkout-logo .logo-dot {
+  color: #006ce4;
+}
+
+.bkg-checkout-close-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bkg-checkout-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: #ffffff;
+}
+
+/* STEPPER HEADER */
+.bkg-checkout-stepper-wrap {
+  background: #ffffff;
+  border-bottom: 1px solid #e7e7e7;
+  padding: 16px 24px;
+}
+
+.bkg-checkout-stepper {
+  max-width: 1140px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 32px;
+}
+
+.bkg-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b6b6b;
+}
+
+.bkg-step-item.active {
+  font-weight: 700;
+  color: #003580;
+}
+
+.bkg-step-item.completed {
+  color: #008009;
+}
+
+.bkg-step-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: #e7e7e7;
+  color: #6b6b6b;
+}
+
+.bkg-step-item.active .bkg-step-circle {
+  background: #006ce4;
+  color: #ffffff;
+}
+
+.bkg-step-item.completed .bkg-step-circle {
+  background: #008009;
+  color: #ffffff;
+}
+
+.bkg-step-divider {
+  flex: 1;
+  max-width: 60px;
+  height: 1px;
+  background: #e7e7e7;
+}
+
+/* MAIN CONTAINER (2 COLUMNS) */
+.bkg-checkout-container {
+  max-width: 1140px;
+  margin: 24px auto 48px auto;
+  padding: 0 16px;
+  display: grid;
+  grid-template-columns: 370px 1fr;
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .bkg-checkout-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* SIDEBAR CARDS */
+.bkg-checkout-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bkg-card {
+  background: #ffffff;
+  border: 1px solid #e7e7e7;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* HOTEL SUMMARY CARD */
+.bkg-hotel-card-thumb {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.bkg-hotel-stars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.bkg-hotel-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1.25;
+  margin: 0 0 6px 0;
+}
+
+.bkg-hotel-address {
+  font-size: 13px;
+  color: #595959;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.bkg-hotel-location-score {
+  font-size: 13px;
+  color: #008009;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.bkg-score-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bkg-score-badge {
+  background: #003580;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px 4px 4px 0;
+}
+
+.bkg-score-text {
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+.bkg-amenities-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 10px;
+}
+
+.bkg-amenity-tag {
+  font-size: 12px;
+  color: #4b5563;
+  background: #f3f4f6;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+/* BOOKING DETAILS CARD */
+.bkg-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: #1a1a1a;
+}
+
+.bkg-booking-dates-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.bkg-date-col-label {
+  font-size: 12px;
+  color: #595959;
+  margin-bottom: 2px;
+}
+
+.bkg-date-col-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.bkg-date-col-hours {
+  font-size: 12px;
+  color: #595959;
+}
+
+.bkg-today-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #d4111e;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.bkg-total-stay-text {
+  font-size: 13px;
+  color: #1a1a1a;
+  line-height: 1.4;
+}
+
+.bkg-change-selection-link {
+  display: inline-block;
+  font-size: 13px;
+  color: #006ce4;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.bkg-change-selection-link:hover {
+  text-decoration: underline;
+}
+
+/* PRICE SUMMARY CARD */
+.bkg-price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #595959;
+  margin-bottom: 6px;
+}
+
+.bkg-price-row.strike {
+  text-decoration: line-through;
+}
+
+.bkg-price-row.discount {
+  color: #008009;
+  font-weight: 600;
+}
+
+.bkg-final-price-box {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.bkg-final-price-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.bkg-final-price-label {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+.bkg-final-price-num {
+  font-size: 26px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+.bkg-taxes-note {
+  font-size: 12px;
+  color: #595959;
+  text-align: right;
+  margin-top: 2px;
+}
+
+.bkg-taxes-dropdown-btn {
+  background: transparent;
+  border: none;
+  color: #006ce4;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bkg-taxes-breakdown {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+/* POLICY & URGENCY CARDS */
+.bkg-cancellation-card {
+  font-size: 13px;
+  color: #1a1a1a;
+  line-height: 1.4;
+}
+
+.bkg-cancellation-price {
+  font-weight: 700;
+}
+
+.bkg-urgency-card {
+  border: 1px solid #f87171;
+  background: #fff5f5;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.bkg-urgency-card h5 {
+  margin: 0 0 2px 0;
+  color: #991b1b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bkg-urgency-card p {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* PROMO CODE CARD (STEP 2) */
+.bkg-promo-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.bkg-promo-input {
+  flex: 1;
+  border: 1px solid #868686;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.bkg-promo-btn {
+  background: #ffffff;
+  border: 1px solid #006ce4;
+  color: #006ce4;
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.bkg-promo-btn:hover {
+  background: #ebf3ff;
+}
+
+/* MAIN FORM COLUMN */
+.bkg-checkout-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* INFO CALLOUT BANNER */
+.bkg-info-banner {
+  background: #eef5ff;
+  border: 1px solid #cce0ff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #003580;
+  font-weight: 600;
+}
+
+/* FORM FIELDS */
+.bkg-radio-group {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.bkg-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.bkg-form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 600px) {
+  .bkg-form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bkg-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.bkg-input-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.bkg-input-group input,
+.bkg-input-group select,
+.bkg-input-group textarea {
+  border: 1px solid #868686;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #1a1a1a;
+  background: #ffffff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bkg-input-group input:focus,
+.bkg-input-group select:focus,
+.bkg-input-group textarea:focus {
+  border-color: #006ce4;
+  box-shadow: 0 0 0 2px rgba(0, 108, 228, 0.2);
+}
+
+.bkg-input-subtext {
+  font-size: 12px;
+  color: #595959;
+  margin-top: 2px;
+}
+
+.bkg-phone-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.bkg-phone-prefix-select {
+  width: 120px;
+}
+
+.bkg-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #1a1a1a;
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+.bkg-checkbox-label input {
+  margin-top: 2px;
+}
+
+/* ROOM SUMMARY BOX */
+.bkg-room-summary-box {
+  background: #fbfbfb;
+  border: 1px solid #e7e7e7;
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.bkg-room-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  color: #008009;
+  font-weight: 600;
+}
+
+/* ADDONS / CROSS-SELLING */
+.bkg-addon-item {
+  border: 1px solid #e7e7e7;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bkg-addon-info h6 {
+  margin: 0 0 2px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.bkg-addon-info p {
+  margin: 0;
+  font-size: 12px;
+  color: #595959;
+}
+
+/* PAYMENT METHODS CARD (STEP 2) */
+.bkg-pay-property-banner {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.bkg-pay-property-banner h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.bkg-pay-property-banner p {
+  margin: 0;
+  font-size: 13px;
+  color: #595959;
+}
+
+.bkg-card-brands-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 16px 0;
+}
+
+.bkg-brand-badge {
+  background: #f0f0f0;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #333333;
+}
+
+.bkg-card-input-with-icon {
+  position: relative;
+}
+
+.bkg-card-input-with-icon input {
+  padding-left: 38px;
+}
+
+.bkg-card-input-with-icon svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ACTIONS BAR */
+.bkg-checkout-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.bkg-btn-primary {
+  background-color: #006ce4;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bkg-btn-primary:hover {
+  background-color: #0057b8;
+}
+
+.bkg-btn-primary:disabled {
+  background-color: #93c5fd;
+  cursor: not-allowed;
+}
+
+.bkg-btn-secondary {
+  background: transparent;
+  color: #006ce4;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.bkg-price-match-guarantee {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #595959;
+}
+
+/* CONFIRMATION SCREEN (STEP 3) */
+.bkg-confirmed-container {
+  max-width: 800px;
+  margin: 32px auto;
+  background: #ffffff;
+  border: 1px solid #e7e7e7;
+  border-radius: 8px;
+  padding: 32px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.bkg-confirmed-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bkg-confirmed-check-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bkg-confirmed-header h2 {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #065f46;
+}
+
+.bkg-confirmed-pnr-box {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bkg-confirmed-details-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.bkg-confirmed-detail-item {
+  font-size: 14px;
+}
+
+.bkg-confirmed-detail-item strong {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.bkg-confirmed-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}

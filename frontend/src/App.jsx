@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import { AlojamientosPage } from './pages/AlojamientosPage';
 import { AlojamientosSearchPage } from './pages/AlojamientosSearchPage';
 import { AlojamientoDetail } from './pages/AlojamientoDetail';
+import { AlojamientoCheckoutPage } from './pages/AlojamientoCheckoutPage';
 
 // --- Modulo de Atracciones ---
 import { AtraccionesPage } from './pages/AtraccionesPage';
@@ -80,6 +81,8 @@ function App() {
           <Route path="/alojamientos" element={<AlojamientosPage />} />
           <Route path="/alojamientos/search" element={<AlojamientosSearchPage />} />
           <Route path="/searchresults" element={<AlojamientosSearchPage />} />
+          <Route path="/alojamientos/checkout" element={<AlojamientoCheckoutPage />} />
+          <Route path="/book.html" element={<AlojamientoCheckoutPage />} />
           <Route path="/alojamientos/:id" element={<AlojamientoDetail />} />
 
           {/* Rutas de Atracciones */}
