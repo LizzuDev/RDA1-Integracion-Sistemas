@@ -159,22 +159,31 @@ export function MisReservasPage() {
         link: '/'
       }));
 
-      // 4. Alojamientos (Local storage & default fallback si está vacío)
-      let alojamientosLocales = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
-      if (alojamientosLocales.length === 0 && vuelosItems.length === 0 && autosItems.length === 0 && atraccionesItems.length === 0) {
-        alojamientosLocales = [
-          {
-            id: 'HOTEL-789012',
-            titulo: 'Grand Hotel Guayaquil (3 noches)',
-            fecha: '2026-10-15',
-            status: 'CONFIRMED',
-            total: 245.00
-          }
-        ];
+      // 4. Alojamientos API & Local
+      let alojamientosApiItems = [];
+      try {
+        const respuestaAlojamientos = await getReservasAlojamientos();
+        const listaAlojamientos = Array.isArray(respuestaAlojamientos) ? respuestaAlojamientos : (respuestaAlojamientos?.data || []);
+        alojamientosApiItems = listaAlojamientos.map((al) => ({
+          id: al.reservation_id || al.id,
+          pnr: al.codigo_reserva || (al.reservation_id || al.id || 'HOTEL').substring(0, 8).toUpperCase(),
+          tipo: 'alojamiento',
+          icono: '🛏️',
+          servicioTexto: 'Alojamiento',
+          titulo: al.customer_name ? `Hospedaje de ${al.customer_name} (${al.huespedes || 2} personas)` : 'Estadía en Alojamiento',
+          fecha: al.checkin ? formatearFecha(al.checkin) : '2026-10-15',
+          status: al.status || 'CONFIRMED',
+          totalRaw: al.total_price?.total || al.total || 180.00,
+          link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/'
+        }));
+      } catch (err) {
+        // Fallback silencioso
       }
-      const alojamientosFormatted = alojamientosLocales.map(al => ({
-        id: al.id,
-        pnr: (al.id || 'HOTEL').substring(0, 6).toUpperCase(),
+
+      const alojamientosLocales = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+      const alojamientosLocalesFormatted = alojamientosLocales.map((al) => ({
+        id: al.reservationId || al.id,
+        pnr: al.reservationId || (al.id || 'HOTEL').substring(0, 8).toUpperCase(),
         tipo: 'alojamiento',
         icono: '🛏️',
         servicioTexto: 'Alojamiento',
@@ -182,15 +191,15 @@ export function MisReservasPage() {
         fecha: al.createdAt ? formatearFecha(String(al.createdAt).split('T')[0]) : formatearFecha(new Date().toISOString().split('T')[0]),
         rawDate: al.createdAt ? new Date(al.createdAt).getTime() : new Date().getTime(),
         status: al.status || 'CONFIRMED',
-        totalRaw: al.total || 245.00,
-        link: '/'
+        totalRaw: al.totalPrice || al.total || 180.00,
+        link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/'
       }));
 
       if (currentFetch !== fetchId.current) return;
 
       // Combinar todas las listas eliminando duplicados por ID
       const mapaCombinado = new Map();
-      [...vuelosItems, ...autosItems, ...autosLocalesFormatted, ...atraccionesItems, ...atraccionesLocalesFormatted, ...alojamientosFormatted].forEach(item => {
+      [...vuelosItems, ...autosItems, ...autosLocalesFormatted, ...atraccionesItems, ...atraccionesLocalesFormatted, ...alojamientosApiItems, ...alojamientosLocalesFormatted].forEach(item => {
         if (!mapaCombinado.has(item.id)) {
           mapaCombinado.set(item.id, item);
         }

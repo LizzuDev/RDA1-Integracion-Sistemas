@@ -4,7 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { CommonModule } from './common/common.module';
 import { CoreModule } from './core/core.module';
-// import { AlojamientosModule } from './modules/alojamientos/alojamientos.module';
+import { AlojamientosModule } from './modules/alojamientos/alojamientos.module';
 import { AutosModule } from './modules/autos/autos.module';
 import { AtraccionesModule } from './modules/atracciones/atracciones.module';
 import { VuelosModule } from './modules/vuelos/vuelos.module';
@@ -48,6 +48,7 @@ import { TelemetryModule } from './modules/telemetry/telemetry.module';
     // =========================================================================
     AtraccionesModule,
     VuelosModule,
+    AlojamientosModule,
     AutosModule,
 
     // Envío de la factura en PDF por correo (SMTP de Gmail)

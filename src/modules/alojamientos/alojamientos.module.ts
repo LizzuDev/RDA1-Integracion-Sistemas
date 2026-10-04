@@ -1,15 +1,25 @@
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
+import { CacheModule } from '@nestjs/cache-manager';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AlojamientosService } from './alojamientos.service';
 import { AlojamientosController } from './alojamientos.controller';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { Alojamiento } from './entities/alojamiento.entity';
-import { CommonModule } from '../../common/common.module';
+import { ReservaAlojamiento } from './entities/reserva.entity';
+import { ResenaAlojamiento } from './entities/resena.entity';
 
 @Module({
-  // Descomentar cuando se configure TypeORM globalmente y se instale pg:
-  // imports: [TypeOrmModule.forFeature([Alojamiento]), CommonModule],
-  imports: [CommonModule],
+  imports: [
+    HttpModule,
+    CacheModule.register({ ttl: 60000 }),
+    TypeOrmModule.forFeature([
+      Alojamiento,
+      ReservaAlojamiento,
+      ResenaAlojamiento,
+    ]),
+  ],
   controllers: [AlojamientosController],
   providers: [AlojamientosService],
+  exports: [AlojamientosService],
 })
 export class AlojamientosModule {}

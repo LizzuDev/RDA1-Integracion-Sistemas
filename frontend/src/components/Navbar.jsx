@@ -7,6 +7,8 @@ import { supabase } from '../services/supabase';
 
 export function Navbar() {
   const location = useLocation();
+  const isAlojamientos = location.pathname === '/' || location.pathname.startsWith('/alojamientos');
+  const isVuelos = location.pathname.startsWith('/vuelos');
   const isAutos = location.pathname.startsWith('/autos');
   const isVuelos = location.pathname.startsWith('/vuelos');
   const isAtracciones = location.pathname === '/' || location.pathname.startsWith('/search') || location.pathname.startsWith('/atracciones');
@@ -127,9 +129,11 @@ export function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-inner">
-        <div className="navbar-logo">
-          Booking<span>.com</span>
-        </div>
+        <Link to="/" style={{ textDecoration: 'none' }}>
+          <div className="navbar-logo">
+            Booking<span>.com</span>
+          </div>
+        </Link>
         <div className="navbar-actions">
           <span className="nav-currency" onClick={() => setShowCurrencyModal(true)} style={{ cursor: 'pointer', padding: '8px 12px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             {currency} 

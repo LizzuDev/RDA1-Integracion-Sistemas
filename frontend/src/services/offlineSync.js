@@ -56,6 +56,8 @@ export async function syncPendingReservations() {
         await reservarAtraccion(task.payload.atraccionId, task.payload.data, task.idempotencyKey);
       } else if (task.tipo === 'vuelo') {
         await crearReservaVuelo(task.payload, task.idempotencyKey, task.fingerprint);
+      } else if (task.tipo === 'alojamiento') {
+        await reservarAlojamiento(task.payload.alojamientoId, task.payload.data, task.idempotencyKey);
       }
       
       console.log(`[Offline Sync] ✅ Sincronización exitosa para reserva de ${task.tipo} (${task.id})`);
