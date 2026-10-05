@@ -81,8 +81,13 @@ export function AtraccionesPage() {
   const [formError, setFormError] = useState('');
 
   const handleSearch = () => {
-    if (!busqueda.trim() || !startDate || !endDate) {
-      setFormError('Por favor, ingresa el destino y selecciona las fechas (inicio y fin) para realizar la búsqueda.');
+    const faltantes = [];
+    if (!busqueda.trim()) faltantes.push('Destino');
+    if (!startDate) faltantes.push('Fecha de inicio');
+    if (!endDate) faltantes.push('Fecha de fin');
+
+    if (faltantes.length > 0) {
+      setFormError(`Por favor completa los siguientes campos obligatorios: ${faltantes.join(', ')}.`);
       return;
     }
     setFormError('');
