@@ -228,13 +228,21 @@ export function AutosPage() {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    const faltantes = [];
-    if (!pickupLocation.trim()) faltantes.push('Lugar de recogida');
-    if (!startDate) faltantes.push('Fecha de Salida');
-    if (!endDate) faltantes.push('Fecha de Regreso');
+    const hasLugar = pickupLocation.trim() !== '';
+    const hasFechas = startDate && endDate;
 
-    if (faltantes.length > 0) {
-      setFormError(`Por favor completa los siguientes campos obligatorios: ${faltantes.join(', ')}.`);
+    if (!hasLugar && !hasFechas) {
+      setFormError('Por favor coloque el lugar de recogida y escoja las fechas de salida y regreso.');
+      setFlashRed(true);
+      setTimeout(() => setFlashRed(false), 800);
+      return;
+    } else if (!hasLugar) {
+      setFormError('Por favor coloque el lugar de recogida.');
+      setFlashRed(true);
+      setTimeout(() => setFlashRed(false), 800);
+      return;
+    } else if (!hasFechas) {
+      setFormError('Por favor escoja las fechas de salida y regreso.');
       setFlashRed(true);
       setTimeout(() => setFlashRed(false), 800);
       return;

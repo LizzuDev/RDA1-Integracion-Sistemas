@@ -81,15 +81,20 @@ export function AtraccionesPage() {
   const [formError, setFormError] = useState('');
 
   const handleSearch = () => {
-    const faltantes = [];
-    if (!busqueda.trim()) faltantes.push('Destino');
-    if (!startDate) faltantes.push('Fecha de inicio');
-    if (!endDate) faltantes.push('Fecha de fin');
+    const hasDestino = busqueda.trim() !== '';
+    const hasFechas = startDate && endDate;
 
-    if (faltantes.length > 0) {
-      setFormError(`Por favor completa los siguientes campos obligatorios: ${faltantes.join(', ')}.`);
+    if (!hasDestino && !hasFechas) {
+      setFormError('Por favor coloque el destino y escoja el rango de fecha.');
+      return;
+    } else if (!hasDestino) {
+      setFormError('Por favor coloque el destino.');
+      return;
+    } else if (!hasFechas) {
+      setFormError('Por favor escoja el rango de fecha.');
       return;
     }
+
     setFormError('');
     navigate(`/search?destino=${encodeURIComponent(busqueda)}`);
   };
