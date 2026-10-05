@@ -180,19 +180,14 @@ export function AlojamientoCheckoutModal({
 
     const idempotencyKey = uuidv4();
     const payload = {
-      checkin,
-      checkout,
-      habitaciones_count: parseInt(rooms, 10),
-      nights: nightsCount,
-      customer_name: `${nombre} ${apellidos}`.trim(),
-      customer_email: email.trim(),
-      phone: `${telefonoPrefijo} ${telefono}`.trim(),
-      guest_name: nombreHuesped || `${nombre} ${apellidos}`.trim(),
-      special_requests: peticionesEspeciales,
-      arrival_time: horaLlegada,
-      travel_purpose: viajaPorTrabajo === 'si' ? 'business' : 'leisure',
-      card_holder: titularTarjeta,
-      payment_method: 'pay_at_property',
+      checkin: checkin || new Date().toISOString().split('T')[0],
+      checkout: checkout || new Date(Date.now() + 86400000 * (nightsCount || 1)).toISOString().split('T')[0],
+      habitaciones_count: Math.max(1, parseInt(rooms, 10) || 1),
+      nights: Math.max(1, parseInt(nightsCount, 10) || 1),
+      customer_name: `${nombre} ${apellidos}`.trim() || 'Huésped',
+      customer_email: email.trim() || 'cliente@example.com',
+      adultos: Math.max(1, parseInt(adults, 10) || 2),
+      ninos: 0,
     };
 
     const codigoReservaPnr = `BKG-${uuidv4().substring(0, 6).toUpperCase()}`;
@@ -224,10 +219,10 @@ export function AlojamientoCheckoutModal({
         reservationId: codigoReservaPnr,
         alojamientoId: alojamiento.id,
         titulo: `${alojamiento?.nombre} (${nightsCount} noches)`,
-        checkin,
-        checkout,
-        fecha: checkin,
-        habitaciones: rooms,
+        checkin: payload.checkin,
+        checkout: payload.checkout,
+        fecha: payload.checkin,
+        habitaciones: payload.habitaciones_count,
         huesped: `${nombre} ${apellidos}`.trim(),
         email: email.trim(),
         status: 'PENDING_OFFLINE',
@@ -262,10 +257,10 @@ export function AlojamientoCheckoutModal({
         reservationId: reservationCode,
         alojamientoId: alojamiento.id,
         titulo: `${alojamiento?.nombre} (${nightsCount} noches)`,
-        checkin,
-        checkout,
-        fecha: checkin,
-        habitaciones: rooms,
+        checkin: payload.checkin,
+        checkout: payload.checkout,
+        fecha: payload.checkin,
+        habitaciones: payload.habitaciones_count,
         huesped: `${nombre} ${apellidos}`.trim(),
         email: email.trim(),
         status: res.status || 'CONFIRMED',
@@ -283,7 +278,9 @@ export function AlojamientoCheckoutModal({
       if (err.response?.status === 409) {
         setErrorMsg('Esta reserva ya fue procesada anteriormente.');
       } else {
-        setErrorMsg(err.response?.data?.message || 'Hubo un inconveniente al procesar tu reserva. Inténtalo de nuevo.');
+        const errorDetail = err.response?.data?.detail || err.response?.data?.message;
+        const invalidParams = err.response?.data?.invalidParams?.map(p => `${p.name}: ${p.reason}`).join(', ');
+        setErrorMsg(invalidParams || errorDetail || 'Hubo un inconveniente al procesar tu reserva. Inténtalo de nuevo.');
       }
     } finally {
       setLoading(false);
