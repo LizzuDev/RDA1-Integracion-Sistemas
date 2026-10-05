@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 import { searchAutos } from '../services/autosApi';
 import { AutoCard } from '../components/AutoCard';
 import DatePicker from 'react-datepicker';
@@ -14,6 +15,7 @@ export function AutosPage() {
   const [error, setError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
   const { convertPrice, currency } = useCurrency();
+  const { user } = useAuth();
   
   // Search form state
   const [pickupLocation, setPickupLocation] = useState('');
@@ -354,22 +356,27 @@ export function AutosPage() {
         </section>
 
         {/* VIAJA MAS Y GASTA MENOS */}
-        <section style={{ marginBottom: '40px' }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '15px', fontWeight: 'bold', color: '#333' }}>Viaja más y gasta menos</h2>
-          <div style={{ border: '1px solid #e7e7e7', borderRadius: '8px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white' }}>
-            <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px' }}>Inicia sesión y ahorra</h3>
-              <p style={{ color: '#333', fontSize: '0.9rem', marginBottom: '16px' }}>Ahorra un 10% en coches de alquiler seleccionados. Busca la etiqueta azul de Genius.</p>
-              <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                <button style={{ background: '#006ce4', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => navigate('/login')}>Inicia sesión</button>
-                <span style={{ color: '#006ce4', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => navigate('/register')}>Hazte una cuenta</span>
+        {!user && (
+          <section style={{ marginBottom: '40px' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '15px', fontWeight: 'bold', color: '#333' }}>Viaja más y gasta menos</h2>
+            <div style={{ border: '1px solid #e7e7e7', borderRadius: '8px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white' }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px' }}>Inicia sesión y ahorra</h3>
+                <p style={{ color: '#333', fontSize: '0.9rem', marginBottom: '16px' }}>Ahorra un 10% en coches de alquiler seleccionados. Busca la etiqueta azul de Genius.</p>
+                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                  <button style={{ background: '#006ce4', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => navigate('/login')}>Inicia sesión</button>
+                  <span style={{ color: '#006ce4', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => navigate('/register')}>Hazte una cuenta</span>
+                </div>
+              </div>
+              <div style={{ paddingRight: '20px' }}>
+                <div style={{ width: '80px', height: '80px', background: '#006ce4', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '2.5rem', boxShadow: '0 4px 12px rgba(0,108,228,0.3)', position: 'relative' }}>
+                  🌍
+                  <span style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#febb02', color: '#333', fontSize: '0.7rem', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', border: '2px solid white' }}>%</span>
+                </div>
               </div>
             </div>
-            <div style={{ paddingRight: '20px' }}>
-              <img src="https://cf.bstatic.com/static/img/genius-globe-with-badge_large/d8b7ea84752b04f7bdc76d05f32cb72c696e5792.png" alt="Genius" style={{ height: '80px', objectFit: 'contain' }} />
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
       </div>
 
       <div style={{ background: '#f5f5f5', width: '100%', padding: '40px 0', borderTop: '1px solid #e7e7e7', borderBottom: '1px solid #e7e7e7' }}>
