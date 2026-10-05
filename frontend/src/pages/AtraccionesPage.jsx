@@ -185,7 +185,6 @@ export function AtraccionesPage() {
               <h2 className="section-title">Recomendado en Quito</h2>
               <p className="section-subtitle">Nuestra selección de las mejores atracciones basada en IA para ti</p>
             </div>
-            <a href="#" className="see-all-link">Verlas todas</a>
           </div>
 
           {loading && <div className="spinner"></div>}

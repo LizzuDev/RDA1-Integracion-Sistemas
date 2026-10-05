@@ -62,9 +62,70 @@ export function AutosPage() {
   const [sameDropoff, setSameDropoff] = useState(false);
   const [driverAge, setDriverAge] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
+  const [activeDestinationTab, setActiveDestinationTab] = useState(0);
 
   const toggleFaq = (idx) => {
     setOpenFaq(openFaq === idx ? null : idx);
+  };
+
+  // Data for destination tabs
+  const destinationTabs = [
+    {
+      label: 'Ciudades de Ecuador',
+      items: [
+        { name: 'Quito', imgId: 10, puntos: 15, precio: 57.79 },
+        { name: 'Guayaquil', imgId: 12, puntos: 3, precio: 47.70 },
+        { name: 'Cuenca', imgId: 11, puntos: 3, precio: 46.65 },
+        { name: 'Manta', imgId: 13, puntos: 2, precio: 52.64 },
+      ]
+    },
+    {
+      label: 'Aeropuertos de Ecuador',
+      items: [
+        { name: 'Aeropuerto Mariscal Sucre', imgId: 20, puntos: 12, precio: 62.30 },
+        { name: 'Aeropuerto José Joaquín de Olmedo', imgId: 21, puntos: 8, precio: 55.90 },
+        { name: 'Aeropuerto Camilo Ponce Enríquez', imgId: 22, puntos: 4, precio: 48.50 },
+        { name: 'Aeropuerto Eloy Alfaro', imgId: 23, puntos: 3, precio: 51.20 },
+      ]
+    },
+    {
+      label: 'Regiones de Ecuador',
+      items: [
+        { name: 'Costa', imgId: 30, puntos: 20, precio: 44.00 },
+        { name: 'Sierra', imgId: 31, puntos: 18, precio: 49.80 },
+        { name: 'Amazonía', imgId: 32, puntos: 6, precio: 58.40 },
+        { name: 'Galápagos', imgId: 33, puntos: 5, precio: 72.10 },
+      ]
+    },
+    {
+      label: 'Ciudades de todo el mundo',
+      items: [
+        { name: 'Madrid', imgId: 40, puntos: 45, precio: 38.50 },
+        { name: 'Nueva York', imgId: 41, puntos: 60, precio: 85.20 },
+        { name: 'Ciudad de México', imgId: 42, puntos: 35, precio: 42.90 },
+        { name: 'Bogotá', imgId: 43, puntos: 22, precio: 36.70 },
+      ]
+    },
+    {
+      label: 'Aeropuertos de todo el mundo',
+      items: [
+        { name: 'Aeropuerto Adolfo Suárez Barajas', imgId: 50, puntos: 30, precio: 55.00 },
+        { name: 'Aeropuerto Internacional JFK', imgId: 51, puntos: 50, precio: 92.30 },
+        { name: 'Aeropuerto Benito Juárez', imgId: 52, puntos: 28, precio: 47.60 },
+        { name: 'Aeropuerto El Dorado', imgId: 53, puntos: 18, precio: 41.20 },
+      ]
+    },
+  ];
+
+  const handleDestinationCardClick = (destinationName) => {
+    setPickupLocation(destinationName);
+    setPickupError('');
+    setShowSuggestions(false);
+    // Scroll to top (form) and trigger search
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => {
+      fetchData();
+    }, 400);
   };
 
   const fetchData = useCallback(async () => {
@@ -458,47 +519,70 @@ export function AutosPage() {
           <h2 style={{ fontSize: '1.5rem', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Destinos populares en los que alquilar un coche</h2>
           <p style={{ color: '#666', marginBottom: '20px' }}>Descubre más opciones para alquilar un coche económico</p>
           
-          <div style={{ display: 'flex', gap: '20px', borderBottom: '1px solid #e7e7e7', paddingBottom: '10px', marginBottom: '20px', overflowX: 'auto' }}>
-            <button style={{ background: 'white', color: '#006ce4', border: '1px solid #006ce4', padding: '8px 16px', borderRadius: '32px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Ciudades de Ecuador</button>
-            <button style={{ background: 'transparent', color: '#333', border: 'none', padding: '8px 16px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Aeropuertos de Ecuador</button>
-            <button style={{ background: 'transparent', color: '#333', border: 'none', padding: '8px 16px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Regiones de Ecuador</button>
-            <button style={{ background: 'transparent', color: '#333', border: 'none', padding: '8px 16px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Ciudades de todo el mundo</button>
-            <button style={{ background: 'transparent', color: '#333', border: 'none', padding: '8px 16px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Aeropuertos de todo el mundo</button>
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e7e7e7', paddingBottom: '0', marginBottom: '20px', overflowX: 'auto' }}>
+            {destinationTabs.map((tab, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveDestinationTab(idx)}
+                style={{
+                  background: activeDestinationTab === idx ? 'white' : 'transparent',
+                  color: activeDestinationTab === idx ? '#006ce4' : '#333',
+                  border: activeDestinationTab === idx ? '1px solid #006ce4' : 'none',
+                  borderBottom: activeDestinationTab === idx ? '2px solid #006ce4' : 'none',
+                  padding: '8px 16px',
+                  borderRadius: activeDestinationTab === idx ? '32px' : '0',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontWeight: activeDestinationTab === idx ? 'bold' : 'normal',
+                  transition: 'all 0.2s',
+                  marginBottom: '-1px',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
+          {/* Cards for active tab */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
-              <img src="https://picsum.photos/id/10/60/60" alt="Quito" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
-              <div>
-                <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Quito</h3>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>15 puntos de alquiler de coches</div>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(57.79, 'USD')}</strong> al día</div>
+            {destinationTabs[activeDestinationTab].items.map((item, idx) => (
+              <div
+                key={idx}
+                onClick={() => handleDestinationCardClick(item.name)}
+                style={{
+                  display: 'flex',
+                  gap: '15px',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid transparent',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.border = '1px solid #006ce4';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,108,228,0.12)';
+                  e.currentTarget.style.background = '#f0f6ff';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.border = '1px solid transparent';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                <img
+                  src={`https://picsum.photos/id/${item.imgId}/60/60`}
+                  alt={item.name}
+                  style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }}
+                />
+                <div>
+                  <h3 style={{ fontWeight: 'bold', color: '#006ce4', margin: 0, fontSize: '1rem' }}>{item.name}</h3>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>{item.puntos} puntos de alquiler de coches</div>
+                  <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(item.precio, 'USD')}</strong> al día</div>
+                </div>
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
-              <img src="https://picsum.photos/id/11/60/60" alt="Cuenca" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
-              <div>
-                <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Cuenca</h3>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>3 puntos de alquiler de coches</div>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(46.65, 'USD')}</strong> al día</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
-              <img src="https://picsum.photos/id/12/60/60" alt="Guayaquil" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
-              <div>
-                <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Guayaquil</h3>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>3 puntos de alquiler de coches</div>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(47.70, 'USD')}</strong> al día</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center', cursor: 'pointer' }}>
-              <img src="https://picsum.photos/id/13/60/60" alt="Manta" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
-              <div>
-                <h3 style={{ fontWeight: 'bold', color: '#333', margin: 0 }}>Manta</h3>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>2 puntos de alquiler de coches</div>
-                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(52.64, 'USD')}</strong> al día</div>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
       </div>
