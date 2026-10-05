@@ -8,6 +8,37 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { formatearMoneda } from '../services/formato';
 
+const DESTINOS_ECUADOR = [
+  {
+    codigo: 'GYE',
+    nombre: 'Guayaquil',
+    descripcion: 'La Perla del Pacífico',
+    imagen: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=240&fit=crop',
+    desde: '$49',
+  },
+  {
+    codigo: 'CUE',
+    nombre: 'Cuenca',
+    descripcion: 'Ciudad Patrimonio de la Humanidad',
+    imagen: 'https://images.unsplash.com/photo-1519451241324-20b4ea2c4220?w=400&h=240&fit=crop',
+    desde: '$59',
+  },
+  {
+    codigo: 'LOH',
+    nombre: 'Loja',
+    descripcion: 'La Capital Musical del Ecuador',
+    imagen: 'https://images.unsplash.com/photo-1465447142348-e9952c393450?w=400&h=240&fit=crop',
+    desde: '$69',
+  },
+  {
+    codigo: 'GPS',
+    nombre: 'Galápagos',
+    descripcion: 'Paraíso natural único en el mundo',
+    imagen: 'https://images.unsplash.com/photo-1547459124-e23883747a40?w=400&h=240&fit=crop',
+    desde: '$119',
+  },
+];
+
 export function AutosPage() {
   const navigate = useNavigate();
   const [autos, setAutos] = useState([]);
@@ -400,193 +431,193 @@ export function AutosPage() {
 
       {!hasSearched && (
         <>
-          <div className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
-            {/* MARCAS POPULARES */}
-            <section style={{ marginBottom: '40px' }}>
-          <h2 style={{ fontSize: '1.4rem', marginBottom: '20px', fontWeight: 'bold', color: '#333' }}>Empresas populares de alquiler de coches</h2>
-          <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-            {marcasPopulares.map((marca, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                <div style={{ border: '1px solid #e7e7e7', borderRadius: '4px', padding: '15px', width: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: marca.bg, color: marca.color, transition: 'box-shadow 0.2s', height: '60px', fontWeight: '900', fontSize: '1.1rem', textAlign: 'center', letterSpacing: '-0.5px' }} onMouseOver={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'} onMouseOut={e => e.currentTarget.style.boxShadow = 'none'}>
-                  {marca.label}
-                </div>
-                <span style={{ fontSize: '0.85rem', color: '#333' }}>{marca.nombre}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* VIAJA MAS Y GASTA MENOS */}
-        {!user && (
-          <section style={{ marginBottom: '40px' }}>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '15px', fontWeight: 'bold', color: '#333' }}>Viaja más y gasta menos</h2>
-            <div style={{ border: '1px solid #e7e7e7', borderRadius: '8px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white' }}>
-              <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '8px' }}>Inicia sesión y ahorra</h3>
-                <p style={{ color: '#333', fontSize: '0.9rem', marginBottom: '16px' }}>Ahorra un 10% en coches de alquiler seleccionados. Busca la etiqueta azul de Genius.</p>
-                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                  <button style={{ background: '#006ce4', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }} onClick={() => navigate('/login')}>Inicia sesión</button>
-                  <span style={{ color: '#006ce4', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => navigate('/register')}>Hazte una cuenta</span>
-                </div>
-              </div>
-              <div style={{ paddingRight: '20px' }}>
-                <div style={{ width: '80px', height: '80px', background: '#006ce4', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '2.5rem', boxShadow: '0 4px 12px rgba(0,108,228,0.3)', position: 'relative' }}>
-                  🌍
-                  <span style={{ position: 'absolute', bottom: '-5px', right: '-5px', background: '#febb02', color: '#333', fontSize: '0.7rem', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', border: '2px solid white' }}>%</span>
-                </div>
+          {/* Hero */}
+          <section
+            style={{
+              maxWidth: '1024px',
+              margin: '40px auto 0',
+              padding: '0 24px 24px',
+            }}
+          >
+            <div
+              style={{
+                borderRadius: '16px',
+                overflow: 'hidden',
+                position: 'relative',
+                minHeight: '300px',
+                background: '#1a2a4a',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              {/* Background image */}
+              <img
+                src="https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=1200&h=400&fit=crop"
+                alt="Alquiler de coches"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  opacity: 0.45,
+                }}
+              />
+              {/* Text overlay */}
+              <div
+                style={{
+                  position: 'relative',
+                  zIndex: 1,
+                  padding: '40px 48px',
+                  maxWidth: '520px',
+                }}
+              >
+                <h2
+                  style={{
+                    color: '#fff',
+                    fontSize: '2.2rem',
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                    marginBottom: '12px',
+                    textShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  Hay un Ecuador esperándote
+                </h2>
+                <p
+                  style={{
+                    color: 'rgba(255,255,255,0.9)',
+                    fontSize: '1.05rem',
+                    lineHeight: 1.6,
+                    textShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  Te llevamos a los mejores destinos dentro del país para que encuentres los lugares que te muevan. Reserva hoy tu próximo vehículo.
+                </p>
               </div>
             </div>
           </section>
-        )}
-      </div>
 
-      <div style={{ background: '#f5f5f5', width: '100%', padding: '40px 0', borderTop: '1px solid #e7e7e7', borderBottom: '1px solid #e7e7e7' }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '30px' }}>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-            <div style={{ fontSize: '2.5rem' }}>👩🏽‍💼</div>
-            <div>
-              <h4 style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Estamos aquí para lo que necesites</h4>
-              <p style={{ fontSize: '0.9rem', color: '#666' }}>Atención al cliente en más de 30 idiomas</p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-            <div style={{ fontSize: '2.5rem' }}>📝</div>
-            <div>
-              <h4 style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Cancelación gratis</h4>
-              <p style={{ fontSize: '0.9rem', color: '#666' }}>Hasta 48 horas antes de la recogida, en la mayoría de las reservas</p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-            <div style={{ fontSize: '2.5rem' }}>👍</div>
-            <div>
-              <h4 style={{ fontWeight: 'bold', marginBottom: '4px', color: '#333' }}>Más de 5 millones de comentarios</h4>
-              <p style={{ fontSize: '0.9rem', color: '#666' }}>De clientes reales y verificados</p>
-            </div>
-          </div>
-        </div>
-      </div>
+          {/* ── DESTINOS ────────────────────────────────────────────────── */}
+          <section
+            style={{
+              maxWidth: '1024px',
+              margin: '0 auto',
+              padding: '0 24px 32px',
+            }}
+          >
+            <h2
+              style={{
+                fontSize: '1.4rem',
+                fontWeight: 700,
+                color: '#1a1a1a',
+                marginBottom: '4px',
+              }}
+            >
+              Ofertas desde{' '}
+              <span style={{ color: '#0057b8' }}>Quito ▾</span>
+            </h2>
+            <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: '20px' }}>
+              Haz clic en un destino para iniciar tu búsqueda directamente.
+            </p>
 
-      <div className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
-        
-        {/* PREGUNTAS FRECUENTES */}
-        <section style={{ marginBottom: '40px' }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', fontWeight: 'bold', color: '#333' }}>Preguntas frecuentes</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {[
-                {q: '¿Cuánto cuesta alquilar un coche en Ecuador durante una semana?', a: `En promedio, alquilar un coche en Ecuador cuesta alrededor de ${formatearMoneda(350, 'USD')} a ${formatearMoneda(450, 'USD')} por semana, dependiendo de la ciudad y el tipo de vehículo.`}, 
-                {q: '¿Cuánto cuesta alquilar un coche en Ecuador durante un mes?', a: `El costo mensual suele ser más económico en promedio diario, rondando los ${formatearMoneda(1200, 'USD')} a ${formatearMoneda(1500, 'USD')}.`}, 
-                {q: '¿Cuál es el coche que más se alquila en Ecuador?', a: 'Los vehículos SUV y los compactos económicos son los más populares debido a la topografía del país y el tráfico en las ciudades.'}, 
-                {q: '¿Cuánto cuesta alquilar un vehículo del tipo "SUV" en Ecuador?', a: `Un SUV estándar puede costar entre ${formatearMoneda(60, 'USD')} y ${formatearMoneda(90, 'USD')} al día, ideal para viajes largos o terrenos irregulares.`}
-              ].map((faq, i) => (
-                <div key={`faq1-${i}`} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', background: 'white', overflow: 'hidden' }}>
-                  <div onClick={() => toggleFaq(`l-${i}`)} style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', background: 'white' }}>
-                    <span style={{ fontWeight: '600', fontSize: '0.95rem', color: '#333' }}>{faq.q}</span>
-                    <span style={{ transform: openFaq === `l-${i}` ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                gap: '16px',
+              }}
+            >
+              {DESTINOS_ECUADOR.map((dest) => (
+                <button
+                  key={dest.codigo}
+                  type="button"
+                  onClick={() => handleDestinationCardClick(dest.nombre)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    textAlign: 'left',
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.18)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.1)';
+                  }}
+                  aria-label={`Buscar coches en ${dest.nombre}`}
+                >
+                  {/* Card image */}
+                  <div style={{ position: 'relative', height: '150px' }}>
+                    <img
+                      src={dest.imagen}
+                      alt={dest.nombre}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                      onError={(e) => {
+                        e.target.src = `https://picsum.photos/seed/${dest.codigo}/400/240`;
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        background: 'rgba(255,255,255,0.92)',
+                        color: '#0057b8',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      Oferta especial
+                    </span>
                   </div>
-                  {openFaq === `l-${i}` && (
-                    <div style={{ padding: '0 16px 16px', fontSize: '0.9rem', color: '#666', borderTop: '1px solid #eee', paddingTop: '10px' }}>
-                      {faq.a}
+                  {/* Card info */}
+                  <div style={{ padding: '14px 16px', background: '#fff' }}>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '1.05rem',
+                        color: '#1a1a1a',
+                        marginBottom: '2px',
+                      }}
+                    >
+                      {dest.nombre}
                     </div>
-                  )}
-                </div>
+                    <div style={{ color: '#666', fontSize: '0.82rem', marginBottom: '8px' }}>
+                      {dest.descripcion}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: '#888', fontSize: '0.8rem' }}>Desde</span>
+                      <span
+                        style={{
+                          color: '#0057b8',
+                          fontWeight: 700,
+                          fontSize: '1rem',
+                        }}
+                      >
+                        {dest.desde}
+                      </span>
+                    </div>
+                  </div>
+                </button>
               ))}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {[
-                {q: '¿Puedo recoger el coche en un lugar y devolverlo en otro distinto en Ecuador?', a: 'Sí, la mayoría de agencias permiten devoluciones en otra sucursal, aunque suele aplicar un cargo adicional conocido como "tarifa de solo ida".'}, 
-                {q: '¿Con cuánto tiempo de antelación debo reservar un coche de alquiler en Ecuador?', a: 'Se recomienda reservar al menos con 1 a 2 semanas de anticipación, especialmente durante temporada alta (vacaciones y feriados).'}, 
-                {q: '¿Por qué debería reservar un coche de alquiler en Ecuador con Booking.com?', a: 'Ofrecemos cancelación gratuita en la mayoría de reservas, sin cargos ocultos y un servicio de atención al cliente disponible 24/7 en múltiples idiomas.'}
-              ].map((faq, i) => (
-                <div key={`faq2-${i}`} style={{ border: '1px solid #e7e7e7', borderRadius: '4px', background: 'white', overflow: 'hidden' }}>
-                  <div onClick={() => toggleFaq(`r-${i}`)} style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', background: 'white' }}>
-                    <span style={{ fontWeight: '600', fontSize: '0.95rem', color: '#333' }}>{faq.q}</span>
-                    <span style={{ transform: openFaq === `r-${i}` ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
-                  </div>
-                  {openFaq === `r-${i}` && (
-                    <div style={{ padding: '0 16px 16px', fontSize: '0.9rem', color: '#666', borderTop: '1px solid #eee', paddingTop: '10px' }}>
-                      {faq.a}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* DESTINOS POPULARES */}
-        <section style={{ marginBottom: '40px' }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '5px', fontWeight: 'bold', color: '#333' }}>Destinos populares en los que alquilar un coche</h2>
-          <p style={{ color: '#666', marginBottom: '20px' }}>Descubre más opciones para alquilar un coche económico</p>
-          
-          {/* Tabs */}
-          <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e7e7e7', paddingBottom: '0', marginBottom: '20px', overflowX: 'auto' }}>
-            {destinationTabs.map((tab, idx) => (
-              <button
-                key={idx}
-                onClick={() => setActiveDestinationTab(idx)}
-                style={{
-                  background: activeDestinationTab === idx ? 'white' : 'transparent',
-                  color: activeDestinationTab === idx ? '#006ce4' : '#333',
-                  border: activeDestinationTab === idx ? '1px solid #006ce4' : 'none',
-                  borderBottom: activeDestinationTab === idx ? '2px solid #006ce4' : 'none',
-                  padding: '8px 16px',
-                  borderRadius: activeDestinationTab === idx ? '32px' : '0',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  fontWeight: activeDestinationTab === idx ? 'bold' : 'normal',
-                  transition: 'all 0.2s',
-                  marginBottom: '-1px',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Cards for active tab */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-            {destinationTabs[activeDestinationTab].items.map((item, idx) => (
-              <div
-                key={idx}
-                onClick={() => handleDestinationCardClick(item.name)}
-                style={{
-                  display: 'flex',
-                  gap: '15px',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  border: '1px solid transparent',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.border = '1px solid #006ce4';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,108,228,0.12)';
-                  e.currentTarget.style.background = '#f0f6ff';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.border = '1px solid transparent';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                <img
-                  src={`https://picsum.photos/id/${item.imgId}/60/60`}
-                  alt={item.name}
-                  style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }}
-                />
-                <div>
-                  <h3 style={{ fontWeight: 'bold', color: '#006ce4', margin: 0, fontSize: '1rem' }}>{item.name}</h3>
-                  <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>{item.puntos} puntos de alquiler de coches</div>
-                  <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>Precio medio de <strong>{formatearMoneda(item.precio, 'USD')}</strong> al día</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-      </>
+          </section>
+        </>
       )}
 
       {hasSearched && (

@@ -142,51 +142,11 @@ export function Navbar() {
           </div>
         </Link>
         <div className="navbar-actions">
-          <span
-            className="nav-currency"
-            onClick={() => setShowCurrencyModal(true)}
-            style={{
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.92rem',
-              color: '#ffffff',
-              padding: '6px 8px',
-              borderRadius: '4px',
-            }}
-          >
-            {currency}
-          </span>
-          <span
-            className="nav-flag"
-            onClick={() => setShowLanguageModal(true)}
-            style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
-            title="Seleccionar idioma"
-          >
-            {currentLanguage?.countryCode ? (
-              <img src={`https://flagcdn.com/w40/${currentLanguage.countryCode}.png`} alt={currentLanguage.name || 'Idioma'} style={{ width: '22px', borderRadius: '2px' }} />
-            ) : (
-              <RoundFlag country={language === 'es' ? 'EC' : 'ES'} size={24} />
-            )}
-          </span>
-          <span
-            className="nav-help"
-            title="Ayuda y asistencia"
-            style={{
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '26px',
-              height: '26px',
-              borderRadius: '50%',
-              border: '1px solid #ffffff',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: '#ffffff',
-            }}
-          >
-            ?
-          </span>
+          {/* Botones ocultos a petición del usuario: moneda, idioma, ayuda
+          <span className="nav-currency"... />
+          <span className="nav-flag"... />
+          <span className="nav-help"... />
+          */}
           <span
             style={{
               color: '#ffffff',
