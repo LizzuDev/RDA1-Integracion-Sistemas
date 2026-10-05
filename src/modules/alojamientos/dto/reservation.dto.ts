@@ -42,6 +42,41 @@ export class ReservationRequestDto {
   @IsEmail()
   @IsOptional()
   customer_email?: string;
+
+  @ApiProperty({ description: 'Teléfono de contacto', example: '+593 0991234567', required: false })
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @ApiProperty({ description: 'Nombre del huésped principal', example: 'Juan Perez', required: false })
+  @IsString()
+  @IsOptional()
+  guest_name?: string;
+
+  @ApiProperty({ description: 'Peticiones especiales', example: 'Cama extra si es posible', required: false })
+  @IsString()
+  @IsOptional()
+  special_requests?: string;
+
+  @ApiProperty({ description: 'Hora estimada de llegada', example: '15:00 - 16:00', required: false })
+  @IsString()
+  @IsOptional()
+  arrival_time?: string;
+
+  @ApiProperty({ description: 'Propósito del viaje', example: 'leisure', required: false })
+  @IsString()
+  @IsOptional()
+  travel_purpose?: string;
+
+  @ApiProperty({ description: 'Titular de la tarjeta', example: 'Juan Perez', required: false })
+  @IsString()
+  @IsOptional()
+  card_holder?: string;
+
+  @ApiProperty({ description: 'Método de pago', example: 'pay_at_property', required: false })
+  @IsString()
+  @IsOptional()
+  payment_method?: string;
 }
 
 export enum ReservationStatus {
