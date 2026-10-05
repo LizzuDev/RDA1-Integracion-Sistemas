@@ -233,18 +233,21 @@ export function AutosPage() {
   const handleSearch = (e) => {
     e.preventDefault();
     const faltantes = [];
-    if (!pickupLocation.trim()) faltantes.push('coloque el lugar de recogida');
-    if (!startDate || !endDate) faltantes.push('escoja las fechas de salida y regreso');
-    if (!pickupTime || !dropoffTime) faltantes.push('escoja las horas de salida y regreso');
+    if (pickupLocation.trim() === '') faltantes.push('el lugar de recogida');
+    if (!startDate) faltantes.push('la fecha de salida');
+    if (!endDate) faltantes.push('la fecha de regreso');
+    if (!pickupTime) faltantes.push('la hora de salida');
+    if (!dropoffTime) faltantes.push('la hora de regreso');
 
     if (faltantes.length > 0) {
       let mensaje = '';
       if (faltantes.length === 1) {
-        mensaje = `Por favor ${faltantes[0]}.`;
+        mensaje = `Por favor proporcione ${faltantes[0]}.`;
       } else if (faltantes.length === 2) {
-        mensaje = `Por favor ${faltantes[0]} y ${faltantes[1]}.`;
+        mensaje = `Por favor proporcione ${faltantes[0]} y ${faltantes[1]}.`;
       } else {
-        mensaje = `Por favor ${faltantes[0]}, ${faltantes[1]} y ${faltantes[2]}.`;
+        const last = faltantes.pop();
+        mensaje = `Por favor proporcione ${faltantes.join(', ')} y ${last}.`;
       }
       setFormError(mensaje);
       setFlashRed(true);
