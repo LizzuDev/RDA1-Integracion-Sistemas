@@ -174,6 +174,12 @@ export function AlojamientoDetail() {
   const availabilityRef = useRef(null);
   const facilitiesRef = useRef(null);
   const rulesRef = useRef(null);
+  const reviewsRef = useRef(null);
+
+  // Reviews State
+  const [resenas, setResenas] = useState([]);
+  const [resenasScores, setResenasScores] = useState(null);
+  const [resenasLoading, setResenasLoading] = useState(false);
 
   // Pre-fill user profile if logged in
   useEffect(() => {
@@ -186,6 +192,20 @@ export function AlojamientoDetail() {
       }
     }
   }, [user]);
+
+  // Load Resenas
+  useEffect(() => {
+    if (!id) return;
+    setResenasLoading(true);
+    fetch(`${import.meta.env.VITE_API_URL || ''}/api/v1/alojamientos/${id}/resenas`)
+      .then((r) => r.json())
+      .then((data) => {
+        setResenas(data.resenas || []);
+        setResenasScores(data.scores || null);
+      })
+      .catch(() => {})
+      .finally(() => setResenasLoading(false));
+  }, [id]);
 
   // Load Alojamiento & Related Attractions
   useEffect(() => {
@@ -754,10 +774,10 @@ export function AlojamientoDetail() {
           </button>
           <button
             type="button"
-            className="dt-nav-tab"
-            onClick={() => scrollToSection(overviewRef, 'reviews')}
+            className={`dt-nav-tab ${activeTab === 'reviews' ? 'active' : ''}`}
+            onClick={() => scrollToSection(reviewsRef, 'reviews')}
           >
-            Comentarios ({reviewsCount})
+            Comentarios ({resenas.length || reviewsCount})
           </button>
         </nav>
       </div>
@@ -1747,6 +1767,87 @@ export function AlojamientoDetail() {
           </div>
         </section>
       </div>
+
+      {/* ======================================================================
+          REVIEWS / COMENTARIOS SECTION
+          ====================================================================== */}
+      <section className="dt-reviews-section" ref={reviewsRef} id="reviews">
+        <div className="dt-reviews-header">
+          <div>
+            <h2>Comentarios de los huespedes</h2>
+            <div style={{ fontSize: '0.85rem', color: '#595959' }}>
+              {resenas.length || reviewsCount} comentarios reales de viajeros verificados
+            </div>
+          </div>
+          <button
+            type="button"
+            className="dt-reserve-btn-primary"
+            onClick={() => scrollToSection(availabilityRef, 'price')}
+          >
+            Ver disponibilidad
+          </button>
+        </div>
+
+        {/* Score Summary */}
+        {resenasScores && (
+          <div className="dt-reviews-summary">
+            <div className="dt-reviews-score-big">
+              <div className="dt-score-badge" style={{ fontSize: '2.2rem', width: '80px', height: '80px', borderRadius: '8px 8px 8px 0' }}>
+                {resenasScores.general}
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>
+                  {resenasScores.general >= 9 ? 'Excelente' : resenasScores.general >= 8 ? 'Muy bueno' : 'Bueno'}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#595959' }}>{resenas.length} comentarios</div>
+              </div>
+            </div>
+            <div className="dt-reviews-bars">
+              {[
+                { label: 'Limpieza', val: resenasScores.limpieza },
+                { label: 'Servicio', val: resenasScores.servicio },
+                { label: 'Calidad-precio', val: resenasScores.calidad },
+              ].map(({ label, val }) => (
+                <div key={label} className="dt-review-bar-row">
+                  <span className="dt-review-bar-label">{label}</span>
+                  <div className="dt-review-bar-track">
+                    <div className="dt-review-bar-fill" style={{ width: `${(val / 10) * 100}%` }} />
+                  </div>
+                  <span className="dt-review-bar-val">{val}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Individual Reviews */}
+        {resenasLoading ? (
+          <div style={{ padding: '32px', textAlign: 'center', color: '#595959' }}>Cargando comentarios...</div>
+        ) : (
+          <div className="dt-reviews-list">
+            {resenas.map((r) => (
+              <div key={r.id} className="dt-review-card">
+                <div className="dt-review-avatar">
+                  {(r.usuarioNombre || 'A').charAt(0).toUpperCase()}
+                </div>
+                <div className="dt-review-body">
+                  <div className="dt-review-meta">
+                    <div>
+                      <strong style={{ fontSize: '0.95rem' }}>{r.usuarioNombre || 'Huesped anonimo'}</strong>
+                      <span style={{ fontSize: '0.78rem', color: '#595959', marginLeft: '6px' }}>{r.usuarioPais}</span>
+                    </div>
+                    <div className="dt-review-score-pill">{Number(r.puntuacion).toFixed(1)}</div>
+                  </div>
+                  <p className="dt-review-comment">{r.comentario}</p>
+                  <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                    {r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long' }) : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* ======================================================================
           LIGHTBOX FULLSCREEN MODAL

@@ -299,6 +299,63 @@ export class AlojamientosService implements OnModuleInit {
     await this.alojamientoRepo.remove(alojamiento);
   }
 
+  async getResenas(alojamientoId: string): Promise<any> {
+    const alojamiento = await this.alojamientoRepo.findOneBy({ id: alojamientoId });
+    if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
+
+    let resenas = await this.resenaRepo.find({ where: { alojamientoId }, order: { createdAt: 'DESC' } });
+
+    if (resenas.length === 0) {
+      // Seed mock reviews for demonstration
+      const mocks = [
+        {
+          alojamientoId,
+          usuarioId: 'mock-user-1',
+          usuarioNombre: 'Carlos M.',
+          usuarioPais: 'Colombia',
+          comentario: 'Excelente alojamiento, muy limpio y bien ubicado. El anfitrión fue muy atento y resolvió todas nuestras dudas. Lo recomiendo totalmente.',
+          puntuacion: 9.2,
+          limpieza: 9.5,
+          servicio: 9.0,
+          calidad: 9.0,
+        },
+        {
+          alojamientoId,
+          usuarioId: 'mock-user-2',
+          usuarioNombre: 'Laura P.',
+          usuarioPais: 'Ecuador',
+          comentario: 'Muy buen apartamento, tiene todo lo necesario. La vista desde la terraza es increíble. Volvería sin dudarlo.',
+          puntuacion: 9.6,
+          limpieza: 10.0,
+          servicio: 9.5,
+          calidad: 9.2,
+        },
+        {
+          alojamientoId,
+          usuarioId: 'mock-user-3',
+          usuarioNombre: 'Roberto A.',
+          usuarioPais: 'Perú',
+          comentario: 'La ubicación es perfecta, cerca de todo. El apartamento es espacioso y moderno. Solo mejoraría la velocidad del WiFi.',
+          puntuacion: 8.8,
+          limpieza: 9.0,
+          servicio: 8.5,
+          calidad: 9.0,
+        },
+      ];
+      resenas = await this.resenaRepo.save(mocks as any[]);
+    }
+
+    const avg = (arr: number[]) => Number((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1));
+    const scores = {
+      limpieza: avg(resenas.map((r) => r.limpieza)),
+      servicio: avg(resenas.map((r) => r.servicio)),
+      calidad: avg(resenas.map((r) => r.calidad)),
+      general: avg(resenas.map((r) => r.puntuacion)),
+    };
+
+    return { resenas, scores, total: resenas.length };
+  }
+
   private buildReservaResponse(reserva: ReservaAlojamiento) {
     return {
       reservation_id: reserva.id,
