@@ -185,14 +185,16 @@ export function MisReservasPage() {
             tipo: 'alojamiento',
             servicioTexto: 'Alojamiento',
             destino: al.destino || 'Quito',
-            titulo: al.customer_name ? `Republica del Salvador Coliving (${al.huespedes || 2} personas)` : 'Republica del Salvador Coliving Ecuador XOE',
+            titulo: al.nombre_alojamiento
+              ? `${al.nombre_alojamiento} (${al.huespedes || 1} persona${(al.huespedes || 1) > 1 ? 's' : ''})`
+              : 'Alojamiento reservado',
             fechasTexto: `${checkinStr} – ${checkoutStr}`,
             fecha: checkinStr,
             rawDate: al.created_at ? new Date(al.created_at).getTime() : (al.checkin ? new Date(al.checkin).getTime() : new Date().getTime()),
             status: al.status || 'CONFIRMED',
-            totalRaw: al.total_price?.total || al.total || 168.00,
-            imagen: al.photoUrl || DEFAULT_IMAGES.alojamiento,
-            link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/',
+            totalRaw: al.total_price?.total || al.total || 0,
+            imagen: al.photo_url || DEFAULT_IMAGES.alojamiento,
+            link: al.alojamiento_id ? `/alojamientos/${al.alojamiento_id}` : '/',
           };
         });
       } catch (err) {
@@ -205,16 +207,18 @@ export function MisReservasPage() {
         const checkoutStr = al.checkout ? formatearFecha(al.checkout) : '16 nov.';
         return {
           id: al.reservationId || al.id,
-          pnr: al.reservationId || (al.id || 'HOTEL').substring(0, 8).toUpperCase(),
+          pnr: al.codigoReserva || al.reservationId || (al.id || 'HOTEL').substring(0, 8).toUpperCase(),
           tipo: 'alojamiento',
           servicioTexto: 'Alojamiento',
           destino: al.destino || 'Quito',
-          titulo: al.titulo || 'Republica del Salvador Coliving Ecuador XOE',
+          titulo: al.nombreAlojamiento
+            ? `${al.nombreAlojamiento} (${al.huespedes || 1} persona${(al.huespedes || 1) > 1 ? 's' : ''})`
+            : al.titulo || 'Alojamiento reservado',
           fechasTexto: `${checkinStr} – ${checkoutStr}`,
           fecha: checkinStr,
           rawDate: al.createdAt ? new Date(al.createdAt).getTime() : (al.checkin ? new Date(al.checkin).getTime() : new Date().getTime()),
           status: al.status || 'CONFIRMED',
-          totalRaw: al.totalPrice || al.total || 168.00,
+          totalRaw: al.totalPrice || al.total || 0,
           imagen: al.photoUrl || DEFAULT_IMAGES.alojamiento,
           link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/',
         };

@@ -256,14 +256,19 @@ export class AlojamientosService implements OnModuleInit {
   async getReservas(): Promise<any> {
     this.logger.log('Consultando historial de reservas de alojamientos');
     const reservas = await this.reservaRepo.find({ order: { createdAt: 'DESC' } });
-    return reservas.map((r) => this.buildReservaResponse(r));
+    // Enrich with alojamiento data (batch lookup)
+    const ids = [...new Set(reservas.map((r) => r.alojamientoId))];
+    const alojamientos = await this.alojamientoRepo.findByIds(ids);
+    const alojMap = new Map(alojamientos.map((a) => [a.id, a]));
+    return reservas.map((r) => this.buildReservaResponse(r, alojMap.get(r.alojamientoId)));
   }
 
   async getReservaById(reservationId: string): Promise<any> {
     this.logger.log(`Consultando detalle de reserva ${reservationId}`);
     const reserva = await this.reservaRepo.findOneBy({ id: reservationId });
     if (!reserva) throw new HttpException('Reserva no encontrada', HttpStatus.NOT_FOUND);
-    return this.buildReservaResponse(reserva);
+    const alojamiento = await this.alojamientoRepo.findOneBy({ id: reserva.alojamientoId });
+    return this.buildReservaResponse(reserva, alojamiento);
   }
 
   async create(dto: CreateAlojamientoDto): Promise<any> {
@@ -356,9 +361,14 @@ export class AlojamientosService implements OnModuleInit {
     return { resenas, scores, total: resenas.length };
   }
 
-  private buildReservaResponse(reserva: ReservaAlojamiento) {
+  private buildReservaResponse(reserva: ReservaAlojamiento, alojamiento?: any) {
+    const defaultPhoto = 'https://cf.bstatic.com/xdata/images/hotel/max1024x768/833148758.jpg?k=4af6fee87e75cf2bdb688cfa67e30d77b3282140a0ed4ee22ac61e5be30b95dd&o=&hp=1';
+    const photos = alojamiento?.photos;
+    const photoUrl = Array.isArray(photos) && photos.length > 0 ? photos[0].url : defaultPhoto;
+
     return {
       reservation_id: reserva.id,
+      alojamiento_id: reserva.alojamientoId,
       codigo_reserva: reserva.codigoReserva,
       status: reserva.status,
       customer_name: reserva.customerName,
@@ -370,6 +380,10 @@ export class AlojamientosService implements OnModuleInit {
       habitaciones_count: reserva.habitacionesCount,
       total_price: reserva.totalPrice || { currency: 'USD', total: Number(reserva.total) },
       created_at: reserva.createdAt,
+      // Enriched from alojamiento entity
+      nombre_alojamiento: alojamiento?.nombre || null,
+      destino: alojamiento?.destino || null,
+      photo_url: photoUrl,
       _links: {
         self: { href: `/api/v1/alojamientos/reservations/${reserva.id}`, type: 'GET' },
         cancelar: { href: `/api/v1/alojamientos/reservations/${reserva.id}/cancel`, type: 'POST' },
