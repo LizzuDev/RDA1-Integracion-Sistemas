@@ -399,7 +399,7 @@ function ProveedoresTab() {
   const [health, setHealth] = useState({});
   const [modal, setModal] = useState(null); // null | 'nuevo' | { ...proveedor }
   const [detalle, setDetalle] = useState(null);
-  const [form, setForm] = useState({ nombre:'', equipo:'', url:'', apiBase:'', tipo:'Otro', descripcion:'', contacto:'' });
+  const [form, setForm] = useState({ nombre:'', equipo:'', url:'', apiBase:'', tipo:'Otro', descripcion:'', contacto:'', tokenAuth:'', webhookUrl:'', healthcheckUrl:'', rateLimit:'', entorno:'Producción' });
   const [formErr, setFormErr] = useState({});
   const [guardando, setGuardando] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
@@ -448,7 +448,7 @@ function ProveedoresTab() {
   });
 
   const abrirNuevo = () => {
-    setForm({ nombre:'', equipo:'', url:'', apiBase:'', tipo:'Otro', descripcion:'', contacto:'', emoji:'🔗' });
+    setForm({ nombre:'', equipo:'', url:'', apiBase:'', tipo:'Otro', descripcion:'', contacto:'', emoji:'🔗', tokenAuth:'', webhookUrl:'', healthcheckUrl:'', rateLimit:'', entorno:'Producción' });
     setFormErr({});
     setModal('nuevo');
   };
@@ -616,7 +616,7 @@ function ProveedoresTab() {
               <TipoBadge tipo={detalle.tipo} />
             </div>
             <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-              {[['🌐 URL del Sistema', detalle.url], ['🔌 API Base URL', detalle.apiBase], ['📧 Contacto', detalle.contacto], ['📅 Registro', detalle.fechaRegistro]].map(([label, val]) => (
+              {[['🌐 URL del Sistema', detalle.url], ['🔌 API Base', detalle.apiBase], ['🔑 Token (Auth)', detalle.tokenAuth ? '••••••••' : 'No definido'], ['🪝 Webhook', detalle.webhookUrl], ['🩺 Healthcheck', detalle.healthcheckUrl], ['⚡ Rate Limit', detalle.rateLimit ? detalle.rateLimit + ' req/s' : '—'], ['🌍 Entorno', detalle.entorno || 'Producción'], ['📧 Contacto', detalle.contacto], ['📅 Registro', detalle.fechaRegistro]].map(([label, val]) => (
                 <div key={label} style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: '0.75rem', color: C.gray, fontWeight: 600, marginBottom: 3 }}>{label}</div>
                   <div style={{ fontSize: '0.88rem', color: C.text, wordBreak: 'break-all' }}>{val || '—'}</div>
@@ -672,6 +672,29 @@ function ProveedoresTab() {
                   {formErr[field] && <div style={{ color: C.red, fontSize: '0.75rem', marginTop: 2 }}>{formErr[field]}</div>}
                 </div>
               ))}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ background: C.bg, padding: '12px 16px', borderRadius: 6, border: `1px solid ${C.border}` }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 10, color: C.darkBlue }}>Datos Técnicos de Integración (API)</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                      {[['tokenAuth', 'API Key / Token', 'Ej: sk_live_...'], ['webhookUrl', 'Webhook URL', 'https://.../webhook'], ['healthcheckUrl', 'Healthcheck URL', 'https://.../health'], ['rateLimit', 'Rate Limit (req/s)', 'Ej: 50']].map(([field, label, placeholder]) => (
+                        <div key={field}>
+                          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>{label}</label>
+                          <input value={form[field] || ''} onChange={e => { setForm(f => ({ ...f, [field]: e.target.value })); }} placeholder={placeholder} style={inputStyle(field)} />
+                        </div>
+                      ))}
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Entorno</label>
+                        <select value={form.entorno || 'Producción'} onChange={e => setForm(f => ({ ...f, entorno: e.target.value }))} style={{ ...inputStyle('entorno'), background: 'white' }}>
+                          <option value="Producción">Producción</option>
+                          <option value="Staging">Staging / Pruebas</option>
+                          <option value="Desarrollo">Desarrollo</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Tipo de servicio</label>
                 <select value={form.tipo || 'Otro'} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} style={{ ...inputStyle('tipo'), background: 'white' }}>

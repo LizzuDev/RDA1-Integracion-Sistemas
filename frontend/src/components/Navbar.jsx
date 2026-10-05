@@ -278,10 +278,7 @@ export function Navbar() {
             <AttractionsNavIcon size={18} color="#ffffff" />
             <span>{t ? t('nav.attractions') : 'Atracciones'}</span>
           </Link>
-          <span style={{ opacity: 0.85, cursor: 'default', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', color: '#ffffff', fontSize: '0.92rem' }}>
-            <AirportTaxiIcon size={18} color="#ffffff" />
-            <span>Taxis aeropuerto</span>
-          </span>
+
         </div>
       </div>
 
