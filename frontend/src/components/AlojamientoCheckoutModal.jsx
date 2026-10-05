@@ -14,6 +14,13 @@ import {
   InfoIcon,
   ShieldCheckIcon,
   PriceMatchIcon,
+  PetsIcon,
+  WifiIcon,
+  ParkingIcon,
+  ClockIcon,
+  LockIcon,
+  ThumbsUpIcon,
+  AirportShuttleIcon,
 } from './BookingIcons';
 import './AlojamientoCheckoutModal.css';
 
@@ -48,28 +55,33 @@ export function AlojamientoCheckoutModal({
   const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1: Tus datos, 2: Finalizar reserva, 3: Confirmada
 
+  const defaultNombre = user?.user_metadata?.nombre || user?.nombre || 'Liz';
+  const defaultApellido = user?.user_metadata?.apellido || user?.apellido || 'Cadena';
+  const defaultEmail = user?.email || 'lizcadena@example.com';
+  const defaultCardHolder = `${defaultNombre} ${defaultApellido}`.trim();
+
   // Step 1 Form state
   const [paraQuien, setParaQuien] = useState('principal'); // 'principal' | 'otra_persona'
   const [viajaPorTrabajo, setViajaPorTrabajo] = useState('no'); // 'si' | 'no'
-  const [nombre, setNombre] = useState(user?.user_metadata?.nombre || user?.nombre || '');
-  const [apellidos, setApellidos] = useState(user?.user_metadata?.apellido || user?.apellido || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [confirmEmail, setConfirmEmail] = useState(user?.email || '');
+  const [nombre, setNombre] = useState(defaultNombre);
+  const [apellidos, setApellidos] = useState(defaultApellido);
+  const [email, setEmail] = useState(defaultEmail);
+  const [confirmEmail, setConfirmEmail] = useState(defaultEmail);
   const [pais, setPais] = useState('EC');
   const [telefonoPrefijo, setTelefonoPrefijo] = useState('+593');
-  const [telefono, setTelefono] = useState('');
+  const [telefono, setTelefono] = useState('0991234567');
   const [confirmacionSinPapel, setConfirmacionSinPapel] = useState(true);
-  const [nombreHuesped, setNombreHuesped] = useState('');
+  const [nombreHuesped, setNombreHuesped] = useState(defaultCardHolder);
   const [deseaAuto, setDeseaAuto] = useState(false);
   const [deseaTaxi, setDeseaTaxi] = useState(false);
   const [peticionesEspeciales, setPeticionesEspeciales] = useState('');
   const [horaLlegada, setHoraLlegada] = useState('15:00 - 16:00');
 
-  // Step 2 Form state (Payment)
-  const [titularTarjeta, setTitularTarjeta] = useState('');
-  const [numeroTarjeta, setNumeroTarjeta] = useState('');
-  const [fechaCaducidad, setFechaCaducidad] = useState('');
-  const [cvc, setCvc] = useState('');
+  // Step 2 Form state (Payment) - Tarjeta por defecto pre-cargada
+  const [titularTarjeta, setTitularTarjeta] = useState(defaultCardHolder);
+  const [numeroTarjeta, setNumeroTarjeta] = useState('4532 8765 4321 4242');
+  const [fechaCaducidad, setFechaCaducidad] = useState('12/28');
+  const [cvc, setCvc] = useState('842');
   const [aceptaMarketing, setAceptaMarketing] = useState(true);
   const [codigoPromo, setCodigoPromo] = useState('');
   const [promoAplicada, setPromoAplicada] = useState(false);
@@ -124,9 +136,11 @@ export function AlojamientoCheckoutModal({
     }
 
     setErrorMsg('');
-    if (!titularTarjeta.trim()) {
-      setTitularTarjeta(`${nombre} ${apellidos}`.trim());
-    }
+    setTitularTarjeta(`${nombre} ${apellidos}`.trim() || defaultCardHolder);
+    if (!numeroTarjeta) setNumeroTarjeta('4532 8765 4321 4242');
+    if (!fechaCaducidad) setFechaCaducidad('12/28');
+    if (!cvc) setCvc('842');
+
     setStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -491,7 +505,9 @@ export function AlojamientoCheckoutModal({
                 <StarFilledIcon size={14} color="#febb02" />
                 <StarFilledIcon size={14} color="#febb02" />
                 <StarFilledIcon size={14} color="#febb02" />
-                <span style={{ background: '#febb02', color: '#1a1a1a', fontSize: '10px', padding: '1px 4px', borderRadius: '2px', fontWeight: 700, marginLeft: '4px' }}>👍</span>
+                <span style={{ background: '#febb02', color: '#1a1a1a', fontSize: '10px', padding: '2px 5px', borderRadius: '2px', display: 'inline-flex', alignItems: 'center', gap: '2px', fontWeight: 700, marginLeft: '4px' }}>
+                  <ThumbsUpIcon size={11} color="#1a1a1a" />
+                </span>
               </div>
               <h3 className="bkg-hotel-name">{alojamiento.nombre}</h3>
               <p className="bkg-hotel-address">{hotelAddress}</p>
@@ -503,10 +519,18 @@ export function AlojamientoCheckoutModal({
               </div>
 
               <div className="bkg-amenities-tags">
-                <span className="bkg-amenity-tag">🐾 Se admiten mascotas</span>
-                <span className="bkg-amenity-tag">📶 WiFi gratis</span>
-                <span className="bkg-amenity-tag">🚐 Traslado aeropuerto</span>
-                <span className="bkg-amenity-tag">🅿️ Estacionamiento</span>
+                <span className="bkg-amenity-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <PetsIcon size={13} color="#4b5563" /> Se admiten mascotas
+                </span>
+                <span className="bkg-amenity-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <WifiIcon size={13} color="#4b5563" /> WiFi gratis
+                </span>
+                <span className="bkg-amenity-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <AirportShuttleIcon size={13} color="#4b5563" /> Traslado aeropuerto
+                </span>
+                <span className="bkg-amenity-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <ParkingIcon size={13} color="#4b5563" /> Estacionamiento
+                </span>
               </div>
             </div>
 
@@ -518,7 +542,10 @@ export function AlojamientoCheckoutModal({
                   <div className="bkg-date-col-label">Entrada</div>
                   <div className="bkg-date-col-value">{checkin}</div>
                   <div className="bkg-date-col-hours">15:00 – 00:00</div>
-                  <div className="bkg-today-tag">⚠️ El check-in es hoy</div>
+                  <div className="bkg-today-tag">
+                    <ClockIcon size={13} color="#d4111e" />
+                    <span>El check-in es hoy</span>
+                  </div>
                 </div>
                 <div>
                   <div className="bkg-date-col-label">Salida</div>
@@ -640,7 +667,7 @@ export function AlojamientoCheckoutModal({
 
             {/* LIMITED SUPPLY ALERT */}
             <div className="bkg-urgency-card">
-              <span style={{ fontSize: '20px' }}>⏰</span>
+              <ClockIcon size={20} color="#991b1b" />
               <div>
                 <h5>Poca disponibilidad para tus fechas:</h5>
                 <p>226 apartamentos como este ya no están disponibles en nuestra web.</p>
@@ -848,9 +875,15 @@ export function AlojamientoCheckoutModal({
                       Apartamento entero · 95 m² · {adults} adultos
                     </div>
                     <div className="bkg-room-badge-row">
-                      <span>✓ Cancelación gratis</span>
-                      <span>✓ WiFi gratis</span>
-                      <span>✓ No se puede fumar</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <CheckmarkIcon size={14} color="#008009" /> Cancelación gratis
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <CheckmarkIcon size={14} color="#008009" /> WiFi gratis
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <CheckmarkIcon size={14} color="#008009" /> No se puede fumar
+                      </span>
                     </div>
                   </div>
                   <div className="bkg-input-group" style={{ marginBottom: 0 }}>
@@ -1099,7 +1132,7 @@ export function AlojamientoCheckoutModal({
                     className="bkg-btn-primary"
                     disabled={loading}
                   >
-                    <span>🔒</span>
+                    <LockIcon size={16} color="#ffffff" />
                     <span>{loading ? 'Confirmando reserva...' : 'Completar reserva'}</span>
                   </button>
                 </div>
