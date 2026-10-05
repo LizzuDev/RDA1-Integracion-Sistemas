@@ -32,6 +32,7 @@
   align-items: flex-end;
   gap: 12px;
   font-family: inherit;
+  pointer-events: none;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -39,6 +40,7 @@
  * ═══════════════════════════════════════════════════════════════════════ */
 
 .chatbot-lanzador {
+  pointer-events: auto;
   /* 44px es el mínimo de objetivo táctil de las WCAG 2.2 (Target Size
      (Minimum), 2.5.8). "Diminuto" en la esquina no puede significar
      "inaccesible". */
@@ -128,17 +130,14 @@
   width: 360px;
   height: 560px;
   max-height: calc(100vh - 140px);
-  display: flex;
+  display: none;
   flex-direction: column;
   background: #fff;
   border: 1px solid var(--border, #e7e7e7);
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 34, 79, 0.18);
   overflow: hidden;
-  /* El estado cerrado se oculta con `visibility` además de opacidad/transform:
-     `visibility: hidden` saca el subárbol del árbol de accesibilidad y del
-     orden de tabulación, que es justo lo que hace falta para un panel de chat
-     que debe existir en el DOM pero no molestar. */
+  pointer-events: none;
   visibility: hidden;
   opacity: 0;
   transform: translateY(16px) scale(0.96);
@@ -147,9 +146,11 @@
 }
 
 .chatbot-widget--abierto .chatbot-panel {
+  display: flex;
   visibility: visible;
   opacity: 1;
   transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 
 /* ── Cabecera ─────────────────────────────────────────────────────────── */

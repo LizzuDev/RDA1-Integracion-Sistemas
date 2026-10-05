@@ -1,4 +1,5 @@
-﻿import { useCallback } from 'react';
+import { useCallback } from 'react';
+import { API_BASE } from '../services/api';
 
 // Generador rápido de UUID para la sesión del navegador
 const generateUUID = () => {
@@ -30,7 +31,7 @@ export const useTelemetry = () => {
       };
       
       // keepalive: true permite que el request se envíe incluso si el usuario cierra la pestaña o cambia de página
-      await fetch('http://localhost:3000/api/v1/telemetry/events', {
+      await fetch(`${API_BASE}/telemetry/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { getAlojamiento, reservarAlojamiento } from '../services/alojamientosApi';
+import { API_BASE } from '../services/api';
 import { getAtracciones } from '../services/atraccionesApi';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
@@ -197,7 +198,7 @@ export function AlojamientoDetail() {
   useEffect(() => {
     if (!id) return;
     setResenasLoading(true);
-    fetch(`${import.meta.env.VITE_API_URL || ''}/api/v1/alojamientos/${id}/resenas`)
+    fetch(`${API_BASE}/alojamientos/${id}/resenas`)
       .then((r) => r.json())
       .then((data) => {
         setResenas(data.resenas || []);
