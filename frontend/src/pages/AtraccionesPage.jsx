@@ -78,13 +78,15 @@ export function AtraccionesPage() {
   const [tabActivo, setTabActivo] = useState('Pichincha');
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
+  const [formError, setFormError] = useState('');
 
   const handleSearch = () => {
-    if (busqueda.trim()) {
-      navigate(`/search?destino=${encodeURIComponent(busqueda)}`);
-    } else {
-      navigate(`/search`);
+    if (!busqueda.trim() || !startDate || !endDate) {
+      setFormError('Por favor, ingresa el destino y selecciona las fechas (inicio y fin) para realizar la búsqueda.');
+      return;
     }
+    setFormError('');
+    navigate(`/search?destino=${encodeURIComponent(busqueda)}`);
   };
 
   const fetchData = useCallback(async () => {
@@ -174,6 +176,12 @@ export function AtraccionesPage() {
           
           <button className="search-btn" onClick={handleSearch}>Buscar</button>
         </div>
+        {formError && (
+          <div style={{ color: '#d93025', fontSize: '0.95rem', fontWeight: 'bold', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: '#fce8e6', padding: '10px 16px', borderRadius: '8px', maxWidth: '800px', margin: '12px auto 0' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            {formError}
+          </div>
+        )}
       </section>
 
       <div className="main-content">

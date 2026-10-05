@@ -224,14 +224,21 @@ export function AutosPage() {
     timeOptions.push(`${h}:00`, `${h}:30`);
   }
 
+  const [formError, setFormError] = useState('');
+
   const handleSearch = (e) => {
     e.preventDefault();
-    if (pickupLocation) {
-      fetchData();
-      setTimeout(() => {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-      }, 100);
+    if (!pickupLocation.trim() || !startDate || !endDate) {
+      setFormError('Por favor, ingresa el lugar de recogida y selecciona las fechas de salida y regreso.');
+      setFlashRed(true);
+      setTimeout(() => setFlashRed(false), 800);
+      return;
     }
+    setFormError('');
+    fetchData();
+    setTimeout(() => {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }, 100);
   };
 
   const marcasPopulares = [
@@ -411,6 +418,13 @@ export function AutosPage() {
                 Buscar
               </button>
             </div>
+
+            {formError && (
+              <div style={{ color: '#d93025', fontSize: '0.95rem', fontWeight: 'bold', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: '#fce8e6', padding: '10px 16px', borderRadius: '8px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                {formError}
+              </div>
+            )}
 
             {/* Opciones inferiores */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' }}>
