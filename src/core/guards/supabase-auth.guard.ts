@@ -20,7 +20,8 @@ export class SupabaseAuthGuard implements CanActivate {
   private supabaseKey =
     process.env.VITE_SUPABASE_ANON_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_KEY;
+    process.env.SUPABASE_KEY ||
+    process.env.SUPABASE_SECRET_KEY;
   private supabase;
 
   constructor() {
