@@ -80,16 +80,20 @@ export function AutosPage() {
     const clean = raw.replace(/[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ]/g, '').replace(/\s{2,}/g, ' ');
     setPickupLocation(clean);
     setShowSuggestions(clean.length > 0);
+    setFormError('');
   };
 
   const handleSelectSuggestion = (destino) => {
     setPickupLocation(destino);
     setShowSuggestions(false);
     setPickupError('');
+    setFormError('');
   };
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [pickupTime, setPickupTime] = useState('');
+  const [dropoffTime, setDropoffTime] = useState('');
   const [sameDropoff, setSameDropoff] = useState(false);
   const [driverAge, setDriverAge] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
@@ -230,9 +234,10 @@ export function AutosPage() {
     e.preventDefault();
     const hasLugar = pickupLocation.trim() !== '';
     const hasFechas = startDate && endDate;
+    const hasHoras = pickupTime && dropoffTime;
 
-    if (!hasLugar && !hasFechas) {
-      setFormError('Por favor coloque el lugar de recogida y escoja las fechas de salida y regreso.');
+    if (!hasLugar && !hasFechas && !hasHoras) {
+      setFormError('Por favor coloque el lugar de recogida y escoja las fechas y horas de salida y regreso.');
       setFlashRed(true);
       setTimeout(() => setFlashRed(false), 800);
       return;
@@ -243,6 +248,11 @@ export function AutosPage() {
       return;
     } else if (!hasFechas) {
       setFormError('Por favor escoja las fechas de salida y regreso.');
+      setFlashRed(true);
+      setTimeout(() => setFlashRed(false), 800);
+      return;
+    } else if (!hasHoras) {
+      setFormError('Por favor escoja la hora de salida y la hora de regreso.');
       setFlashRed(true);
       setTimeout(() => setFlashRed(false), 800);
       return;
@@ -378,7 +388,7 @@ export function AutosPage() {
                     <input
                       type="date"
                       value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
+                      onChange={(e) => { setStartDate(e.target.value); setFormError(''); }}
                       min={new Date().toISOString().split('T')[0]}
                     />
                   </div>
@@ -390,7 +400,8 @@ export function AutosPage() {
                   </div>
                   <div className="av-input-field">
                     <label>Hora</label>
-                    <select aria-label="Hora de recogida">
+                    <select aria-label="Hora de recogida" value={pickupTime} onChange={(e) => { setPickupTime(e.target.value); setFormError(''); }}>
+                      <option value="">Seleccione hora</option>
                       {timeOptions.map(t => <option key={`pickup-${t}`} value={t}>{t}</option>)}
                     </select>
                   </div>
@@ -408,7 +419,7 @@ export function AutosPage() {
                     <input
                       type="date"
                       value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
+                      onChange={(e) => { setEndDate(e.target.value); setFormError(''); }}
                       min={startDate || new Date().toISOString().split('T')[0]}
                     />
                   </div>
@@ -420,7 +431,8 @@ export function AutosPage() {
                   </div>
                   <div className="av-input-field">
                     <label>Hora</label>
-                    <select aria-label="Hora de devolución">
+                    <select aria-label="Hora de devolución" value={dropoffTime} onChange={(e) => { setDropoffTime(e.target.value); setFormError(''); }}>
+                      <option value="">Seleccione hora</option>
                       {timeOptions.map(t => <option key={`dropoff-${t}`} value={t}>{t}</option>)}
                     </select>
                   </div>

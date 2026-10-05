@@ -67,12 +67,14 @@ export function AtraccionesPage() {
     const clean = raw.replace(/[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ]/g, '').replace(/\s{2,}/g, ' ');
     setBusqueda(clean);
     setShowSuggestions(clean.length > 0);
+    setFormError('');
   };
 
   const handleSelectSuggestion = (destino) => {
     setBusqueda(destino);
     setShowSuggestions(false);
     setSearchError('');
+    setFormError('');
   };
 
   const [tabActivo, setTabActivo] = useState('Pichincha');
@@ -175,7 +177,10 @@ export function AtraccionesPage() {
                 selectsRange={true}
                 startDate={startDate}
                 endDate={endDate}
-                onChange={(update) => setDateRange(update)}
+                onChange={(update) => {
+                  setDateRange(update);
+                  setFormError('');
+                }}
                 monthsShown={2}
                 placeholderText="Fechas"
                 dateFormat="dd/MM/yyyy"
