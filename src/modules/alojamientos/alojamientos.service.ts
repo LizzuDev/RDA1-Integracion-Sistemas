@@ -256,14 +256,19 @@ export class AlojamientosService implements OnModuleInit {
   async getReservas(): Promise<any> {
     this.logger.log('Consultando historial de reservas de alojamientos');
     const reservas = await this.reservaRepo.find({ order: { createdAt: 'DESC' } });
-    return reservas.map((r) => this.buildReservaResponse(r));
+    // Enrich with alojamiento data (batch lookup)
+    const ids = [...new Set(reservas.map((r) => r.alojamientoId))];
+    const alojamientos = await this.alojamientoRepo.findByIds(ids);
+    const alojMap = new Map(alojamientos.map((a) => [a.id, a]));
+    return reservas.map((r) => this.buildReservaResponse(r, alojMap.get(r.alojamientoId)));
   }
 
   async getReservaById(reservationId: string): Promise<any> {
     this.logger.log(`Consultando detalle de reserva ${reservationId}`);
     const reserva = await this.reservaRepo.findOneBy({ id: reservationId });
     if (!reserva) throw new HttpException('Reserva no encontrada', HttpStatus.NOT_FOUND);
-    return this.buildReservaResponse(reserva);
+    const alojamiento = await this.alojamientoRepo.findOneBy({ id: reserva.alojamientoId });
+    return this.buildReservaResponse(reserva, alojamiento);
   }
 
   async create(dto: CreateAlojamientoDto): Promise<any> {
@@ -299,9 +304,71 @@ export class AlojamientosService implements OnModuleInit {
     await this.alojamientoRepo.remove(alojamiento);
   }
 
-  private buildReservaResponse(reserva: ReservaAlojamiento) {
+  async getResenas(alojamientoId: string): Promise<any> {
+    const alojamiento = await this.alojamientoRepo.findOneBy({ id: alojamientoId });
+    if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
+
+    let resenas = await this.resenaRepo.find({ where: { alojamientoId }, order: { createdAt: 'DESC' } });
+
+    if (resenas.length === 0) {
+      // Seed mock reviews for demonstration
+      const mocks = [
+        {
+          alojamientoId,
+          usuarioId: 'mock-user-1',
+          usuarioNombre: 'Carlos M.',
+          usuarioPais: 'Colombia',
+          comentario: 'Excelente alojamiento, muy limpio y bien ubicado. El anfitrión fue muy atento y resolvió todas nuestras dudas. Lo recomiendo totalmente.',
+          puntuacion: 9.2,
+          limpieza: 9.5,
+          servicio: 9.0,
+          calidad: 9.0,
+        },
+        {
+          alojamientoId,
+          usuarioId: 'mock-user-2',
+          usuarioNombre: 'Laura P.',
+          usuarioPais: 'Ecuador',
+          comentario: 'Muy buen apartamento, tiene todo lo necesario. La vista desde la terraza es increíble. Volvería sin dudarlo.',
+          puntuacion: 9.6,
+          limpieza: 10.0,
+          servicio: 9.5,
+          calidad: 9.2,
+        },
+        {
+          alojamientoId,
+          usuarioId: 'mock-user-3',
+          usuarioNombre: 'Roberto A.',
+          usuarioPais: 'Perú',
+          comentario: 'La ubicación es perfecta, cerca de todo. El apartamento es espacioso y moderno. Solo mejoraría la velocidad del WiFi.',
+          puntuacion: 8.8,
+          limpieza: 9.0,
+          servicio: 8.5,
+          calidad: 9.0,
+        },
+      ];
+      resenas = await this.resenaRepo.save(mocks as any[]);
+    }
+
+    const avg = (arr: number[]) => Number((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1));
+    const scores = {
+      limpieza: avg(resenas.map((r) => r.limpieza)),
+      servicio: avg(resenas.map((r) => r.servicio)),
+      calidad: avg(resenas.map((r) => r.calidad)),
+      general: avg(resenas.map((r) => r.puntuacion)),
+    };
+
+    return { resenas, scores, total: resenas.length };
+  }
+
+  private buildReservaResponse(reserva: ReservaAlojamiento, alojamiento?: any) {
+    const defaultPhoto = 'https://cf.bstatic.com/xdata/images/hotel/max1024x768/833148758.jpg?k=4af6fee87e75cf2bdb688cfa67e30d77b3282140a0ed4ee22ac61e5be30b95dd&o=&hp=1';
+    const photos = alojamiento?.photos;
+    const photoUrl = Array.isArray(photos) && photos.length > 0 ? photos[0].url : defaultPhoto;
+
     return {
       reservation_id: reserva.id,
+      alojamiento_id: reserva.alojamientoId,
       codigo_reserva: reserva.codigoReserva,
       status: reserva.status,
       customer_name: reserva.customerName,
@@ -313,6 +380,10 @@ export class AlojamientosService implements OnModuleInit {
       habitaciones_count: reserva.habitacionesCount,
       total_price: reserva.totalPrice || { currency: 'USD', total: Number(reserva.total) },
       created_at: reserva.createdAt,
+      // Enriched from alojamiento entity
+      nombre_alojamiento: alojamiento?.nombre || null,
+      destino: alojamiento?.destino || null,
+      photo_url: photoUrl,
       _links: {
         self: { href: `/api/v1/alojamientos/reservations/${reserva.id}`, type: 'GET' },
         cancelar: { href: `/api/v1/alojamientos/reservations/${reserva.id}/cancel`, type: 'POST' },

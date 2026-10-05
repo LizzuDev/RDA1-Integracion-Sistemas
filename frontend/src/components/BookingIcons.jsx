@@ -714,5 +714,15 @@ export function AirportShuttleIcon({ size = 14, color = 'currentColor', classNam
   );
 }
 
+export function MoreVerticalIcon({ size = 20, color = 'currentColor', className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="1.5" fill={color}/>
+      <circle cx="12" cy="5" r="1.5" fill={color}/>
+      <circle cx="12" cy="19" r="1.5" fill={color}/>
+    </svg>
+  );
+}
+
 
 

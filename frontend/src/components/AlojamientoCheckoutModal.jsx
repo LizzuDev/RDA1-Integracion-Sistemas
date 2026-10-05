@@ -217,12 +217,19 @@ export function AlojamientoCheckoutModal({
       const localBooking = {
         id: codigoReservaPnr,
         reservationId: codigoReservaPnr,
+        codigoReserva: codigoReservaPnr,
         alojamientoId: alojamiento.id,
+        nombreAlojamiento: alojamiento?.nombre || null,
+        photoUrl: Array.isArray(alojamiento?.photos) && alojamiento.photos.length > 0
+          ? alojamiento.photos[0].url
+          : null,
+        destino: alojamiento?.destino || null,
         titulo: `${alojamiento?.nombre} (${nightsCount} noches)`,
         checkin: payload.checkin,
         checkout: payload.checkout,
         fecha: payload.checkin,
         habitaciones: payload.habitaciones_count,
+        huespedes: payload.huespedes,
         huesped: `${nombre} ${apellidos}`.trim(),
         email: email.trim(),
         status: 'PENDING_OFFLINE',
@@ -255,12 +262,19 @@ export function AlojamientoCheckoutModal({
       const confirmedBooking = {
         id: res.reservation_id || res.id || reservationCode,
         reservationId: reservationCode,
+        codigoReserva: reservationCode,
         alojamientoId: alojamiento.id,
+        nombreAlojamiento: alojamiento?.nombre || null,
+        photoUrl: Array.isArray(alojamiento?.photos) && alojamiento.photos.length > 0
+          ? alojamiento.photos[0].url
+          : null,
+        destino: alojamiento?.destino || null,
         titulo: `${alojamiento?.nombre} (${nightsCount} noches)`,
         checkin: payload.checkin,
         checkout: payload.checkout,
         fecha: payload.checkin,
         habitaciones: payload.habitaciones_count,
+        huespedes: payload.huespedes,
         huesped: `${nombre} ${apellidos}`.trim(),
         email: email.trim(),
         status: res.status || 'CONFIRMED',

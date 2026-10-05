@@ -142,6 +142,14 @@ export class AlojamientosController {
     return this.alojamientosService.getAvailability(id, date);
   }
 
+  @Get(':id/resenas')
+  @ApiOperation({ summary: 'Obtener reseñas de un alojamiento' })
+  @ApiParam({ name: 'id', description: 'ID del alojamiento', type: 'string' })
+  @ApiResponse({ status: 200, description: 'Reseñas del alojamiento.' })
+  async getResenas(@Param('id') id: string) {
+    return this.alojamientosService.getResenas(id);
+  }
+
   @Post(':id/reservations')
   @Header('X-API-Deprecation-Date', '2027-12-31')
   @ApiOperation({ summary: 'Reservar un alojamiento (Requiere Idempotency-Key)' })

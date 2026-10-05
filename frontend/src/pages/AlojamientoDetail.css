@@ -1323,6 +1323,155 @@
 }
 
 /* --------------------------------------------------------------------------
+   Reviews / Comentarios Section
+   -------------------------------------------------------------------------- */
+.dt-reviews-section {
+  max-width: 1100px;
+  margin: 0 auto 40px auto;
+  padding: 0 16px;
+}
+
+.dt-reviews-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e7e7e7;
+}
+
+.dt-reviews-header h2 {
+  font-size: 1.45rem;
+  font-weight: 800;
+  margin: 0 0 4px 0;
+}
+
+.dt-reviews-summary {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+  background: #f8f9fa;
+  border: 1px solid #e7e7e7;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 28px;
+}
+
+.dt-reviews-score-big {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.dt-reviews-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.dt-review-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.dt-review-bar-label {
+  width: 120px;
+  font-weight: 600;
+  color: #1a1a1a;
+  flex-shrink: 0;
+}
+
+.dt-review-bar-track {
+  flex: 1;
+  height: 8px;
+  background: #e7e7e7;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dt-review-bar-fill {
+  height: 100%;
+  background: #003580;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.dt-review-bar-val {
+  width: 28px;
+  text-align: right;
+  font-weight: 700;
+  color: #003580;
+  font-size: 0.82rem;
+}
+
+.dt-reviews-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.dt-review-card {
+  display: flex;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid #e7e7e7;
+  border-radius: 8px;
+  padding: 18px;
+  transition: box-shadow 0.2s ease;
+}
+
+.dt-review-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.09);
+}
+
+.dt-review-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #003580;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.dt-review-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-review-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.dt-review-score-pill {
+  background: #003580;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.dt-review-comment {
+  font-size: 0.85rem;
+  color: #374151;
+  line-height: 1.55;
+  margin: 0 0 6px 0;
+}
+
+/* --------------------------------------------------------------------------
    Responsive Design
    -------------------------------------------------------------------------- */
 @media (max-width: 1024px) {
@@ -1358,4 +1507,12 @@
   .dt-activities-carousel {
     grid-template-columns: 1fr;
   }
+  .dt-reviews-list {
+    grid-template-columns: 1fr;
+  }
+  .dt-reviews-summary {
+    flex-direction: column;
+    gap: 20px;
+  }
 }
+
