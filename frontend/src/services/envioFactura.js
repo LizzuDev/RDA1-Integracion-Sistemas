@@ -1,5 +1,5 @@
-import { facturaComoBase64 } from '../utils/facturaPdf';
-import { enviarFacturaPorCorreo } from './facturasApi';
+import emailjs from '@emailjs/browser';
+import { supabase } from './supabase';
 
 /**
  * Envío automático de la factura al completar una compra.
@@ -121,28 +121,41 @@ export function normalizar(datos) {
 export async function enviarFacturaTrasCompra(datos) {
   try {
     const reserva = normalizar(datos);
-    const pdfBase64 = facturaComoBase64(reserva);
+    
+    // Extraer correo del usuario actual para el envío
+    const { data: { session } } = await supabase.auth.getSession();
+    const userEmail = session?.user?.email || datos.pasajeros?.[0]?.email;
+    const userName = session?.user?.user_metadata?.nombre || session?.user?.user_metadata?.full_name || datos.pasajeros?.[0]?.firstName || 'Cliente';
 
-    const respuesta = await enviarFacturaPorCorreo({
-      pdfBase64,
+    if (!userEmail) {
+      console.warn('[Factura] No hay correo destino disponible para enviar la confirmación.');
+      return { enviado: false, motivo: 'No hay correo destino' };
+    }
+
+    const templateParams = {
+      to_email: userEmail,
+      to_name: userName,
       pnr: reserva.pnr,
-      concepto: reserva.titulo,
-    });
+      service_name: reserva.titulo,
+      total_price: `$${reserva.totalRaw.toFixed(2)} USD`,
+    };
+
+    const response = await emailjs.send(
+      'service_gc9gkdc',
+      'template_nlbgw3v',
+      templateParams,
+      'vZyuTrdLeGeWrTWLe'
+    );
 
     console.log(
-      `[Factura] Enviada a ${respuesta.destinatario} (PNR ${reserva.pnr}, adjunto ${respuesta.archivo})`,
+      `[Factura] Confirmación enviada a ${userEmail} por EmailJS (PNR ${reserva.pnr})`, response.status, response.text
     );
     return { enviado: true };
   } catch (err) {
-    // La compra está confirmada. Un fallo de SMTP aquí es un problema de correo,
-    // no de la reserva, así que se registra y se sigue: no se propaga al `catch`
-    // del flujo de compra, que mostraría un error sobre una compra ya hecha.
-    const status = err?.response?.status;
     console.warn(
-      `[Factura] No se pudo enviar la factura (PNR ${datos.pnr}). ` +
-        `La reserva sigue confirmada. ${status ? `HTTP ${status}. ` : ''}` +
-        `${err?.response?.data?.detail ?? err?.message ?? 'Error desconocido.'}`,
+      `[Factura] No se pudo enviar el comprobante por EmailJS (PNR ${datos?.pnr}). ` +
+      `La reserva sigue confirmada. Error:`, err
     );
-    return { enviado: false, motivo: err?.response?.data?.detail ?? err?.message };
+    return { enviado: false, motivo: err?.message };
   }
 }
