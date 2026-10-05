@@ -123,6 +123,7 @@ export function AutoDetail() {
           firstName: user?.user_metadata?.nombre || user?.user_metadata?.full_name || '',
           lastName: user?.user_metadata?.apellido || '',
           documentNumber: user?.user_metadata?.cedula || '',
+          email: user?.email || '',
         },
       ],
     };

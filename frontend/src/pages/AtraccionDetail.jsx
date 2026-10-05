@@ -151,9 +151,10 @@ export function AtraccionDetail() {
           total: atraccionRes.totalPrice.total,
           pasajeros: [
             {
-              firstName: user.user_metadata?.nombre || user.user_metadata?.full_name || '',
-              lastName: user.user_metadata?.apellido || '',
-              documentNumber: user.user_metadata?.cedula || '',
+              firstName: user?.user_metadata?.nombre || user?.user_metadata?.full_name || '',
+              lastName: user?.user_metadata?.apellido || '',
+              documentNumber: user?.user_metadata?.cedula || '',
+              email: user?.email || '',
             },
           ],
         });

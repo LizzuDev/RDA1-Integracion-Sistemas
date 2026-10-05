@@ -338,6 +338,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
             firstName: p.firstName,
             lastName: p.lastName,
             documentNumber: p.documentNumber,
+            email: p.email,
           })),
         };
 
