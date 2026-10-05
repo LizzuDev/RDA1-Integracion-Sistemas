@@ -1201,10 +1201,16 @@ export function AlojamientoDetail() {
                 </span>
               </button>
 
-              <div style={{ fontSize: '11px', color: '#4b5563', lineHeight: 1.4, marginTop: '4px' }}>
-                <div>✓ ¡Solo te llevará 2 minutos!</div>
-                <div>✓ No pagas nada hoy</div>
-                <div>✓ Cancelación gratuita</div>
+              <div style={{ fontSize: '11px', color: '#4b5563', lineHeight: 1.4, marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckmarkIcon size={12} color="#008009" /> <span>¡Solo te llevará 2 minutos!</span>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckmarkIcon size={12} color="#008009" /> <span>No pagas nada hoy</span>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckmarkIcon size={12} color="#008009" /> <span>Cancelación gratuita</span>
+                </div>
               </div>
             </div>
           </div>

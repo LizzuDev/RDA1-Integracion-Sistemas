@@ -11,7 +11,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans JP', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: #1a1a1a;
   -webkit-font-smoothing: antialiased;
 }
