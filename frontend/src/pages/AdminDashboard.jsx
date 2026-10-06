@@ -1071,9 +1071,13 @@ function FinanzasTab() {
   );
 }
 
+
 function SoporteTab() {
   const [tickets, setTickets] = useState([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+  const [resolutionText, setResolutionText] = useState({});
+  const [savingId, setSavingId] = useState(null);
 
   useEffect(() => {
     async function fetchTickets() {
@@ -1089,6 +1093,28 @@ function SoporteTab() {
     }
     fetchTickets();
   }, []);
+
+  const updateTicket = async (ticketId, status, resolution) => {
+    setSavingId(ticketId);
+    try {
+      const updates = { status };
+      if (resolution !== undefined) {
+        updates.resolution = resolution;
+        updates.resolved_at = new Date().toISOString();
+        updates.resolved_by = 'admin@booking.ec';
+      }
+      const { error } = await supabase.from('support_tickets').update(updates).eq('id', ticketId);
+      if (error) throw error;
+      setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, ...updates } : t));
+      if (status === 'RESOLVED' || status === 'REJECTED') setExpandedId(null);
+    } catch (err) {
+      console.error('Error updating ticket:', err);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const ST_LABEL = { PENDING: '🕐 Pendiente', IN_REVIEW: '🔍 En revisión', RESOLVED: '✅ Resuelto', REJECTED: '❌ Rechazado' };
 
   return (
     <div>
@@ -1115,46 +1141,111 @@ function SoporteTab() {
       </div>
 
       <SectionTitle>🎫 Tickets de Soporte (Helpdesk)</SectionTitle>
-      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-          <thead>
-            <tr style={{ background: C.lightBlue, color: C.darkBlue }}>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Ticket ID</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Cliente</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Asunto</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Prioridad</th>
-              <th style={{ padding: '10px 14px', textAlign: 'center' }}>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loadingTickets && (
-              <tr>
-                <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: C.gray }}>Cargando tickets...</td>
-              </tr>
+
+      {loadingTickets && (
+        <div style={{ textAlign: 'center', padding: '30px', color: C.gray }}>Cargando tickets...</div>
+      )}
+      {!loadingTickets && tickets.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '30px', color: C.gray, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+          No hay tickets de soporte reportados aún.
+        </div>
+      )}
+
+      {!loadingTickets && tickets.map(t => {
+        const isExpanded = expandedId === t.id;
+        const priColor = t.priority === 'Alta' ? C.red : t.priority === 'Media' ? C.orange : C.text;
+        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('es-EC', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+        return (
+          <div key={t.id} style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 12, overflow: 'hidden' }}>
+            {/* Row header */}
+            <div
+              style={{ display: 'grid', gridTemplateColumns: '130px 1fr 1fr 80px 140px 36px', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: '8px' }}
+              onClick={() => setExpandedId(isExpanded ? null : t.id)}
+            >
+              <div style={{ fontWeight: 700, color: C.blue, fontSize: '0.82rem' }}>#{t.id}</div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{t.client_name}</div>
+                <div style={{ fontSize: '0.78rem', color: C.gray }}>{t.email}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.88rem' }}>{t.subject}</div>
+                <div style={{ fontSize: '0.78rem', color: C.gray }}>{t.entity_name} · {t.pnr_or_id}</div>
+              </div>
+              <div style={{ fontWeight: 700, color: priColor, fontSize: '0.85rem' }}>{t.priority}</div>
+              <div>
+                <Badge status={t.status} />
+                <div style={{ fontSize: '0.72rem', color: C.gray, marginTop: 2 }}>{dateStr}</div>
+              </div>
+              <div style={{ textAlign: 'center', fontSize: '0.8rem', color: C.gray }}>{isExpanded ? '▲' : '▼'}</div>
+            </div>
+
+            {/* Expanded panel */}
+            {isExpanded && (
+              <div style={{ borderTop: `1px solid ${C.border}`, padding: '16px', background: '#fafafa' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontSize: '0.73rem', fontWeight: 700, color: C.gray, marginBottom: 4 }}>DESCRIPCIÓN DEL USUARIO</div>
+                    <p style={{ margin: 0, fontSize: '0.88rem', color: C.text, lineHeight: 1.5, background: 'white', border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 12px' }}>{t.description}</p>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.73rem', fontWeight: 700, color: C.gray, marginBottom: 4 }}>CAMBIAR ESTADO</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {['PENDING', 'IN_REVIEW', 'RESOLVED', 'REJECTED'].map(s => (
+                        <button
+                          key={s}
+                          disabled={t.status === s || savingId === t.id}
+                          onClick={() => updateTicket(t.id, s, s === 'RESOLVED' ? (resolutionText[t.id] || t.resolution) : undefined)}
+                          style={{ padding: '5px 10px', borderRadius: 4, border: `1px solid ${t.status === s ? C.blue : C.border}`, background: t.status === s ? C.lightBlue : 'white', color: t.status === s ? C.darkBlue : C.text, fontWeight: t.status === s ? 700 : 400, cursor: t.status === s ? 'default' : 'pointer', fontSize: '0.78rem', opacity: savingId === t.id ? 0.6 : 1 }}
+                        >
+                          {ST_LABEL[s]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: '0.73rem', fontWeight: 700, color: C.gray, marginBottom: 4 }}>
+                    RESOLUCIÓN / RESPUESTA AL USUARIO {t.resolution && <span style={{ color: C.green }}>(ya tiene resolución)</span>}
+                  </div>
+                  <textarea
+                    rows={3}
+                    placeholder="Escribe la resolución o respuesta que verá el usuario..."
+                    value={resolutionText[t.id] ?? (t.resolution || '')}
+                    onChange={e => setResolutionText(prev => ({ ...prev, [t.id]: e.target.value }))}
+                    style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${C.border}`, borderRadius: 6, fontSize: '0.88rem', boxSizing: 'border-box', resize: 'vertical', outline: 'none', fontFamily: 'inherit' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => updateTicket(t.id, 'IN_REVIEW', undefined)}
+                    disabled={t.status === 'IN_REVIEW' || savingId === t.id}
+                    style={{ padding: '7px 14px', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: 5, cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}
+                  >
+                    🔍 Marcar En Revisión
+                  </button>
+                  <button
+                    onClick={() => updateTicket(t.id, 'RESOLVED', resolutionText[t.id] || t.resolution || '')}
+                    disabled={savingId === t.id}
+                    style={{ padding: '7px 14px', background: C.green, color: 'white', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem', opacity: savingId === t.id ? 0.6 : 1 }}
+                  >
+                    {savingId === t.id ? 'Guardando...' : '✅ Resolver y Notificar'}
+                  </button>
+                  <button
+                    onClick={() => updateTicket(t.id, 'REJECTED', resolutionText[t.id] || '')}
+                    disabled={savingId === t.id}
+                    style={{ padding: '7px 14px', background: C.red, color: 'white', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem' }}
+                  >
+                    ❌ Rechazar
+                  </button>
+                </div>
+              </div>
             )}
-            {!loadingTickets && tickets.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: C.gray }}>No hay tickets de soporte reportados aún.</td>
-              </tr>
-            )}
-            {!loadingTickets && tickets.map(t => (
-              <tr key={t.id} style={{ borderTop: `1px solid ${C.border}` }}>
-                <td style={{ padding: '10px 14px', fontWeight: 600 }}>#{t.id}</td>
-                <td style={{ padding: '10px 14px' }}>
-                  {t.client_name}<br/>
-                  <span style={{ fontSize: '0.8rem', color: C.gray }}>{t.entity_name} (Ref: {t.pnr_or_id})</span>
-                </td>
-                <td style={{ padding: '10px 14px' }}>
-                  {t.subject}<br/>
-                  <span style={{ fontSize: '0.8rem', color: C.gray, display: 'block', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.description}</span>
-                </td>
-                <td style={{ padding: '10px 14px', color: t.priority === 'Alta' ? C.red : t.priority === 'Media' ? C.orange : C.text, fontWeight: 700 }}>{t.priority}</td>
-                <td style={{ padding: '10px 14px', textAlign: 'center' }}><Badge status={t.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

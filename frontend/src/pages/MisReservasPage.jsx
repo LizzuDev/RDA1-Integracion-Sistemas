@@ -64,6 +64,11 @@ export function MisReservasPage() {
   const [descShake, setDescShake] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  // Main view toggle
+  const [mainView, setMainView] = useState('trips'); // 'trips' | 'reports'
+  const [misTickets, setMisTickets] = useState([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+
   // Filters
   const [filtroServicio, setFiltroServicio] = useState(''); // '' | 'alojamiento' | 'vuelo' | 'auto' | 'atraccion'
   const [filtroStatus, setFiltroStatus] = useState('');
@@ -394,6 +399,29 @@ export function MisReservasPage() {
     };
   }, []);
 
+  const fetchMisTickets = useCallback(async () => {
+    if (!user?.email) return;
+    setLoadingTickets(true);
+    try {
+      const { data, error: sbErr } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .eq('email', user.email)
+        .order('created_at', { ascending: false });
+      if (sbErr) throw sbErr;
+      setMisTickets(data || []);
+    } catch (e) {
+      console.error('Error fetching mis tickets:', e);
+    } finally {
+      setLoadingTickets(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (mainView === 'reports') fetchMisTickets();
+  }, [mainView, fetchMisTickets]);
+
+
   // Filtered reservations
   const reservasFiltradas = reservas.filter((item) => {
     if (filtroServicio && item.tipo !== filtroServicio) return false;
@@ -481,9 +509,22 @@ export function MisReservasPage() {
           <button
             type="button"
             className={`trips-filter-pill ${filtroServicio === 'atraccion' ? 'active' : ''}`}
-            onClick={() => setFiltroServicio('atraccion')}
+            onClick={() => { setFiltroServicio('atraccion'); setMainView('trips'); }}
           >
             Atracciones
+          </button>
+          <button
+            type="button"
+            className={`trips-filter-pill ${mainView === 'reports' ? 'active' : ''}`}
+            onClick={() => { setMainView('reports'); setFiltroServicio(''); }}
+            style={{ borderLeft: '2px solid #e7e7e7', marginLeft: '4px', paddingLeft: '12px' }}
+          >
+            📋 Mis Reportes
+            {misTickets.length > 0 && (
+              <span style={{ background: '#d32f2f', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '0.72rem', marginLeft: '4px', fontWeight: 700 }}>
+                {misTickets.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -528,8 +569,106 @@ export function MisReservasPage() {
         </div>
       )}
 
-      {/* Empty State */}
-      {!cargando && !error && reservasFiltradas.length === 0 && (
+      {/* REPORTS VIEW */}
+      {!cargando && mainView === 'reports' && (
+        <div style={{ maxWidth: '700px', margin: '0 auto', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#1a1a1a' }}>Mis Reportes de Soporte</h2>
+            <button type="button" onClick={fetchMisTickets} style={{ background: 'none', border: '1px solid #ddd', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', color: '#595959' }}>⟳ Actualizar</button>
+          </div>
+
+          {loadingTickets && (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#595959' }}>
+              <div style={{ width: '32px', height: '32px', border: '3px solid #e0e0e0', borderTopColor: '#006ce4', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+              <p>Cargando tus reportes...</p>
+            </div>
+          )}
+
+          {!loadingTickets && misTickets.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fafafa', borderRadius: '12px', border: '1px dashed #ddd' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>📋</div>
+              <h3 style={{ margin: '0 0 8px', color: '#1a1a1a', fontSize: '1.1rem' }}>No tienes reportes enviados</h3>
+              <p style={{ color: '#595959', fontSize: '0.9rem', margin: 0 }}>Cuando reportes un problema con una reserva, podrás seguir su estado aquí.</p>
+            </div>
+          )}
+
+          {!loadingTickets && misTickets.map(ticket => {
+            const ST = {
+              PENDING:   { label: '🕐 Pendiente',    bg: '#fff8e1', color: '#f57f17', border: '#ffe082' },
+              IN_REVIEW: { label: '🔍 En revisión', bg: '#e3f2fd', color: '#1565c0', border: '#90caf9' },
+              RESOLVED:  { label: '✅ Resuelto',    bg: '#e8f5e9', color: '#2e7d32', border: '#a5d6a7' },
+              REJECTED:  { label: '❌ Rechazado',   bg: '#ffebee', color: '#c62828', border: '#ef9a9a' },
+            };
+            const st = ST[ticket.status] || ST.PENDING;
+            const priColor = ticket.priority === 'Alta' ? '#d32f2f' : ticket.priority === 'Media' ? '#e65100' : '#388e3c';
+            const dateStr = ticket.created_at
+              ? new Date(ticket.created_at).toLocaleDateString('es-EC', { day: 'numeric', month: 'long', year: 'numeric' })
+              : 'Sin fecha';
+            return (
+              <div key={ticket.id} style={{ background: 'white', border: '1px solid #e7e7e7', borderRadius: '10px', marginBottom: '16px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#006ce4', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{ticket.type || 'Reserva'}</span>
+                    <h3 style={{ margin: '2px 0 0', fontSize: '1rem', fontWeight: 800, color: '#1a1a1a' }}>{ticket.subject}</h3>
+                  </div>
+                  <div style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: '20px', padding: '4px 12px', fontSize: '0.82rem', fontWeight: 700 }}>{st.label}</div>
+                </div>
+                <div style={{ padding: '14px 18px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                    <div>
+                      <div style={{ fontSize: '0.73rem', color: '#888', marginBottom: '2px', fontWeight: 600 }}>SERVICIO REPORTADO</div>
+                      <div style={{ fontSize: '0.9rem', color: '#1a1a1a', fontWeight: 600 }}>{ticket.entity_name}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.73rem', color: '#888', marginBottom: '2px', fontWeight: 600 }}>PNR / REFERENCIA</div>
+                      <div style={{ fontSize: '0.9rem', color: '#006ce4', fontWeight: 700 }}>{ticket.pnr_or_id}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.73rem', color: '#888', marginBottom: '2px', fontWeight: 600 }}>PRIORIDAD</div>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 700, color: priColor }}>{ticket.priority}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.73rem', color: '#888', marginBottom: '2px', fontWeight: 600 }}>FECHA DE ENVÍO</div>
+                      <div style={{ fontSize: '0.88rem', color: '#1a1a1a' }}>{dateStr}</div>
+                    </div>
+                  </div>
+                  <div style={{ background: '#f9f9f9', borderRadius: '6px', padding: '10px 14px' }}>
+                    <div style={{ fontSize: '0.73rem', color: '#888', marginBottom: '4px', fontWeight: 600 }}>TU DESCRIPCIÓN</div>
+                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#333', lineHeight: 1.5 }}>{ticket.description}</p>
+                  </div>
+                  {ticket.resolution && (
+                    <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: '8px', padding: '12px 16px', marginTop: '12px' }}>
+                      <div style={{ fontSize: '0.73rem', fontWeight: 700, color: '#2e7d32', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        ✅ RESOLUCIÓN DEL SOPORTE
+                        {ticket.resolved_at && (
+                          <span style={{ color: '#66bb6a', fontWeight: 400 }}>· {new Date(ticket.resolved_at).toLocaleDateString('es-EC', { day: 'numeric', month: 'long' })}</span>
+                        )}
+                      </div>
+                      <p style={{ margin: 0, fontSize: '0.9rem', color: '#1b5e20', lineHeight: 1.5, fontWeight: 500 }}>{ticket.resolution}</p>
+                    </div>
+                  )}
+                  {ticket.status === 'PENDING' && !ticket.resolution && (
+                    <div style={{ marginTop: '10px', fontSize: '0.8rem', color: '#888', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      🕐 Tu reporte está en cola. El equipo de soporte lo revisará pronto.
+                    </div>
+                  )}
+                  {ticket.status === 'IN_REVIEW' && (
+                    <div style={{ marginTop: '10px', fontSize: '0.8rem', color: '#1565c0', background: '#e3f2fd', borderRadius: '5px', padding: '8px 12px' }}>
+                      🔍 Un agente está revisando tu caso. Te notificaremos cuando haya una resolución.
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: '8px 18px', borderTop: '1px solid #f0f0f0', background: '#fafafa', fontSize: '0.73rem', color: '#aaa' }}>
+                  Ticket #{ticket.id}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Empty State — only when viewing trips */}
+      {!cargando && !error && mainView === 'trips' && reservasFiltradas.length === 0 && (
         <div className="trips-empty-state">
           <h2 className="trips-empty-title">Todavía no tienes viajes registrados</h2>
           <p className="trips-empty-desc">
@@ -549,8 +688,8 @@ export function MisReservasPage() {
         </div>
       )}
 
-      {/* Grouped Trips List (Booking.com style) */}
-      {!cargando && !error && reservasFiltradas.length > 0 && (
+      {/* Grouped Trips List — only when viewing trips */}
+      {!cargando && !error && mainView === 'trips' && reservasFiltradas.length > 0 && (
         <div className="trips-list-container">
           {Object.entries(gruposPorDestino).map(([destino, items]) => (
             <div key={destino} className="trips-group">
