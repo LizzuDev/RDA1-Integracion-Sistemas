@@ -10,9 +10,8 @@ const C = {
 
 const TABS = [
   { id: 'observabilidad', label: '📊 Observabilidad', sub: 'Estado en vivo' },
-  { id: 'microservicios', label: '🔬 Microservicios', sub: 'RDA2 Simulado' },
+  { id: 'microservicios', label: '🔬 Servicios & Prov.', sub: 'RDA2 Simulado' },
   { id: 'gestion', label: '🗂️ Gestión', sub: 'Usuarios & Reservas' },
-  { id: 'proveedores', label: '🔗 Proveedores', sub: 'Integración RDA2' },
   { id: 'finanzas', label: '💰 Finanzas', sub: 'Pagos & Payouts' },
   { id: 'soporte', label: '🎧 Soporte', sub: 'Ticketing & QC' },
   { id: 'auditoria', label: '🛡️ Auditoría', sub: 'Logs de Seguridad' },
@@ -1425,9 +1424,16 @@ export function AdminDashboard() {
       </div>
       <div style={{maxWidth:1280,margin:'0 auto',padding:'24px'}}>
         {activeTab==='observabilidad'&&<ObservabilidadTab stats={stats} loadingStats={loadingStats} serviceHealth={serviceHealth}/>}
-        {activeTab==='microservicios'&&<MicroserviciosTab/>}
+        {activeTab==='microservicios'&&(
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+            <MicroserviciosTab/>
+            <div style={{ borderTop: `2px dashed ${C.border}`, paddingTop: '40px' }}>
+              <SectionTitle>🔗 Gestión de Proveedores Integrados (RDA2)</SectionTitle>
+              <ProveedoresTab/>
+            </div>
+          </div>
+        )}
         {activeTab==='gestion'&&<GestionTab users={users} reservas={reservas} loadingUsers={loadingUsers} loadingReservas={loadingReservas} onRefresh={handleRefresh}/>}
-        {activeTab==='proveedores'&&<ProveedoresTab/>}
         {activeTab==='finanzas'&&<FinanzasTab/>}
         {activeTab==='soporte'&&<SoporteTab/>}
         {activeTab==='auditoria'&&<AuditoriaTab/>}
