@@ -3,7 +3,8 @@ import {
   extraerFecha,
   extraerHora,
   formatearFecha,
-import { formatearMoneda } from '../services/formato';
+  formatearMoneda,
+} from '../services/formato';
 import { FareFamilies } from './FareFamilies';
 import { useAuth } from '../hooks/useAuth';
 import { ReportModal } from './ReportModal';
