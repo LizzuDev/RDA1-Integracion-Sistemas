@@ -13,6 +13,10 @@ const TABS = [
   { id: 'microservicios', label: '🔬 Microservicios', sub: 'RDA2 Simulado' },
   { id: 'gestion', label: '🗂️ Gestión', sub: 'Usuarios & Reservas' },
   { id: 'proveedores', label: '🔗 Proveedores', sub: 'Integración RDA2' },
+  { id: 'finanzas', label: '💰 Finanzas', sub: 'Pagos & Payouts' },
+  { id: 'soporte', label: '🎧 Soporte', sub: 'Ticketing & QC' },
+  { id: 'auditoria', label: '🛡️ Auditoría', sub: 'Logs de Seguridad' },
+  { id: 'configuracion', label: '⚙️ Ajustes', sub: 'Global' },
 ];
 
 function fmt(n) { return typeof n === 'number' ? n.toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}) : '0.00'; }
@@ -1014,6 +1018,217 @@ function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
     </div>
   );
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// NUEVAS PESTAÑAS (BOOKING.COM CLONE)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FinanzasTab() {
+  return (
+    <div>
+      <div style={{ background: '#e8f5e9', border: '1px solid #2e7d32', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: '1.2rem' }}>💰</span>
+        <span style={{ fontSize: '0.85rem', color: '#2e7d32' }}>
+          <strong>Admin Financiero.</strong> Gestión de comisiones, conciliación bancaria y pagos a proveedores (Payouts).
+        </span>
+      </div>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
+        <KpiCard icon="💳" label="Cobrado a Clientes" value="$42,500.00" color={C.blue} />
+        <KpiCard icon="🏦" label="Payouts Pendientes" value="$36,125.00" color={C.orange} />
+        <KpiCard icon="📈" label="Comisiones (Revenue)" value="$6,375.00" color={C.green} />
+      </div>
+
+      <SectionTitle>🏦 Liquidaciones Pendientes (Payouts)</SectionTitle>
+      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <thead>
+            <tr style={{ background: C.lightBlue, color: C.darkBlue }}>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Proveedor</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Periodo</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Total Reservas</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Comisión (15%)</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>A Pagar</th>
+              <th style={{ padding: '10px 14px', textAlign: 'center' }}>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {['TravelEcuador Pro', 'HotelHub EC', 'AeroLink Ecuador'].map((p, i) => (
+              <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                <td style={{ padding: '10px 14px', fontWeight: 600 }}>{p}</td>
+                <td style={{ padding: '10px 14px' }}>Sept 1 - Sept 15</td>
+                <td style={{ padding: '10px 14px' }}>$5,000.00</td>
+                <td style={{ padding: '10px 14px', color: C.red }}>-$750.00</td>
+                <td style={{ padding: '10px 14px', fontWeight: 700, color: C.green }}>$4,250.00</td>
+                <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                  <button style={{ background: C.green, color: 'white', border: 'none', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}>Aprobar Payout</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SoporteTab() {
+  return (
+    <div>
+      <div style={{ background: '#fff3e0', border: '1px solid #e65100', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: '1.2rem' }}>🎧</span>
+        <span style={{ fontSize: '0.85rem', color: '#e65100' }}>
+          <strong>Soporte y Moderación (QC).</strong> Gestión de tickets de clientes y aprobación de nuevos listados.
+        </span>
+      </div>
+
+      <SectionTitle>🛂 Moderación (Quality Control) - Pendientes de Aprobación</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginBottom: 24 }}>
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontWeight: 700 }}>Hostal La Costa 🏖️</span>
+            <Badge status="PENDING" />
+          </div>
+          <div style={{ fontSize: '0.85rem', color: C.gray, marginBottom: 14 }}>Esperando revisión de fotos y validación de RUC.</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={{ flex: 1, background: C.green, color: 'white', border: 'none', borderRadius: 4, padding: '6px', cursor: 'pointer', fontWeight: 600 }}>Aprobar</button>
+            <button style={{ flex: 1, background: C.red, color: 'white', border: 'none', borderRadius: 4, padding: '6px', cursor: 'pointer', fontWeight: 600 }}>Rechazar</button>
+          </div>
+        </div>
+      </div>
+
+      <SectionTitle>🎫 Tickets de Soporte (Helpdesk)</SectionTitle>
+      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <thead>
+            <tr style={{ background: C.lightBlue, color: C.darkBlue }}>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Ticket ID</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Cliente</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Asunto</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Prioridad</th>
+              <th style={{ padding: '10px 14px', textAlign: 'center' }}>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ borderTop: `1px solid ${C.border}` }}>
+              <td style={{ padding: '10px 14px', fontWeight: 600 }}>#TK-1042</td>
+              <td style={{ padding: '10px 14px' }}>Juan Pérez (PNR: ABC12)</td>
+              <td style={{ padding: '10px 14px' }}>Solicitud de cancelación por enfermedad</td>
+              <td style={{ padding: '10px 14px', color: C.red, fontWeight: 700 }}>Alta</td>
+              <td style={{ padding: '10px 14px', textAlign: 'center' }}><Badge status="PENDING" /></td>
+            </tr>
+            <tr style={{ borderTop: `1px solid ${C.border}` }}>
+              <td style={{ padding: '10px 14px', fontWeight: 600 }}>#TK-1041</td>
+              <td style={{ padding: '10px 14px' }}>María Gómez (PNR: XYZ98)</td>
+              <td style={{ padding: '10px 14px' }}>Cambio de fecha en renta de auto</td>
+              <td style={{ padding: '10px 14px', color: C.orange, fontWeight: 700 }}>Media</td>
+              <td style={{ padding: '10px 14px', textAlign: 'center' }}><Badge status="CONFIRMED" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AuditoriaTab() {
+  return (
+    <div>
+      <div style={{ background: '#ffebee', border: '1px solid #d32f2f', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: '1.2rem' }}>🛡️</span>
+        <span style={{ fontSize: '0.85rem', color: '#d32f2f' }}>
+          <strong>Registro de Auditoría (Audit Trail).</strong> Historial inmutable de acciones críticas ejecutadas por el equipo de administración. Cumplimiento de seguridad.
+        </span>
+      </div>
+
+      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <thead>
+            <tr style={{ background: C.bg, color: C.text }}>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Fecha y Hora</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Administrador</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Acción</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Entidad Afectada</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>IP Origen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { time: 'Hace 5 min', admin: 'admin_principal@booking.ec', action: 'Aprobó Payout', target: 'TravelEcuador Pro', ip: '192.168.1.45' },
+              { time: 'Hace 32 min', admin: 'soporte_maria@booking.ec', action: 'Canceló Reserva', target: 'PNR: ABC12', ip: '192.168.1.112' },
+              { time: 'Hace 2 horas', admin: 'sysadmin@booking.ec', action: 'Modificó Ajuste Global', target: 'Comisión Base (Cambio: 10% -> 15%)', ip: '200.10.20.5' },
+              { time: 'Hace 5 horas', admin: 'qc_team@booking.ec', action: 'Aprobó Proveedor', target: 'RentAuto Ecuador', ip: '192.168.1.88' },
+            ].map((log, i) => (
+              <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                <td style={{ padding: '10px 14px', color: C.gray }}>{log.time}</td>
+                <td style={{ padding: '10px 14px', fontWeight: 600, color: C.darkBlue }}>{log.admin}</td>
+                <td style={{ padding: '10px 14px' }}>
+                  <span style={{ background: C.lightBlue, padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>{log.action}</span>
+                </td>
+                <td style={{ padding: '10px 14px', fontFamily: 'monospace' }}>{log.target}</td>
+                <td style={{ padding: '10px 14px', color: C.gray, fontSize: '0.8rem' }}>{log.ip}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ConfiguracionTab() {
+  return (
+    <div>
+      <div style={{ background: '#f5f5f5', border: `1px solid ${C.gray}`, borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: '1.2rem' }}>⚙️</span>
+        <span style={{ fontSize: '0.85rem', color: C.text }}>
+          <strong>Ajustes Globales del Sistema.</strong> Configuración central del comportamiento de la plataforma Booking Ecuador.
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        {/* Panel Finanzas Globales */}
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px' }}>
+          <SectionTitle badge="Global">Finanzas y Comisiones</SectionTitle>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>Comisión Base de la Plataforma (%)</label>
+            <input type="number" defaultValue={15} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${C.border}` }} />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>Tasa de Impuestos (IVA %)</label>
+            <input type="number" defaultValue={15} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${C.border}` }} />
+          </div>
+          <button style={{ background: C.blue, color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontWeight: 600 }}>Guardar Cambios</button>
+        </div>
+
+        {/* Panel Integraciones */}
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px' }}>
+          <SectionTitle badge="APIs">Pasarelas y Servicios</SectionTitle>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>Stripe Payments</div>
+              <div style={{ fontSize: '0.8rem', color: C.gray }}>Modo de pruebas (Test Mode)</div>
+            </div>
+            <input type="checkbox" defaultChecked style={{ transform: 'scale(1.5)', accentColor: C.green }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
+            <div>
+              <div style={{ fontWeight: 700 }}>Envío de Emails (Resend/SendGrid)</div>
+              <div style={{ fontSize: '0.8rem', color: C.gray }}>Envío de comprobantes automático</div>
+            </div>
+            <input type="checkbox" defaultChecked style={{ transform: 'scale(1.5)', accentColor: C.green }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: C.red }}>Modo Mantenimiento</div>
+              <div style={{ fontSize: '0.8rem', color: C.gray }}>Bloquea el acceso público a toda la plataforma</div>
+            </div>
+            <input type="checkbox" style={{ transform: 'scale(1.5)', accentColor: C.red }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function AdminDashboard() {
   const [activeTab,setActiveTab]=useState('observabilidad');
@@ -1213,6 +1428,10 @@ export function AdminDashboard() {
         {activeTab==='microservicios'&&<MicroserviciosTab/>}
         {activeTab==='gestion'&&<GestionTab users={users} reservas={reservas} loadingUsers={loadingUsers} loadingReservas={loadingReservas} onRefresh={handleRefresh}/>}
         {activeTab==='proveedores'&&<ProveedoresTab/>}
+        {activeTab==='finanzas'&&<FinanzasTab/>}
+        {activeTab==='soporte'&&<SoporteTab/>}
+        {activeTab==='auditoria'&&<AuditoriaTab/>}
+        {activeTab==='configuracion'&&<ConfiguracionTab/>}
       </div>
     </div>
   );
