@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
+import { supabase } from '../services/supabase';
 
 const C = {
   blue: '#006ce4', darkBlue: '#003b95', lightBlue: '#ebf3ff',
@@ -1072,10 +1073,21 @@ function FinanzasTab() {
 
 function SoporteTab() {
   const [tickets, setTickets] = useState([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem('booking_tickets') || '[]');
-    setTickets(saved);
+    async function fetchTickets() {
+      try {
+        const { data, error } = await supabase.from('support_tickets').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        setTickets(data || []);
+      } catch (err) {
+        console.error('Error fetching tickets:', err);
+      } finally {
+        setLoadingTickets(false);
+      }
+    }
+    fetchTickets();
   }, []);
 
   return (
@@ -1115,17 +1127,22 @@ function SoporteTab() {
             </tr>
           </thead>
           <tbody>
-            {tickets.length === 0 && (
+            {loadingTickets && (
+              <tr>
+                <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: C.gray }}>Cargando tickets...</td>
+              </tr>
+            )}
+            {!loadingTickets && tickets.length === 0 && (
               <tr>
                 <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: C.gray }}>No hay tickets de soporte reportados aún.</td>
               </tr>
             )}
-            {tickets.map(t => (
+            {!loadingTickets && tickets.map(t => (
               <tr key={t.id} style={{ borderTop: `1px solid ${C.border}` }}>
                 <td style={{ padding: '10px 14px', fontWeight: 600 }}>#{t.id}</td>
                 <td style={{ padding: '10px 14px' }}>
-                  {t.clientName}<br/>
-                  <span style={{ fontSize: '0.8rem', color: C.gray }}>{t.entityName} (Ref: {t.pnrOrId})</span>
+                  {t.client_name}<br/>
+                  <span style={{ fontSize: '0.8rem', color: C.gray }}>{t.entity_name} (Ref: {t.pnr_or_id})</span>
                 </td>
                 <td style={{ padding: '10px 14px' }}>
                   {t.subject}<br/>

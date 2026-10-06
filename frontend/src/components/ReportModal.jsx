@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../services/supabase';
 
 export function ReportModal({ isOpen, onClose, entityName, pnrOrId, type }) {
   const { user } = useAuth();
@@ -10,7 +11,7 @@ export function ReportModal({ isOpen, onClose, entityName, pnrOrId, type }) {
   
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // validation
@@ -27,22 +28,26 @@ export function ReportModal({ isOpen, onClose, entityName, pnrOrId, type }) {
 
     const ticket = {
       id: `TK-${Math.floor(Math.random()*10000)}`,
-      clientName: user?.user_metadata?.nombre ? `${user.user_metadata.nombre} ${user.user_metadata.apellido||''}` : 'Usuario',
+      client_name: user?.user_metadata?.nombre ? `${user.user_metadata.nombre} ${user.user_metadata.apellido||''}` : 'Usuario',
       email: user?.email || 'desconocido@email.com',
-      entityName,
-      pnrOrId,
+      entity_name: entityName,
+      pnr_or_id: pnrOrId,
       type,
       subject,
       priority,
       description,
-      status: 'PENDING',
-      createdAt: new Date().toISOString()
+      status: 'PENDING'
     };
     
-    const existing = JSON.parse(localStorage.getItem('booking_tickets') || '[]');
-    localStorage.setItem('booking_tickets', JSON.stringify([ticket, ...existing]));
-    
-    onClose();
+    try {
+      const { error: sbError } = await supabase.from('support_tickets').insert([ticket]);
+      if (sbError) throw sbError;
+      
+      onClose();
+    } catch (err) {
+      console.error('Error guardando ticket en Supabase:', err);
+      setError('Hubo un error al enviar el reporte. Por favor, intenta de nuevo.');
+    }
   };
 
   return (
