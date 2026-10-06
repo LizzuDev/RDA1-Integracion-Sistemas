@@ -55,9 +55,14 @@ export function MisReservasPage() {
   const [reportSubject, setReportSubject] = useState('');
   const [reportPriority, setReportPriority] = useState('Media');
   const [reportDescription, setReportDescription] = useState('');
-  const [reportError, setReportError] = useState('');
   const [reportSuccess, setReportSuccess] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
+  // Per-field errors + shake triggers
+  const [subjectError, setSubjectError] = useState('');
+  const [descError, setDescError] = useState('');
+  const [subjectShake, setSubjectShake] = useState(false);
+  const [descShake, setDescShake] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   // Filters
   const [filtroServicio, setFiltroServicio] = useState(''); // '' | 'alojamiento' | 'vuelo' | 'auto' | 'atraccion'
@@ -298,27 +303,63 @@ export function MisReservasPage() {
     setReportSubject('');
     setReportPriority('Media');
     setReportDescription('');
-    setReportError('');
+    setSubjectError('');
+    setDescError('');
+    setSubjectShake(false);
+    setDescShake(false);
+    setSubmitError('');
     setReportSuccess(false);
+  };
+
+  // ── Validation helpers ──────────────────────────────────────────────────────
+  const ALLOWED = /^[a-zA-Z0-9\s,.\'\-ñÑáéíóúÁÉÍÓÚüÜ?!:()]*$/;
+  const collapseSpaces = (v) => v.replace(/\s{2,}/g, ' ');
+
+  const validateSubject = (val) => {
+    const v = collapseSpaces(val);
+    if (!v.trim()) return 'El asunto no puede estar vacío.';
+    if (v.trim().length < 5) return `Necesitas al menos ${5 - v.trim().length} caracteres más.`;
+    if (!ALLOWED.test(v)) return 'Caracteres no permitidos. Solo letras, números y puntuación básica.';
+    return '';
+  };
+
+  const validateDesc = (val) => {
+    const v = collapseSpaces(val);
+    if (!v.trim()) return 'La descripción no puede estar vacía.';
+    if (v.trim().length < 15) return `Necesitas al menos ${15 - v.trim().length} caracteres más.`;
+    if (!ALLOWED.test(v)) return 'Caracteres no permitidos. Solo letras, números y puntuación básica.';
+    return '';
+  };
+
+  const triggerShake = (setter) => {
+    setter(true);
+    setTimeout(() => setter(false), 600);
+  };
+
+  const handleSubjectChange = (e) => {
+    const v = collapseSpaces(e.target.value.slice(0, 120));
+    setReportSubject(v);
+    setSubjectError(validateSubject(v));
+    setSubmitError('');
+  };
+
+  const handleDescChange = (e) => {
+    const v = collapseSpaces(e.target.value.slice(0, 800));
+    setReportDescription(v);
+    setDescError(validateDesc(v));
+    setSubmitError('');
   };
 
   const handleSendReport = async (e) => {
     e.preventDefault();
-    setReportError('');
+    setSubmitError('');
 
-    if (!reportSubject.trim() || reportSubject.trim().length < 5) {
-      setReportError('El asunto debe tener al menos 5 caracteres.');
-      return;
-    }
-    if (!reportDescription.trim() || reportDescription.trim().length < 15) {
-      setReportError('La descripción debe tener al menos 15 caracteres.');
-      return;
-    }
-    const hasSymbols = /[^a-zA-Z0-9\s,.\-ñÑáéíóúÁÉÍÓÚ?]/.test(reportSubject) || /[^a-zA-Z0-9\s,.\-ñÑáéíóúÁÉÍÓÚ?]/.test(reportDescription);
-    if (hasSymbols) {
-      setReportError('Solo se permiten letras, números y puntuación básica.');
-      return;
-    }
+    const sErr = validateSubject(reportSubject);
+    const dErr = validateDesc(reportDescription);
+
+    if (sErr) { setSubjectError(sErr); triggerShake(setSubjectShake); }
+    if (dErr) { setDescError(dErr); triggerShake(setDescShake); }
+    if (sErr || dErr) return;
 
     setSendingReport(true);
     try {
@@ -331,16 +372,16 @@ export function MisReservasPage() {
         entity_name: selectedReserva.titulo,
         pnr_or_id: selectedReserva.pnr,
         type: selectedReserva.servicioTexto,
-        subject: reportSubject,
+        subject: reportSubject.trim(),
         priority: reportPriority,
-        description: reportDescription,
+        description: reportDescription.trim(),
         status: 'PENDING',
       };
       const { error: sbError } = await supabase.from('support_tickets').insert([ticket]);
       if (sbError) throw sbError;
       setReportSuccess(true);
     } catch (err) {
-      setReportError('Error al enviar el reporte. Por favor intenta de nuevo.');
+      setSubmitError('Error al enviar el reporte. Por favor intenta de nuevo.');
     } finally {
       setSendingReport(false);
     }
@@ -714,6 +755,22 @@ export function MisReservasPage() {
               {/* ── REPORT VIEW ── */}
               {modalView === 'report' && (
                 <>
+                  <style>{`
+                    @keyframes shake-red {
+                      0%   { transform: translateX(0);   background: transparent; }
+                      15%  { transform: translateX(-6px); background: rgba(211,47,47,0.06); }
+                      30%  { transform: translateX(6px);  background: rgba(211,47,47,0.1); }
+                      45%  { transform: translateX(-4px); background: rgba(211,47,47,0.08); }
+                      60%  { transform: translateX(4px);  background: rgba(211,47,47,0.06); }
+                      75%  { transform: translateX(-2px); background: rgba(211,47,47,0.04); }
+                      100% { transform: translateX(0);   background: transparent; }
+                    }
+                    .field-shake { animation: shake-red 0.55s ease forwards; border-radius: 5px; }
+                    .report-input-err { border-color: #d32f2f !important; }
+                    .field-counter { font-size: 0.74rem; color: #999; text-align: right; margin-top: 3px; }
+                    .field-err-msg { font-size: 0.78rem; color: #d32f2f; font-weight: 600; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+                  `}</style>
+
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
                     <button type="button" onClick={() => setModalView('detail')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#006ce4', fontWeight: 600, fontSize: '0.9rem', padding: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
                       ← Volver
@@ -733,22 +790,30 @@ export function MisReservasPage() {
                       <button type="button" onClick={() => setSelectedReserva(null)} className="trips-btn-primary" style={{ width: '100%' }}>Cerrar</button>
                     </div>
                   ) : (
-                    <form onSubmit={handleSendReport} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                      {reportError && (
-                        <div style={{ background: '#ffebee', color: '#d32f2f', padding: '10px 12px', borderRadius: '5px', fontSize: '0.85rem', fontWeight: 600 }}>{reportError}</div>
-                      )}
+                    <form onSubmit={handleSendReport} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }} noValidate>
 
+                      {/* Asunto */}
                       <div>
                         <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 700, marginBottom: '5px', color: '#1a1a1a' }}>Asunto *</label>
-                        <input
-                          type="text"
-                          value={reportSubject}
-                          onChange={e => { setReportSubject(e.target.value); setReportError(''); }}
-                          placeholder="Ej: Cobro incorrecto, cancelación sin aviso..."
-                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #ddd', borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }}
-                        />
+                        <div className={subjectShake ? 'field-shake' : ''}>
+                          <input
+                            type="text"
+                            value={reportSubject}
+                            onChange={handleSubjectChange}
+                            maxLength={120}
+                            placeholder="Ej: Cobro incorrecto, cancelación sin aviso..."
+                            style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${subjectError ? '#d32f2f' : '#ddd'}`, borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none', background: subjectError ? 'rgba(211,47,47,0.04)' : 'white', transition: 'border-color 0.2s, background 0.2s' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '3px' }}>
+                          {subjectError
+                            ? <span className="field-err-msg"><span>⚠️</span>{subjectError}</span>
+                            : <span />}
+                          <span className="field-counter">{reportSubject.length}/120</span>
+                        </div>
                       </div>
 
+                      {/* Prioridad */}
                       <div>
                         <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 700, marginBottom: '5px', color: '#1a1a1a' }}>Prioridad</label>
                         <select
@@ -756,26 +821,47 @@ export function MisReservasPage() {
                           onChange={e => setReportPriority(e.target.value)}
                           style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #ddd', borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }}
                         >
-                          <option value="Baja">Baja</option>
-                          <option value="Media">Media</option>
-                          <option value="Alta">Alta</option>
+                          <option value="Baja">Baja — problema menor</option>
+                          <option value="Media">Media — afecta mi experiencia</option>
+                          <option value="Alta">Alta — urgente, impide el servicio</option>
                         </select>
                       </div>
 
+                      {/* Descripción */}
                       <div>
                         <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 700, marginBottom: '5px', color: '#1a1a1a' }}>Descripción del problema *</label>
-                        <textarea
-                          value={reportDescription}
-                          onChange={e => { setReportDescription(e.target.value); setReportError(''); }}
-                          rows={4}
-                          placeholder="Describe el inconveniente con detalle para que podamos ayudarte..."
-                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #ddd', borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none', resize: 'vertical' }}
-                        />
+                        <div className={descShake ? 'field-shake' : ''}>
+                          <textarea
+                            value={reportDescription}
+                            onChange={handleDescChange}
+                            rows={4}
+                            maxLength={800}
+                            placeholder="Describe qué ocurrió, cuándo y cómo afectó tu reserva..."
+                            style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${descError ? '#d32f2f' : '#ddd'}`, borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none', resize: 'vertical', background: descError ? 'rgba(211,47,47,0.04)' : 'white', transition: 'border-color 0.2s, background 0.2s' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '3px' }}>
+                          {descError
+                            ? <span className="field-err-msg"><span>⚠️</span>{descError}</span>
+                            : <span />}
+                          <span className="field-counter">{reportDescription.length}/800</span>
+                        </div>
                       </div>
+
+                      {/* Error global de envío */}
+                      {submitError && (
+                        <div style={{ background: '#ffebee', color: '#d32f2f', padding: '10px 12px', borderRadius: '5px', fontSize: '0.85rem', fontWeight: 600, display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <span>⚠️</span>{submitError}
+                        </div>
+                      )}
 
                       <div style={{ display: 'flex', gap: '10px' }}>
                         <button type="button" onClick={() => setModalView('detail')} className="trips-btn-secondary" style={{ flex: 1 }}>Cancelar</button>
-                        <button type="submit" disabled={sendingReport} style={{ flex: 2, padding: '10px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '6px', cursor: sendingReport ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: sendingReport ? 0.7 : 1 }}>
+                        <button
+                          type="submit"
+                          disabled={sendingReport || !!subjectError || !!descError}
+                          style={{ flex: 2, padding: '10px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '6px', cursor: (sendingReport || subjectError || descError) ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: (sendingReport || subjectError || descError) ? 0.6 : 1, transition: 'opacity 0.2s' }}
+                        >
                           {sendingReport ? 'Enviando...' : 'Enviar reporte'}
                         </button>
                       </div>
