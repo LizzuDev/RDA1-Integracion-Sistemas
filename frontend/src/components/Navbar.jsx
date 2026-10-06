@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
@@ -28,6 +28,19 @@ export function Navbar() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showDropdown) return;
+    const handleOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showDropdown]);
   
   // States for Profile Edit
   const [nombre, setNombre] = useState(user?.user_metadata?.nombre || '');
@@ -159,7 +172,7 @@ export function Navbar() {
             Publica tu propiedad
           </span>
           {user ? (
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }} ref={dropdownRef}>
               {!isAdmin && (
                 <Link to="/mis-reservas" className="navbar-btn outline" style={{textDecoration: 'none', marginRight: '10px'}}>{t('nav.my_bookings')}</Link>
               )}
