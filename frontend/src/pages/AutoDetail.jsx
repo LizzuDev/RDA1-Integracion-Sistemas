@@ -181,7 +181,7 @@ export function AutoDetail() {
 
         {/* Breadcrumb & Header */}
         <div style={{ marginBottom: '20px' }}>
-          <span onClick={() => navigate('/autos')} style={{ color: '#006ce4', cursor: 'pointer', fontSize: '0.9rem' }}>Volver a los resultados de búsqueda</span>
+          <span onClick={() => navigate('/autos')} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/autos'); } }} style={{ color: '#006ce4', cursor: 'pointer', fontSize: '0.9rem' }}>Volver a los resultados de búsqueda</span>
           <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#333', margin: '10px 0 5px 0' }}>Tu oferta</h1>
           <p style={{ color: '#666', fontSize: '0.9rem', margin: 0 }}>Siguiente: Añade los extras</p>
           <div style={{ display: 'flex', gap: '5px', marginTop: '15px' }}>
@@ -215,7 +215,7 @@ export function AutoDetail() {
                 <div>
                   <h2 style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#333', marginBottom: '15px' }}>
                     {make} {model}{' '}
-                    <span style={{ position: 'relative', cursor: 'pointer', fontSize: '0.9rem', color: '#006ce4', fontWeight: 'normal' }} onClick={() => setShowSimilarModal(!showSimilarModal)}>
+                    <span style={{ position: 'relative', cursor: 'pointer', fontSize: '0.9rem', color: '#006ce4', fontWeight: 'normal' }} onClick={() => setShowSimilarModal(!showSimilarModal)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowSimilarModal(!showSimilarModal); } }}>
                       o un coche pequeño similar ℹ️
                       {showSimilarModal && (
                         <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '10px', background: '#222', color: 'white', padding: '15px', borderRadius: '4px', width: '300px', zIndex: 10, fontSize: '0.9rem', lineHeight: '1.4', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', fontWeight: 'normal', textAlign: 'left' }}>
@@ -247,7 +247,7 @@ export function AutoDetail() {
                   <div style={{ background: '#003b95', color: 'white', padding: '6px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.9rem' }}>{supplierInfo.score}</div>
                   <div style={{ fontSize: '0.85rem', color: '#333', lineHeight: '1.2' }}><b>{supplierInfo.scoreText}</b><br /><span style={{ color: '#666' }}>{supplierInfo.reviews} opiniones</span></div>
                 </div>
-                <div onClick={() => setShowImportantInfoModal(true)} style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <div onClick={() => setShowImportantInfoModal(true)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowImportantInfoModal(true); } }} style={{ color: '#006ce4', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <span>ℹ️</span> Información importante
                 </div>
               </div>

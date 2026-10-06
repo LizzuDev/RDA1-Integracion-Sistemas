@@ -12,7 +12,7 @@ export function AtraccionCard({ atraccion }) {
   const price = atraccion.price?.total || 55;
 
   return (
-    <div className="attraction-search-card" onClick={() => navigate(`/atracciones/${id}`)} style={{cursor: 'pointer'}}>
+    <div className="attraction-search-card" onClick={() => navigate(`/atracciones/${id}`)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/atracciones/${id}`); } }} style={{cursor: 'pointer'}}>
       <div className="asc-image">
         <img src={imageUrl} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${id}/300/300`; }} alt={name} />
         <button className="favorite-btn" onClick={(e) => e.stopPropagation()}>♡</button>

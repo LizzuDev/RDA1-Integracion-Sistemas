@@ -314,7 +314,7 @@ export function AlojamientosSearchPage() {
             </div>
 
             {/* 2. Dates Field */}
-            <div className="sr-search-field" ref={datesRef} onClick={() => setShowDatesPopover(!showDatesPopover)}>
+            <div className="sr-search-field" ref={datesRef} onClick={() => setShowDatesPopover(!showDatesPopover)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDatesPopover(!showDatesPopover); } }}>
               <span className="sr-search-icon" aria-hidden="true">
                 <CalendarIcon size={20} color="#474747" />
               </span>

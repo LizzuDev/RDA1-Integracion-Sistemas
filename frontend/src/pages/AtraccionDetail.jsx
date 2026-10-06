@@ -179,7 +179,7 @@ export function AtraccionDetail() {
   return (
     <div className="search-page-wrapper">
       <div className="breadcrumb-nav" style={{ paddingTop: 24 }}>
-        <span onClick={() => navigate('/')}>Inicio</span> {'>'} <span>Atracciones</span> {'>'} <span>Cosas que hacer en Quito</span> {'>'} <span>La Ronda</span> {'>'} <strong>{atraccion.nombre || atraccion.name || 'Recorrido a pie de Quito Old Town con degustación...'}</strong>
+        <span onClick={() => navigate('/')} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/'); } }} style={{cursor: 'pointer'}}>Inicio</span> {'>'} <span>Atracciones</span> {'>'} <span>Cosas que hacer en Quito</span> {'>'} <span>La Ronda</span> {'>'} <strong>{atraccion.nombre || atraccion.name || 'Recorrido a pie de Quito Old Town con degustación...'}</strong>
       </div>
 
       <main className="detail-layout">
@@ -430,7 +430,7 @@ export function AtraccionDetail() {
                   const isBestPrice = dateStr === '2026-10-03';
 
                   return (
-                    <div key={dateStr} className={`date-box ${isActive ? 'active' : ''}`} onClick={() => setForm({...form, date: dateStr})}>
+                    <div key={dateStr} className={`date-box ${isActive ? 'active' : ''}`} onClick={() => setForm({...form, date: dateStr})} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setForm({...form, date: dateStr}); } }}>
                       <span className="day-name">{dayName}</span>
                       <span className="day-num">{dayNum}</span>
                       <span className="month">{monthName}</span>

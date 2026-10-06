@@ -488,7 +488,7 @@ export function MisReservasPage() {
                       <div className="trip-card-price">
                         {convertPrice(r.totalRaw)}
                       </div>
-                      <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()} tabIndex={-1}>
                         <button
                           type="button"
                           className="trip-card-menu-btn"

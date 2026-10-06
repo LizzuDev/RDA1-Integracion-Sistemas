@@ -850,15 +850,15 @@ export function AlojamientoDetail() {
 
         {/* Photo Gallery Collage (Booking.com signature layout) */}
         <section className="dt-gallery-grid">
-          <div className="dt-hero-image-wrapper" onClick={() => setLightboxIndex(0)}>
+          <div className="dt-hero-image-wrapper" onClick={() => setLightboxIndex(0)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLightboxIndex(0); } }}>
             <img src={photos[0].url} alt={alojamiento.nombre} className="dt-hero-image" />
           </div>
 
           <div className="dt-stacked-images">
-            <div className="dt-stacked-image-wrapper" onClick={() => setLightboxIndex(1)}>
+            <div className="dt-stacked-image-wrapper" onClick={() => setLightboxIndex(1)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLightboxIndex(1); } }}>
               <img src={photos[1]?.url || photos[0].url} alt="Room detail" className="dt-stacked-image" />
             </div>
-            <div className="dt-stacked-image-wrapper" onClick={() => setLightboxIndex(2)}>
+            <div className="dt-stacked-image-wrapper" onClick={() => setLightboxIndex(2)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLightboxIndex(2); } }}>
               <img src={photos[2]?.url || photos[0].url} alt="Room detail" className="dt-stacked-image" />
             </div>
           </div>
@@ -867,11 +867,11 @@ export function AlojamientoDetail() {
         {/* Bottom 5 Thumbnails */}
         <div className="dt-thumbnails-row">
           {photos.slice(3, 7).map((p, idx) => (
-            <div key={idx} className="dt-thumb-wrapper" onClick={() => setLightboxIndex(idx + 3)}>
+            <div key={idx} className="dt-thumb-wrapper" onClick={() => setLightboxIndex(idx + 3)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLightboxIndex(idx + 3); } }}>
               <img src={p.url} alt={`Thumbnail ${idx + 3}`} className="dt-thumb-image" />
             </div>
           ))}
-          <div className="dt-thumb-wrapper" onClick={() => setLightboxIndex(0)}>
+          <div className="dt-thumb-wrapper" onClick={() => setLightboxIndex(0)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLightboxIndex(0); } }}>
             <img src={photos[7]?.url || photos[0].url} alt="Más fotos" className="dt-thumb-image" />
             <div className="dt-more-photos-overlay">+29 fotos</div>
           </div>

@@ -168,7 +168,7 @@ export function AtraccionesSearchPage() {
               {atracciones.map((a, idx) => {
                 const navigateToDetail = () => window.location.href = `/atracciones/${a.id}`;
                 return (
-                <div key={a.id} className="search-result-card" onClick={navigateToDetail} style={{cursor: 'pointer'}}>
+                <div key={a.id} className="search-result-card" onClick={navigateToDetail} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateToDetail(); } }} style={{cursor: 'pointer'}}>
                   <div className="sr-image">
                     {/* Usamos lazy loading para las imagenes para optimizar */}
                     <img loading="lazy" src={a.photos?.[0]?.url || `https://picsum.photos/seed/${a.id}/300/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${a.id}/300/300`; }} alt={a.name} />
