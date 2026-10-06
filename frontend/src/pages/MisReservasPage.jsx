@@ -8,6 +8,7 @@ import { descargarFactura } from '../utils/facturaPdf';
 import { formatearFecha } from '../services/formato';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../services/supabase';
 import {
   MoreVerticalIcon,
   CheckmarkIcon,
@@ -48,6 +49,15 @@ export function MisReservasPage() {
   const [avisoDescarga, setAvisoDescarga] = useState('');
   const { convertPrice } = useCurrency();
   const { user } = useAuth();
+
+  // Report form state
+  const [modalView, setModalView] = useState('detail'); // 'detail' | 'report'
+  const [reportSubject, setReportSubject] = useState('');
+  const [reportPriority, setReportPriority] = useState('Media');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportError, setReportError] = useState('');
+  const [reportSuccess, setReportSuccess] = useState(false);
+  const [sendingReport, setSendingReport] = useState(false);
 
   // Filters
   const [filtroServicio, setFiltroServicio] = useState(''); // '' | 'alojamiento' | 'vuelo' | 'auto' | 'atraccion'
@@ -284,6 +294,56 @@ export function MisReservasPage() {
     setAvisoDescarga('');
     setSelectedReserva(reserva);
     setActiveMenuId(null);
+    setModalView('detail');
+    setReportSubject('');
+    setReportPriority('Media');
+    setReportDescription('');
+    setReportError('');
+    setReportSuccess(false);
+  };
+
+  const handleSendReport = async (e) => {
+    e.preventDefault();
+    setReportError('');
+
+    if (!reportSubject.trim() || reportSubject.trim().length < 5) {
+      setReportError('El asunto debe tener al menos 5 caracteres.');
+      return;
+    }
+    if (!reportDescription.trim() || reportDescription.trim().length < 15) {
+      setReportError('La descripción debe tener al menos 15 caracteres.');
+      return;
+    }
+    const hasSymbols = /[^a-zA-Z0-9\s,.\-ñÑáéíóúÁÉÍÓÚ?]/.test(reportSubject) || /[^a-zA-Z0-9\s,.\-ñÑáéíóúÁÉÍÓÚ?]/.test(reportDescription);
+    if (hasSymbols) {
+      setReportError('Solo se permiten letras, números y puntuación básica.');
+      return;
+    }
+
+    setSendingReport(true);
+    try {
+      const ticket = {
+        id: `TK-${Math.floor(Math.random() * 100000)}`,
+        client_name: user?.user_metadata?.nombre
+          ? `${user.user_metadata.nombre} ${user.user_metadata.apellido || ''}`
+          : user?.email || 'Usuario',
+        email: user?.email || 'desconocido@email.com',
+        entity_name: selectedReserva.titulo,
+        pnr_or_id: selectedReserva.pnr,
+        type: selectedReserva.servicioTexto,
+        subject: reportSubject,
+        priority: reportPriority,
+        description: reportDescription,
+        status: 'PENDING',
+      };
+      const { error: sbError } = await supabase.from('support_tickets').insert([ticket]);
+      if (sbError) throw sbError;
+      setReportSuccess(true);
+    } catch (err) {
+      setReportError('Error al enviar el reporte. Por favor intenta de nuevo.');
+    } finally {
+      setSendingReport(false);
+    }
   };
 
   useEffect(() => {
@@ -591,90 +651,139 @@ export function MisReservasPage() {
             </div>
 
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <span
-                  style={{
-                    fontSize: '0.75rem',
-                    textTransform: 'uppercase',
-                    fontWeight: 700,
-                    color: '#006ce4',
-                    letterSpacing: '0.5px',
-                  }}
-                >
-                  {selectedReserva.servicioTexto}
-                </span>
-                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '4px 0 6px 0', color: '#1a1a1a' }}>
-                  {selectedReserva.titulo}
-                </h3>
-                <span className={`trip-card-status ${(selectedReserva.status || '').toLowerCase()}`}>
-                  {ESTADOS_ES[selectedReserva.status] ?? selectedReserva.status}
-                </span>
-              </div>
 
-              <div
-                style={{
-                  background: '#f5f5f5',
-                  borderRadius: '6px',
-                  padding: '16px',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '14px',
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Código PNR</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1a1a1a' }}>{selectedReserva.pnr}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Fecha / Estancia</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>{selectedReserva.fechasTexto}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Destino</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>{selectedReserva.destino}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Total Pagado</div>
-                  <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#008009' }}>
-                    {convertPrice(selectedReserva.totalRaw)}
+              {/* ── DETAIL VIEW ── */}
+              {modalView === 'detail' && (
+                <>
+                  <div>
+                    <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700, color: '#006ce4', letterSpacing: '0.5px' }}>
+                      {selectedReserva.servicioTexto}
+                    </span>
+                    <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '4px 0 6px 0', color: '#1a1a1a' }}>
+                      {selectedReserva.titulo}
+                    </h3>
+                    <span className={`trip-card-status ${(selectedReserva.status || '').toLowerCase()}`}>
+                      {ESTADOS_ES[selectedReserva.status] ?? selectedReserva.status}
+                    </span>
                   </div>
-                </div>
-              </div>
 
-              {avisoDescarga && (
-                <div
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '4px',
-                    fontSize: '0.85rem',
-                    background: '#fdecea',
-                    color: '#b71c1c',
-                    border: '1px solid #ef9a9a',
-                  }}
-                >
-                  {avisoDescarga}
-                </div>
+                  <div style={{ background: '#f5f5f5', borderRadius: '6px', padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                    <div>
+                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Código PNR</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1a1a1a' }}>{selectedReserva.pnr}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Fecha / Estancia</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>{selectedReserva.fechasTexto}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Destino</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>{selectedReserva.destino}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Total Pagado</div>
+                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#008009' }}>{convertPrice(selectedReserva.totalRaw)}</div>
+                    </div>
+                  </div>
+
+                  {avisoDescarga && (
+                    <div style={{ padding: '10px 14px', borderRadius: '4px', fontSize: '0.85rem', background: '#fdecea', color: '#b71c1c', border: '1px solid #ef9a9a' }}>
+                      {avisoDescarga}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+                    <button type="button" disabled={isDownloading} onClick={() => descargarPDF(selectedReserva)} className="trips-btn-primary" style={{ flex: 1, textAlign: 'center' }}>
+                      {isDownloading ? 'Generando PDF...' : 'Descargar factura (PDF)'}
+                    </button>
+                    <button type="button" onClick={() => setSelectedReserva(null)} className="trips-btn-secondary" style={{ flex: 1, textAlign: 'center' }}>
+                      Cerrar
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => { setModalView('report'); setReportError(''); setReportSuccess(false); }}
+                    style={{ width: '100%', marginTop: '4px', padding: '10px', background: '#fff5f5', color: '#d32f2f', border: '1px solid #ffcdd2', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    ⚠️ Reportar un problema con esta reserva
+                  </button>
+                </>
               )}
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                <button
-                  type="button"
-                  disabled={isDownloading}
-                  onClick={() => descargarPDF(selectedReserva)}
-                  className="trips-btn-primary"
-                  style={{ flex: 1, textAlign: 'center' }}
-                >
-                  {isDownloading ? 'Generando PDF...' : 'Descargar factura (PDF)'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReserva(null)}
-                  className="trips-btn-secondary"
-                  style={{ flex: 1, textAlign: 'center' }}
-                >
-                  Cerrar
-                </button>
-              </div>
+              {/* ── REPORT VIEW ── */}
+              {modalView === 'report' && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                    <button type="button" onClick={() => setModalView('detail')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#006ce4', fontWeight: 600, fontSize: '0.9rem', padding: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      ← Volver
+                    </button>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#1a1a1a' }}>Reportar problema</h3>
+                  </div>
+
+                  <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: '6px', padding: '10px 14px', fontSize: '0.83rem', color: '#795548' }}>
+                    Estás reportando: <strong>{selectedReserva.titulo}</strong> &middot; PNR: <strong>{selectedReserva.pnr}</strong>
+                  </div>
+
+                  {reportSuccess ? (
+                    <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                      <div style={{ fontSize: '2.5rem', marginBottom: '10px' }}>✅</div>
+                      <h4 style={{ margin: '0 0 8px', color: '#2e7d32', fontSize: '1.1rem' }}>Reporte enviado con éxito</h4>
+                      <p style={{ fontSize: '0.88rem', color: '#595959', margin: '0 0 20px' }}>Nuestro equipo de soporte revisará tu reporte a la brevedad.</p>
+                      <button type="button" onClick={() => setSelectedReserva(null)} className="trips-btn-primary" style={{ width: '100%' }}>Cerrar</button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSendReport} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      {reportError && (
+                        <div style={{ background: '#ffebee', color: '#d32f2f', padding: '10px 12px', borderRadius: '5px', fontSize: '0.85rem', fontWeight: 600 }}>{reportError}</div>
+                      )}
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 700, marginBottom: '5px', color: '#1a1a1a' }}>Asunto *</label>
+                        <input
+                          type="text"
+                          value={reportSubject}
+                          onChange={e => { setReportSubject(e.target.value); setReportError(''); }}
+                          placeholder="Ej: Cobro incorrecto, cancelación sin aviso..."
+                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #ddd', borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 700, marginBottom: '5px', color: '#1a1a1a' }}>Prioridad</label>
+                        <select
+                          value={reportPriority}
+                          onChange={e => setReportPriority(e.target.value)}
+                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #ddd', borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }}
+                        >
+                          <option value="Baja">Baja</option>
+                          <option value="Media">Media</option>
+                          <option value="Alta">Alta</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 700, marginBottom: '5px', color: '#1a1a1a' }}>Descripción del problema *</label>
+                        <textarea
+                          value={reportDescription}
+                          onChange={e => { setReportDescription(e.target.value); setReportError(''); }}
+                          rows={4}
+                          placeholder="Describe el inconveniente con detalle para que podamos ayudarte..."
+                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #ddd', borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none', resize: 'vertical' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button type="button" onClick={() => setModalView('detail')} className="trips-btn-secondary" style={{ flex: 1 }}>Cancelar</button>
+                        <button type="submit" disabled={sendingReport} style={{ flex: 2, padding: '10px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '6px', cursor: sendingReport ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: sendingReport ? 0.7 : 1 }}>
+                          {sendingReport ? 'Enviando...' : 'Enviar reporte'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </>
+              )}
+
             </div>
           </div>
         </div>
