@@ -68,6 +68,7 @@ export function MisReservasPage() {
   const [mainView, setMainView] = useState('trips'); // 'trips' | 'reports'
   const [misTickets, setMisTickets] = useState([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
+  const [ticketBadgeSeen, setTicketBadgeSeen] = useState(false);
 
   // Filters
   const [filtroServicio, setFiltroServicio] = useState(''); // '' | 'alojamiento' | 'vuelo' | 'auto' | 'atraccion'
@@ -410,6 +411,8 @@ export function MisReservasPage() {
         .order('created_at', { ascending: false });
       if (sbErr) throw sbErr;
       setMisTickets(data || []);
+      // Reset badge if there are tickets and user hasn't seen them yet
+      if ((data || []).length > 0 && mainView !== 'reports') setTicketBadgeSeen(false);
     } catch (e) {
       console.error('Error fetching mis tickets:', e);
     } finally {
@@ -480,29 +483,29 @@ export function MisReservasPage() {
         <div className="trips-filter-pills" role="tablist" aria-label="Filtrar por tipo de servicio">
           <button
             type="button"
-            className={`trips-filter-pill ${filtroServicio === '' ? 'active' : ''}`}
-            onClick={() => setFiltroServicio('')}
+            className={`trips-filter-pill ${mainView === 'trips' && filtroServicio === '' ? 'active' : ''}`}
+            onClick={() => { setFiltroServicio(''); setMainView('trips'); }}
           >
             Todos los viajes ({reservas.length})
           </button>
           <button
             type="button"
-            className={`trips-filter-pill ${filtroServicio === 'alojamiento' ? 'active' : ''}`}
-            onClick={() => setFiltroServicio('alojamiento')}
+            className={`trips-filter-pill ${mainView === 'trips' && filtroServicio === 'alojamiento' ? 'active' : ''}`}
+            onClick={() => { setFiltroServicio('alojamiento'); setMainView('trips'); }}
           >
             Alojamientos
           </button>
           <button
             type="button"
-            className={`trips-filter-pill ${filtroServicio === 'vuelo' ? 'active' : ''}`}
-            onClick={() => setFiltroServicio('vuelo')}
+            className={`trips-filter-pill ${mainView === 'trips' && filtroServicio === 'vuelo' ? 'active' : ''}`}
+            onClick={() => { setFiltroServicio('vuelo'); setMainView('trips'); }}
           >
             Vuelos
           </button>
           <button
             type="button"
-            className={`trips-filter-pill ${filtroServicio === 'auto' ? 'active' : ''}`}
-            onClick={() => setFiltroServicio('auto')}
+            className={`trips-filter-pill ${mainView === 'trips' && filtroServicio === 'auto' ? 'active' : ''}`}
+            onClick={() => { setFiltroServicio('auto'); setMainView('trips'); }}
           >
             Renta de autos
           </button>
@@ -516,11 +519,11 @@ export function MisReservasPage() {
           <button
             type="button"
             className={`trips-filter-pill ${mainView === 'reports' ? 'active' : ''}`}
-            onClick={() => { setMainView('reports'); setFiltroServicio(''); }}
+            onClick={() => { setMainView('reports'); setFiltroServicio(''); setTicketBadgeSeen(true); }}
             style={{ borderLeft: '2px solid #e7e7e7', marginLeft: '4px', paddingLeft: '12px' }}
           >
             📋 Mis Reportes
-            {misTickets.length > 0 && (
+            {misTickets.length > 0 && !ticketBadgeSeen && (
               <span style={{ background: '#d32f2f', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '0.72rem', marginLeft: '4px', fontWeight: 700 }}>
                 {misTickets.length}
               </span>
