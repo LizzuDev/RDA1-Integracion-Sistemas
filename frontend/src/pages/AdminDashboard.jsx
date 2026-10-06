@@ -1071,6 +1071,13 @@ function FinanzasTab() {
 }
 
 function SoporteTab() {
+  const [tickets, setTickets] = useState([]);
+
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem('booking_tickets') || '[]');
+    setTickets(saved);
+  }, []);
+
   return (
     <div>
       <div style={{ background: '#fff3e0', border: '1px solid #e65100', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1108,20 +1115,26 @@ function SoporteTab() {
             </tr>
           </thead>
           <tbody>
-            <tr style={{ borderTop: `1px solid ${C.border}` }}>
-              <td style={{ padding: '10px 14px', fontWeight: 600 }}>#TK-1042</td>
-              <td style={{ padding: '10px 14px' }}>Juan Pérez (PNR: ABC12)</td>
-              <td style={{ padding: '10px 14px' }}>Solicitud de cancelación por enfermedad</td>
-              <td style={{ padding: '10px 14px', color: C.red, fontWeight: 700 }}>Alta</td>
-              <td style={{ padding: '10px 14px', textAlign: 'center' }}><Badge status="PENDING" /></td>
-            </tr>
-            <tr style={{ borderTop: `1px solid ${C.border}` }}>
-              <td style={{ padding: '10px 14px', fontWeight: 600 }}>#TK-1041</td>
-              <td style={{ padding: '10px 14px' }}>María Gómez (PNR: XYZ98)</td>
-              <td style={{ padding: '10px 14px' }}>Cambio de fecha en renta de auto</td>
-              <td style={{ padding: '10px 14px', color: C.orange, fontWeight: 700 }}>Media</td>
-              <td style={{ padding: '10px 14px', textAlign: 'center' }}><Badge status="CONFIRMED" /></td>
-            </tr>
+            {tickets.length === 0 && (
+              <tr>
+                <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: C.gray }}>No hay tickets de soporte reportados aún.</td>
+              </tr>
+            )}
+            {tickets.map(t => (
+              <tr key={t.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                <td style={{ padding: '10px 14px', fontWeight: 600 }}>#{t.id}</td>
+                <td style={{ padding: '10px 14px' }}>
+                  {t.clientName}<br/>
+                  <span style={{ fontSize: '0.8rem', color: C.gray }}>{t.entityName} (Ref: {t.pnrOrId})</span>
+                </td>
+                <td style={{ padding: '10px 14px' }}>
+                  {t.subject}<br/>
+                  <span style={{ fontSize: '0.8rem', color: C.gray, display: 'block', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.description}</span>
+                </td>
+                <td style={{ padding: '10px 14px', color: t.priority === 'Alta' ? C.red : t.priority === 'Media' ? C.orange : C.text, fontWeight: 700 }}>{t.priority}</td>
+                <td style={{ padding: '10px 14px', textAlign: 'center' }}><Badge status={t.status} /></td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

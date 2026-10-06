@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { savePendingReservation } from '../services/offlineSync';
 import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { useCurrency } from '../hooks/CurrencyContext';
+import { ReportModal } from '../components/ReportModal';
 
 export function AtraccionDetail() {
   const { id } = useParams();
@@ -20,6 +21,7 @@ export function AtraccionDetail() {
   const [error, setError] = useState(null);
   const [isBooking, setIsBooking] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   
   // Auth & UI States
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -186,9 +188,16 @@ export function AtraccionDetail() {
         
         {/* COLUMNA IZQUIERDA: CONTENIDO */}
         <div className="detail-content">
-          <div className="detail-header">
-            <h1 className="detail-title">{atraccion.nombre || atraccion.name || 'Recorrido a pie de Quito Old Town con degustación de cacao en grupos pequeños'}</h1>
-            <p className="detail-subtitle">Visita guiada de tres horas por el casco antiguo de Quito, destacando miles de años de historia, arquitectura, calles y costumbres.</p>
+          <div className="detail-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <h1 className="detail-title">{atraccion.nombre || atraccion.name || 'Recorrido a pie de Quito Old Town con degustación de cacao en grupos pequeños'}</h1>
+              <p className="detail-subtitle">Visita guiada de tres horas por el casco antiguo de Quito, destacando miles de años de historia, arquitectura, calles y costumbres.</p>
+            </div>
+            {isLoggedIn && (
+              <button onClick={() => setShowReportModal(true)} style={{ background: '#ffebee', color: '#d32f2f', border: '1px solid #ffcdd2', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', flexShrink: 0, marginLeft: '16px', marginTop: '10px' }}>
+                ⚠️ Reportar un problema
+              </button>
+            )}
           </div>
 
           <div className="gallery-grid">
@@ -598,6 +607,14 @@ export function AtraccionDetail() {
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
+
+      <ReportModal 
+        isOpen={showReportModal} 
+        onClose={() => setShowReportModal(false)} 
+        entityName={atraccion.nombre || atraccion.name || 'Atracción'} 
+        pnrOrId={atraccion?.id || 'ATRAC'} 
+        type="Atracción" 
+      />
     </div>
   );
 }

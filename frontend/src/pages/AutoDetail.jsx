@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { createOrderAuto } from '../services/autosApi';
 import { v4 as uuidv4 } from 'uuid';
+import { Navbar } from '../components/Navbar';
 import { useAuth } from '../hooks/useAuth';
+import { ReportModal } from '../components/ReportModal';
 import { savePendingReservation } from '../services/offlineSync';
 import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { useCurrency } from '../hooks/CurrencyContext';
@@ -44,6 +46,7 @@ export function AutoDetail() {
   const [instructionsType, setInstructionsType] = useState('recogida');
   const [showSimilarModal, setShowSimilarModal] = useState(false);
   const [showImportantInfoModal, setShowImportantInfoModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Sanitizar entradas para permitir solo números
   const handleNumberKeyDown = (e) => {
@@ -182,8 +185,17 @@ export function AutoDetail() {
         {/* Breadcrumb & Header */}
         <div style={{ marginBottom: '20px' }}>
           <span onClick={() => navigate('/autos')} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/autos'); } }} style={{ color: '#006ce4', cursor: 'pointer', fontSize: '0.9rem' }}>Volver a los resultados de búsqueda</span>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#333', margin: '10px 0 5px 0' }}>Tu oferta</h1>
-          <p style={{ color: '#666', fontSize: '0.9rem', margin: 0 }}>Siguiente: Añade los extras</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#333', margin: '10px 0 5px 0' }}>Tu oferta</h1>
+              <p style={{ color: '#666', fontSize: '0.9rem', margin: 0 }}>Siguiente: Añade los extras</p>
+            </div>
+            {user && (
+              <button onClick={() => setShowReportModal(true)} style={{ background: '#ffebee', color: '#d32f2f', border: '1px solid #ffcdd2', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                ⚠️ Reportar un problema
+              </button>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: '5px', marginTop: '15px' }}>
             <div style={{ flex: 1, height: '4px', background: '#006ce4' }}></div>
             <div style={{ flex: 1, height: '4px', background: '#e7e7e7' }}></div>
@@ -525,7 +537,13 @@ export function AutoDetail() {
           </div>
         </div>
       )}
-
+      <ReportModal 
+        isOpen={showReportModal} 
+        onClose={() => setShowReportModal(false)} 
+        entityName={`${make} ${model} (${supplierInfo.label})`} 
+        pnrOrId={auto?.id || 'AUTO'} 
+        type="Auto" 
+      />
     </main>
   );
 }

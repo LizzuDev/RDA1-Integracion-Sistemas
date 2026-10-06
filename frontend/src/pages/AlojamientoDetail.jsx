@@ -11,6 +11,7 @@ import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { jsPDF } from 'jspdf';
 import { v4 as uuidv4 } from 'uuid';
 import { AlojamientoCheckoutModal } from '../components/AlojamientoCheckoutModal';
+import { ReportModal } from '../components/ReportModal';
 
 const ESTADOS_ES = {
   PENDING: 'Pendiente',
@@ -169,6 +170,7 @@ export function AlojamientoDetail() {
   const [bookingSuccess, setBookingSuccess] = useState(null);
   const [bookingError, setBookingError] = useState(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // References for Smooth Scrolling
   const overviewRef = useRef(null);
@@ -845,6 +847,15 @@ export function AlojamientoDetail() {
             >
               Reservar tu estancia
             </button>
+            {user && (
+              <button
+                type="button"
+                onClick={() => setShowReportModal(true)}
+                style={{ background: '#ffebee', color: '#d32f2f', border: '1px solid #ffcdd2', padding: '8px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', width: '100%', marginTop: '8px' }}
+              >
+                ⚠️ Reportar un problema
+              </button>
+            )}
           </div>
         </div>
 
@@ -1916,6 +1927,14 @@ export function AlojamientoDetail() {
           }}
         />
       )}
+
+      <ReportModal 
+        isOpen={showReportModal} 
+        onClose={() => setShowReportModal(false)} 
+        entityName={alojamiento?.nombre || 'Alojamiento'} 
+        pnrOrId={alojamiento?.id || 'HOTEL'} 
+        type="Hospedaje" 
+      />
     </div>
   );
 }

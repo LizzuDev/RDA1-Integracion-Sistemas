@@ -3,9 +3,10 @@ import {
   extraerFecha,
   extraerHora,
   formatearFecha,
-  formatearMoneda,
-} from '../services/formato';
+import { formatearMoneda } from '../services/formato';
 import { FareFamilies } from './FareFamilies';
+import { useAuth } from '../hooks/useAuth';
+import { ReportModal } from './ReportModal';
 
 const ESTADOS_ES = {
   SCHEDULED: { texto: 'Programado', icono: '🗓️' },
@@ -28,6 +29,8 @@ function formatearDuracion(minutos) {
 
 export function VueloGroupCard({ ofertasGrupo, onSeleccionarTarifa }) {
   const [expandido, setExpandido] = useState(false);
+  const { user } = useAuth();
+  const [showReportModal, setShowReportModal] = useState(false);
 
   if (!ofertasGrupo || ofertasGrupo.length === 0) return null;
 
@@ -47,16 +50,25 @@ export function VueloGroupCard({ ofertasGrupo, onSeleccionarTarifa }) {
   const estado = primerSegmento ? ESTADOS_ES[primerSegmento.status] : null;
 
   return (
+    <>
     <article 
       className={`vuelo-card-modern ${expandido ? 'vuelo-card-expanded' : ''}`}
       onClick={() => setExpandido(!expandido)}
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: 'pointer', position: 'relative' }}
     >
       <div className="vuelo-card-body" style={{ paddingBottom: expandido ? '10px' : '24px' }}>
         <div className="vuelo-route-row" style={{ marginBottom: 0, alignItems: 'center' }}>
           
-          <div style={{ flex: 1 }}>
-            <h3 className="vuelo-route-title">
+          <div style={{ flex: 1, position: 'relative' }}>
+            {user && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowReportModal(true); }}
+                style={{ position: 'absolute', top: '-15px', left: 0, background: '#ffebee', color: '#d32f2f', border: '1px solid #ffcdd2', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', zIndex: 10 }}
+              >
+                ⚠️ Reportar aerolínea
+              </button>
+            )}
+            <h3 className="vuelo-route-title" style={{ marginTop: user ? '20px' : '0' }}>
               {extraerHora(primerSegmento?.departure.at)} {primerSegmento?.departure.iataCode} 
             </h3>
             <p className="vuelo-route-desc" style={{fontWeight:"bold", marginTop:"2px", color:"#003087"}}>{formatearFecha(extraerFecha(primerSegmento?.departure.at))}</p>
@@ -102,5 +114,14 @@ export function VueloGroupCard({ ofertasGrupo, onSeleccionarTarifa }) {
         </div>
       )}
     </article>
+
+    <ReportModal 
+      isOpen={showReportModal} 
+      onClose={() => setShowReportModal(false)} 
+      entityName={`Vuelo operado por ${ofertaBase.airline?.name ?? 'Aerolínea'}`} 
+      pnrOrId={ofertaBase?.id || 'VUELO'} 
+      type="Vuelo" 
+    />
+    </>
   );
 }
