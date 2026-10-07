@@ -1056,9 +1056,12 @@ function apiErrorMsg(err, fallback = 'Error inesperado') {
       : 'No se pudo contactar con el servidor. Verifica tu conexión o el estado del backend.';
   }
   const { status, data } = err.response;
-  if (status === 404) return `El endpoint no existe en el backend (404 ${err.config?.url || ''}).`;
-  if (status === 401 || status === 403) return 'No autorizado. Inicia sesión con una cuenta de administrador.';
   const detail = data?.detail || data?.message || data?.title;
+  // 404 de ruta inexistente (Nest: "Cannot PUT /...") vs 404 lanzado por la lógica (p. ej. usuario no encontrado)
+  if (status === 404 && (!detail || /^Cannot (GET|POST|PUT|PATCH|DELETE)/i.test(String(detail)) || detail === 'Not Found')) {
+    return `El endpoint no existe en el backend (404 ${err.config?.url || ''}). ¿Está desplegada la última versión?`;
+  }
+  if ((status === 401 || status === 403) && !detail) return 'No autorizado. Inicia sesión con una cuenta de administrador.';
   return `${Array.isArray(detail) ? detail.join(', ') : (detail || fallback)} (HTTP ${status})`;
 }
 const isNotFound = (err) => err?.response?.status === 404;
