@@ -2,14 +2,14 @@
 -- AdminConfigService.asegurarEsquema). Este archivo es por si se quiere
 -- ejecutar a mano en el SQL Editor de Supabase.
 
-CREATE TABLE IF NOT EXISTS admin_config (
+CREATE TABLE IF NOT EXISTS panel_config (
   clave       VARCHAR(60) PRIMARY KEY,
   valor       JSONB NOT NULL,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by  VARCHAR(255)
 );
 
-CREATE TABLE IF NOT EXISTS admin_audit_logs (
+CREATE TABLE IF NOT EXISTS panel_audit_logs (
   id            BIGSERIAL PRIMARY KEY,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   actor_id      VARCHAR(64),
@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
   ip            VARCHAR(64),
   user_agent    TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_panel_audit_created ON panel_audit_logs (created_at DESC);
 
-CREATE TABLE IF NOT EXISTS liquidaciones (
+CREATE TABLE IF NOT EXISTS panel_liquidaciones (
   id            BIGSERIAL PRIMARY KEY,
   vertical      VARCHAR(30) NOT NULL,
   periodo       CHAR(7) NOT NULL,
@@ -36,4 +36,4 @@ CREATE TABLE IF NOT EXISTS liquidaciones (
   aprobado_por  VARCHAR(255),
   aprobado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_liquidaciones_clave ON liquidaciones (vertical, periodo);
+CREATE INDEX IF NOT EXISTS idx_panel_liquidaciones_clave ON panel_liquidaciones (vertical, periodo);

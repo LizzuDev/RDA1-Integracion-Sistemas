@@ -41,7 +41,7 @@ const periodoDe = (d: Date) => {
  *
  * Fuente: las reservas REALES de la base (vuelos, autos, atracciones).
  *  - Cobrado      = suma de reservas pagadas/confirmadas.
- *  - Comisión     = cobrado × comisión base (tabla admin_config).
+ *  - Comisión     = cobrado × comisión base (tabla panel_config).
  *  - IVA incluido = cobrado − cobrado / (1 + IVA).
  *  - Neto proveedor = cobrado − comisión.
  *
@@ -90,7 +90,7 @@ export class AdminFinanzasService {
     return this.dataSource.query(
       `SELECT vertical, periodo, SUM(monto_pagado)::float AS pagado, COUNT(*)::int AS pagos,
               MAX(aprobado_en) AS ultimo_pago, (ARRAY_AGG(aprobado_por ORDER BY aprobado_en DESC))[1] AS aprobado_por
-       FROM liquidaciones GROUP BY vertical, periodo`,
+       FROM panel_liquidaciones GROUP BY vertical, periodo`,
     ) as Promise<{ vertical: string; periodo: string; pagado: number; pagos: number; ultimo_pago: Date; aprobado_por: string }[]>;
   }
 
@@ -249,7 +249,7 @@ export class AdminFinanzasService {
 
     const referencia = (body.referencia || `PAYOUT-${vertical.toUpperCase()}-${periodo}-${Date.now().toString(36).toUpperCase()}`).slice(0, 120);
     const [row] = await this.dataSource.query(
-      `INSERT INTO liquidaciones (vertical, periodo, reservas, monto_bruto, comision_pct, comision, monto_pagado, referencia, aprobado_por)
+      `INSERT INTO panel_liquidaciones (vertical, periodo, reservas, monto_bruto, comision_pct, comision, monto_pagado, referencia, aprobado_por)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, aprobado_en`,
       [vertical, periodo, liq.reservas, liq.bruto, liq.comisionPct, liq.comision, liq.pendiente, referencia, actor],
     );
@@ -271,7 +271,7 @@ export class AdminFinanzasService {
     const rows = await this.dataSource.query(
       `SELECT id, vertical, periodo, reservas, monto_bruto::float AS bruto, comision_pct::float AS "comisionPct",
               comision::float AS comision, monto_pagado::float AS pagado, referencia, aprobado_por AS "aprobadoPor", aprobado_en AS "aprobadoEn"
-       FROM liquidaciones ORDER BY aprobado_en DESC LIMIT 100`,
+       FROM panel_liquidaciones ORDER BY aprobado_en DESC LIMIT 100`,
     );
     return rows.map((r: any) => ({ ...r, proveedor: VERTICALES[r.vertical] || r.vertical }));
   }
