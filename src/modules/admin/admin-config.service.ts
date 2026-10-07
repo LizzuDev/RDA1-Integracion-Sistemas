@@ -83,17 +83,34 @@ export class AdminConfigService implements OnModuleInit {
     await this.asegurarEsquema().catch(() => undefined);
   }
 
-  /** Crea las tablas del panel una sola vez por proceso. */
+  /**
+   * Crea las tablas del panel una sola vez por proceso.
+   *
+   * Cada sentencia se ejecuta POR SEPARADO: la conexión de Supabase usa el
+   * pooler en modo transacción (puerto 6543), que no acepta varias sentencias
+   * SQL en una sola consulta. Un fallo en una sentencia se registra con su
+   * motivo y no impide intentar las demás.
+   */
   asegurarEsquema(): Promise<void> {
     if (!this.schemaListo) {
-      this.schemaListo = this.dataSource
-        .query(ADMIN_SCHEMA_SQL)
-        .then(() => this.logger.log('Esquema del panel admin verificado (admin_config, admin_audit_logs, liquidaciones).'))
-        .catch((e) => {
+      this.schemaListo = (async () => {
+        const sentencias = ADMIN_SCHEMA_SQL.split(';').map((x) => x.trim()).filter(Boolean);
+        const errores: string[] = [];
+        for (const sql of sentencias) {
+          try {
+            await this.dataSource.query(sql);
+          } catch (e) {
+            errores.push(`${sql.split('\n')[0].slice(0, 60)}… → ${e.message}`);
+          }
+        }
+        if (errores.length) {
           this.schemaListo = null; // se reintenta en la próxima petición
-          this.logger.error(`No se pudo crear el esquema del panel admin: ${e.message}`);
-          throw e;
-        });
+          const msg = `No se pudo crear el esquema del panel admin: ${errores.join(' | ')}`;
+          this.logger.error(msg);
+          throw new Error(msg);
+        }
+        this.logger.log('Esquema del panel admin verificado (admin_config, admin_audit_logs, liquidaciones).');
+      })();
     }
     return this.schemaListo;
   }

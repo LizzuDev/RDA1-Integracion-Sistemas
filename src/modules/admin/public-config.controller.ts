@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { UseInterceptors, Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AdminErrorsInterceptor } from './admin-errors.interceptor';
 import { AdminConfigService } from './admin-config.service';
 
 /**
@@ -9,6 +10,7 @@ import { AdminConfigService } from './admin-config.service';
  */
 @ApiTags('Config')
 @Controller('config')
+@UseInterceptors(AdminErrorsInterceptor)
 export class PublicConfigController {
   constructor(private readonly configService: AdminConfigService) {}
 
