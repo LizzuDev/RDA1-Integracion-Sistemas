@@ -46,7 +46,7 @@ function texto(detalle: any): string {
 
 /**
  * Auditoría REAL:
- *  1. `admin_audit_logs`: cada acción del panel (usuarios, reservas, payouts,
+ *  1. `panel_audit_logs`: cada acción del panel (usuarios, reservas, payouts,
  *     ajustes, tickets) se registra con actor, IP y detalle.
  *  2. Eventos del sistema leídos de las tablas reales: registros e inicios de
  *     sesión (auth.users), reservas creadas (vuelos/autos/atracciones) y tickets
@@ -66,7 +66,7 @@ export class AdminAuditService {
     try {
       await this.configService.asegurarEsquema();
       await this.dataSource.query(
-        `INSERT INTO admin_audit_logs (actor_id, actor_email, accion, entidad_tipo, entidad_id, detalle, ip, user_agent)
+        `INSERT INTO panel_audit_logs (actor_id, actor_email, accion, entidad_tipo, entidad_id, detalle, ip, user_agent)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
         [
           actor.id ?? null,
@@ -99,7 +99,7 @@ export class AdminAuditService {
 
     const [admin, usuarios, vuelos, autos, atracciones, tickets] = await Promise.all([
       this.q(`SELECT id, created_at, actor_email, accion, entidad_tipo, entidad_id, detalle, ip
-              FROM admin_audit_logs ORDER BY created_at DESC LIMIT $1`, [lim]),
+              FROM panel_audit_logs ORDER BY created_at DESC LIMIT $1`, [lim]),
       this.q(`SELECT id, email, created_at, last_sign_in_at FROM auth.users
               ORDER BY GREATEST(created_at, COALESCE(last_sign_in_at, created_at)) DESC LIMIT $1`, [lim]),
       this.q(`SELECT id_reserva AS id, res_pnr AS pnr, res_estado AS estado, res_total AS total, res_fechacreacion AS fecha

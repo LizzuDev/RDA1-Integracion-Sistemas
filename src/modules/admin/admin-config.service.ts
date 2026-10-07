@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/c
 import { DataSource } from 'typeorm';
 
 /**
- * Configuración global de la plataforma (tabla `admin_config`, clave/valor).
+ * Configuración global de la plataforma (tabla `panel_config`, clave/valor).
  *
  * También es el dueño del esquema de las tablas del panel de administración:
  * como TypeORM corre con `synchronize: false`, las tablas se crean aquí con
@@ -35,14 +35,14 @@ const CLAVES: Record<keyof PlatformConfig, string> = {
 };
 
 export const ADMIN_SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS admin_config (
+CREATE TABLE IF NOT EXISTS panel_config (
   clave       VARCHAR(60) PRIMARY KEY,
   valor       JSONB NOT NULL,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by  VARCHAR(255)
 );
 
-CREATE TABLE IF NOT EXISTS admin_audit_logs (
+CREATE TABLE IF NOT EXISTS panel_audit_logs (
   id            BIGSERIAL PRIMARY KEY,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   actor_id      VARCHAR(64),
@@ -54,9 +54,9 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
   ip            VARCHAR(64),
   user_agent    TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_panel_audit_created ON panel_audit_logs (created_at DESC);
 
-CREATE TABLE IF NOT EXISTS liquidaciones (
+CREATE TABLE IF NOT EXISTS panel_liquidaciones (
   id            BIGSERIAL PRIMARY KEY,
   vertical      VARCHAR(30) NOT NULL,
   periodo       CHAR(7) NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS liquidaciones (
   aprobado_por  VARCHAR(255),
   aprobado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_liquidaciones_clave ON liquidaciones (vertical, periodo);
+CREATE INDEX IF NOT EXISTS idx_panel_liquidaciones_clave ON panel_liquidaciones (vertical, periodo);
 `;
 
 @Injectable()
@@ -109,7 +109,7 @@ export class AdminConfigService implements OnModuleInit {
           this.logger.error(msg);
           throw new Error(msg);
         }
-        this.logger.log('Esquema del panel admin verificado (admin_config, admin_audit_logs, liquidaciones).');
+        this.logger.log('Esquema del panel admin verificado (panel_config, panel_audit_logs, liquidaciones).');
       })();
     }
     return this.schemaListo;
@@ -118,7 +118,7 @@ export class AdminConfigService implements OnModuleInit {
   async getConfig(): Promise<PlatformConfig & { updatedAt: string | null; updatedBy: string | null }> {
     await this.asegurarEsquema();
     const rows: { clave: string; valor: any; updated_at: Date; updated_by: string | null }[] =
-      await this.dataSource.query('SELECT clave, valor, updated_at, updated_by FROM admin_config');
+      await this.dataSource.query('SELECT clave, valor, updated_at, updated_by FROM panel_config');
 
     const cfg: PlatformConfig = { ...CONFIG_DEFAULTS };
     let updatedAt: Date | null = null;
@@ -159,7 +159,7 @@ export class AdminConfigService implements OnModuleInit {
       if (actual[campo] === valor) continue;
       cambios.push({ campo, antes: actual[campo], despues: valor });
       await this.dataSource.query(
-        `INSERT INTO admin_config (clave, valor, updated_at, updated_by)
+        `INSERT INTO panel_config (clave, valor, updated_at, updated_by)
          VALUES ($1, $2::jsonb, now(), $3)
          ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, updated_at = now(), updated_by = EXCLUDED.updated_by`,
         [CLAVES[campo], JSON.stringify(valor), actor],

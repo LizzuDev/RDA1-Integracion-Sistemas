@@ -196,6 +196,8 @@ export class AdminService {
       email: u.email,
       nombre: [meta.nombre || meta.name || meta.full_name, meta.apellido].filter(Boolean).join(' ') || null,
       rol: esAdmin ? 'admin' : (meta.role || app.role || 'usuario'),
+      // Admin definido por correo en el código: no se le puede quitar el rol desde el panel
+      adminFijo: ADMIN_EMAILS.includes(email),
       // El panel usa 'bloquear' para pintar el botón de desbloquear
       status: baneado || meta.status === 'bloquear' ? 'bloquear' : 'activo',
       created_at: u.created_at,
@@ -260,6 +262,9 @@ export class AdminService {
       } as any);
       if (error) throw new BadRequestException(error.message);
     } else if (action === 'promover_admin' || action === 'quitar_admin') {
+      if (action === 'quitar_admin' && ADMIN_EMAILS.includes((user.email || '').toLowerCase())) {
+        throw new BadRequestException(`${user.email} es administrador principal (definido en el sistema) y no se le puede quitar el rol.`);
+      }
       const { error } = await this.supabase.auth.admin.updateUserById(id, {
         user_metadata: { ...meta, role: action === 'promover_admin' ? 'admin' : 'user' },
       });

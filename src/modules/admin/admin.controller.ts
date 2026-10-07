@@ -1,4 +1,4 @@
-import { UseInterceptors, Controller, Get, Put, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, UseInterceptors, Controller, Get, Put, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminErrorsInterceptor } from './admin-errors.interceptor';
@@ -40,6 +40,9 @@ export class AdminController {
   @Put('users/:id/action')
   @ApiOperation({ summary: 'Acción sobre un usuario (bloquear, desbloquear, promover_admin, quitar_admin, reset_password)' })
   async userAction(@Param('id') id: string, @Body() body: { action: string }, @Req() req: any) {
+    if (body?.action === 'quitar_admin' && req?.user?.id === id) {
+      throw new BadRequestException('No puedes quitarte a ti mismo el rol de administrador.');
+    }
     const res = await this.adminService.executeUserAction(id, body?.action);
     const etiquetas: Record<string, string> = {
       bloquear: 'Bloqueó usuario', desbloquear: 'Desbloqueó usuario', promover_admin: 'Promovió a administrador',
