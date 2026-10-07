@@ -247,28 +247,75 @@ export class AdminService {
     };
   }
 
+  /**
+   * Busca un usuario igual que getUsers(): primero directo en auth.users
+   * (Postgres) y, si eso falla, con la Admin API de Supabase.
+   */
+  private async buscarUsuario(id: string): Promise<{ id: string; email: string; user_metadata: any }> {
+    const errores: string[] = [];
+    try {
+      const rows = await this.dataSource.query(
+        `SELECT id, email, raw_user_meta_data AS meta FROM auth.users WHERE id = $1`, [id],
+      );
+      if (rows?.[0]) return { id: rows[0].id, email: rows[0].email, user_metadata: rows[0].meta || {} };
+      errores.push('no existe en auth.users');
+    } catch (e) {
+      errores.push(`auth.users vía Postgres: ${e.message}`);
+    }
+    try {
+      const { data, error } = await this.supabase.auth.admin.getUserById(id);
+      if (error) throw new Error(error.message);
+      if (data?.user) return { id: data.user.id, email: data.user.email, user_metadata: data.user.user_metadata || {} };
+    } catch (e) {
+      errores.push(`Supabase Admin API: ${e.message}`);
+    }
+    throw new NotFoundException(`Usuario no encontrado (${id}). Detalle: ${errores.join(' | ')}`);
+  }
+
+  /**
+   * Actualiza metadata/baneo del usuario. Va directo a auth.users (misma vía
+   * que el listado) y usa la Admin API solo como respaldo.
+   */
+  private async actualizarUsuario(id: string, cambios: { meta: Record<string, any>; banear?: boolean }) {
+    const errores: string[] = [];
+    try {
+      const sets = [`raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || $2::jsonb`, 'updated_at = now()'];
+      if (cambios.banear !== undefined) sets.push(cambios.banear ? `banned_until = now() + interval '100 years'` : 'banned_until = NULL');
+      const res = await this.dataSource.query(
+        `UPDATE auth.users SET ${sets.join(', ')} WHERE id = $1 RETURNING id`, [id, JSON.stringify(cambios.meta)],
+      );
+      const filas = Array.isArray(res?.[0]) ? res[0] : res;
+      if (filas?.length) return;
+      errores.push('UPDATE no afectó filas');
+    } catch (e) {
+      errores.push(`auth.users vía Postgres: ${e.message}`);
+      this.logger.warn(`No se pudo actualizar auth.users por SQL (${e.message}); probando Admin API...`);
+    }
+    try {
+      const actual = await this.buscarUsuario(id);
+      const payload: any = { user_metadata: { ...actual.user_metadata, ...cambios.meta } };
+      if (cambios.banear !== undefined) payload.ban_duration = cambios.banear ? '876000h' : 'none';
+      const { error } = await this.supabase.auth.admin.updateUserById(id, payload);
+      if (error) throw new Error(error.message);
+      return;
+    } catch (e) {
+      errores.push(`Supabase Admin API: ${e.message}`);
+    }
+    throw new BadRequestException(`No se pudo actualizar el usuario. Detalle: ${errores.join(' | ')}`);
+  }
+
   async executeUserAction(id: string, action: string) {
     this.logger.log(`Admin: ejecutando accion ${action} sobre usuario ${id}`);
-    const { data: found, error: findErr } = await this.supabase.auth.admin.getUserById(id);
-    if (findErr || !found?.user) throw new NotFoundException(`Usuario no encontrado: ${findErr?.message || id}`);
-    const user = found.user;
-    const meta = user.user_metadata || {};
+    const user = await this.buscarUsuario(id);
 
     if (action === 'bloquear' || action === 'desbloquear') {
-      // Bloqueo REAL: Supabase rechaza el login de un usuario baneado.
-      const { error } = await this.supabase.auth.admin.updateUserById(id, {
-        ban_duration: action === 'bloquear' ? '876000h' : 'none',
-        user_metadata: { ...meta, status: action },
-      } as any);
-      if (error) throw new BadRequestException(error.message);
+      // Bloqueo REAL: Supabase Auth rechaza el login si banned_until está en el futuro.
+      await this.actualizarUsuario(id, { meta: { status: action }, banear: action === 'bloquear' });
     } else if (action === 'promover_admin' || action === 'quitar_admin') {
       if (action === 'quitar_admin' && ADMIN_EMAILS.includes((user.email || '').toLowerCase())) {
         throw new BadRequestException(`${user.email} es administrador principal (definido en el sistema) y no se le puede quitar el rol.`);
       }
-      const { error } = await this.supabase.auth.admin.updateUserById(id, {
-        user_metadata: { ...meta, role: action === 'promover_admin' ? 'admin' : 'user' },
-      });
-      if (error) throw new BadRequestException(error.message);
+      await this.actualizarUsuario(id, { meta: { role: action === 'promover_admin' ? 'admin' : 'user' } });
     } else if (action === 'reset_password') {
       const redirectTo = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL.replace(/\/$/, '')}/login` : undefined;
       const { error } = await this.supabase.auth.resetPasswordForEmail(user.email, redirectTo ? { redirectTo } : undefined);
@@ -281,8 +328,7 @@ export class AdminService {
 
   async getUserHistorial(id: string) {
     this.logger.log(`Admin: consultando historial de usuario ${id}`);
-    const { data: user } = await this.supabase.auth.admin.getUserById(id);
-    const email = user?.user?.email;
+    const email = await this.buscarUsuario(id).then((u) => u.email).catch(() => undefined);
 
     const vuelos = await this.reservaRepo.find({ where: { propietarioId: id } });
     let autos = [];
