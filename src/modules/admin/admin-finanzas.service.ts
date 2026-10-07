@@ -4,14 +4,15 @@ import { DataSource, Repository } from 'typeorm';
 import { Reserva } from '../vuelos/entities/reserva.entity';
 import { OrderAuto } from '../autos/entities/order-auto.entity';
 import { ReservaAtraccion } from '../atracciones/entities/reserva.entity';
+import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
 import { AdminConfigService } from './admin-config.service';
 
 /** Estados que significan "el cliente ya pagó". */
-const PAGADAS = new Set(['CONFIRMED', 'PAID', 'TICKET_ISSUING', 'TICKETED', 'ISSUED', 'COMPLETED']);
+const PAGADAS = new Set(['CONFIRMED', 'CONFIRMADA', 'PAGADA', 'PAID', 'TICKET_ISSUING', 'TICKETED', 'ISSUED', 'COMPLETED']);
 /** Estados de reserva viva pendiente de cobro. */
-const PENDIENTES = new Set(['PENDING', 'PENDING_PAYMENT', 'RESERVED', 'HELD', 'CHANGE_PENDING']);
+const PENDIENTES = new Set(['PENDING', 'PENDIENTE', 'PENDING_PAYMENT', 'RESERVED', 'HELD', 'CHANGE_PENDING']);
 /** Estados anulados / reembolsados. */
-const ANULADAS = new Set(['CANCELLED', 'CANCELED', 'FAILED', 'REJECTED', 'REFUNDED', 'CANCELLATION_PENDING', 'EXPIRED']);
+const ANULADAS = new Set(['CANCELLED', 'CANCELADA', 'CANCELED', 'FAILED', 'REJECTED', 'REFUNDED', 'CANCELLATION_PENDING', 'EXPIRED']);
 
 export const VERTICALES: Record<string, string> = {
   vuelos: 'Aerolíneas (Vuelos)',
@@ -39,7 +40,7 @@ const periodoDe = (d: Date) => {
 /**
  * Motor financiero del booking (BACKLOG_ADMIN §4).
  *
- * Fuente: las reservas REALES de la base (vuelos, autos, atracciones).
+ * Fuente: las reservas REALES de la base (vuelos, autos, atracciones, hospedaje).
  *  - Cobrado      = suma de reservas pagadas/confirmadas.
  *  - Comisión     = cobrado × comisión base (tabla panel_config).
  *  - IVA incluido = cobrado − cobrado / (1 + IVA).
@@ -59,13 +60,15 @@ export class AdminFinanzasService {
     @InjectRepository(Reserva) private readonly reservaRepo: Repository<Reserva>,
     @InjectRepository(OrderAuto) private readonly orderAutoRepo: Repository<OrderAuto>,
     @InjectRepository(ReservaAtraccion) private readonly reservaAtraccionRepo: Repository<ReservaAtraccion>,
+    @InjectRepository(ReservaAlojamiento) private readonly reservaAlojamientoRepo: Repository<ReservaAlojamiento>,
   ) {}
 
   private async movimientos(): Promise<Mov[]> {
-    const [vuelos, autos, atracciones] = await Promise.all([
+    const [vuelos, autos, atracciones, hospedaje] = await Promise.all([
       this.reservaRepo.find().catch((e) => { this.logger.error(`Finanzas vuelos: ${e.message}`); return [] as Reserva[]; }),
       this.orderAutoRepo.find().catch((e) => { this.logger.error(`Finanzas autos: ${e.message}`); return [] as OrderAuto[]; }),
       this.reservaAtraccionRepo.find().catch((e) => { this.logger.error(`Finanzas atracciones: ${e.message}`); return [] as ReservaAtraccion[]; }),
+      this.reservaAlojamientoRepo.find().catch((e) => { this.logger.error(`Finanzas hospedaje: ${e.message}`); return [] as ReservaAlojamiento[]; }),
     ]);
     return [
       ...vuelos.map((v) => ({
@@ -81,6 +84,11 @@ export class AdminFinanzasService {
         vertical: 'atracciones', id: a.id, ref: a.id.slice(0, 6).toUpperCase(),
         estado: String(a.status || '').toUpperCase(), monto: Number(a.totalPrice?.total || 0), fecha: a.createdAt,
         cliente: a.customerEmail || a.customerName || null,
+      })),
+      ...hospedaje.map((h) => ({
+        vertical: 'hospedaje', id: h.id, ref: h.codigoReserva || h.id.slice(0, 6).toUpperCase(),
+        estado: String(h.status || '').toUpperCase(), monto: Number(h.totalPrice?.total ?? h.total ?? 0), fecha: h.createdAt,
+        cliente: h.customerEmail || h.customerName || null,
       })),
     ];
   }
@@ -160,7 +168,6 @@ export class AdminFinanzasService {
     const pendientePago = r2(liquidaciones.reduce((s, l) => s + l.pendiente, 0));
 
     const porVertical = Object.keys(VERTICALES)
-      .filter((v) => v !== 'hospedaje')
       .map((v) => {
         const vm = movs.filter((m) => m.vertical === v);
         const c = r2(vm.filter((m) => PAGADAS.has(m.estado)).reduce((s, m) => s + m.monto, 0));
@@ -215,9 +222,8 @@ export class AdminFinanzasService {
   }
 
   /**
-   * Aprueba (paga) lo pendiente de una liquidación vertical+periodo.
-   * Para `hospedaje` (reservas que hoy viven en el navegador) el frontend envía
-   * el bruto y el número de reservas calculados en cliente.
+   * Aprueba (paga) lo pendiente de una liquidación vertical+periodo,
+   * calculada con las reservas reales de la base.
    */
   async aprobarPayout(
     body: { vertical: string; periodo: string; referencia?: string; bruto?: number; reservas?: number },
@@ -227,23 +233,9 @@ export class AdminFinanzasService {
     if (!VERTICALES[vertical]) throw new BadRequestException(`Vertical inválida: ${vertical}`);
     if (!/^\d{4}-\d{2}$/.test(periodo || '')) throw new BadRequestException('periodo debe tener formato YYYY-MM');
 
-    const cfg = await this.configService.getConfig();
-    let liq: { reservas: number; bruto: number; comisionPct: number; comision: number; neto: number; pagado: number; pendiente: number };
-
-    if (vertical === 'hospedaje') {
-      const bruto = r2(Number(body.bruto));
-      if (!Number.isFinite(bruto) || bruto <= 0) throw new BadRequestException('bruto es obligatorio para hospedaje');
-      const pagos = (await this.pagosRegistrados()).find((p) => p.vertical === vertical && p.periodo === periodo);
-      const comision = r2(bruto * cfg.comisionBase / 100);
-      const neto = r2(bruto - comision);
-      const pagado = r2(pagos?.pagado || 0);
-      liq = { reservas: Number(body.reservas) || 0, bruto, comisionPct: cfg.comisionBase, comision, neto, pagado, pendiente: r2(Math.max(neto - pagado, 0)) };
-    } else {
-      const fin = await this.getFinanzas();
-      const encontrada = fin.liquidaciones.find((l) => l.vertical === vertical && l.periodo === periodo);
-      if (!encontrada) throw new BadRequestException(`No hay reservas pagadas para ${vertical} en ${periodo}`);
-      liq = encontrada;
-    }
+    const fin = await this.getFinanzas();
+    const liq = fin.liquidaciones.find((l) => l.vertical === vertical && l.periodo === periodo);
+    if (!liq) throw new BadRequestException(`No hay reservas pagadas para ${vertical} en ${periodo}`);
 
     if (liq.pendiente <= 0.009) throw new BadRequestException('Esta liquidación ya está pagada por completo.');
 

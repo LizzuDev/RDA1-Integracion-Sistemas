@@ -97,7 +97,7 @@ export class AdminAuditService {
     const lim = Math.min(Math.max(Number(limit) || 300, 1), 1000);
     await this.configService.asegurarEsquema().catch(() => undefined);
 
-    const [admin, usuarios, vuelos, autos, atracciones, tickets] = await Promise.all([
+    const [admin, usuarios, vuelos, autos, atracciones, hospedaje, tickets] = await Promise.all([
       this.q(`SELECT id, created_at, actor_email, accion, entidad_tipo, entidad_id, detalle, ip
               FROM panel_audit_logs ORDER BY created_at DESC LIMIT $1`, [lim]),
       this.q(`SELECT id, email, created_at, last_sign_in_at FROM auth.users
@@ -108,6 +108,8 @@ export class AdminAuditService {
               FROM orders_autos ORDER BY "createdAt" DESC LIMIT $1`, [lim]),
       this.q(`SELECT id, status AS estado, "totalPrice" AS precio, "customerEmail" AS email, "customerName" AS nombre, "createdAt" AS fecha
               FROM reservas_atraccion ORDER BY "createdAt" DESC LIMIT $1`, [lim]),
+      this.q(`SELECT id, codigo_reserva AS codigo, estado, total, cliente_email AS email, cliente_nombre AS nombre, creado_en AS fecha
+              FROM reservas_alojamiento ORDER BY creado_en DESC LIMIT $1`, [lim]),
       this.q(`SELECT * FROM support_tickets ORDER BY created_at DESC LIMIT $1`, [lim]),
     ]);
 
@@ -161,6 +163,14 @@ export class AdminAuditService {
         actor: a.email || a.nombre || 'cliente', accion: 'Reserva de atracción creada',
         entidad: `atracción · ${String(a.id).slice(0, 6).toUpperCase()}`,
         detalle: `estado: ${a.estado} · total: $${Number(a.precio?.total || 0).toFixed(2)}`, ip: null,
+      });
+    }
+    for (const h of hospedaje) {
+      items.push({
+        id: `hos-${h.id}`, fecha: new Date(h.fecha).toISOString(), origen: 'SISTEMA', categoria: 'reserva',
+        actor: h.email || h.nombre || 'cliente', accion: 'Reserva de hospedaje creada',
+        entidad: `hospedaje · ${h.codigo || String(h.id).slice(0, 6).toUpperCase()}`,
+        detalle: `estado: ${h.estado} · total: $${Number(h.total || 0).toFixed(2)}`, ip: null,
       });
     }
     for (const t of tickets) {

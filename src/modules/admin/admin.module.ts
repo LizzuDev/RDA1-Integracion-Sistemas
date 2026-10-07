@@ -9,6 +9,8 @@ import { PublicConfigController } from './public-config.controller';
 import { Reserva } from '../vuelos/entities/reserva.entity';
 import { OrderAuto } from '../autos/entities/order-auto.entity';
 import { ReservaAtraccion } from '../atracciones/entities/reserva.entity';
+import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
+import { Alojamiento } from '../alojamientos/entities/alojamiento.entity';
 import { CoreModule } from '../../core/core.module';
 
 /**
@@ -18,7 +20,7 @@ import { CoreModule } from '../../core/core.module';
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Reserva, OrderAuto, ReservaAtraccion]),
+    TypeOrmModule.forFeature([Reserva, OrderAuto, ReservaAtraccion, ReservaAlojamiento, Alojamiento]),
     CoreModule,
   ],
   controllers: [AdminController, PublicConfigController],

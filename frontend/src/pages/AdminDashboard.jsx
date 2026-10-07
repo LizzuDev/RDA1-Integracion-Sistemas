@@ -23,9 +23,9 @@ function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleString('e
 function estadoColor(s) {
   if (!s) return C.gray;
   const u = s.toUpperCase();
-  if (u==='CONFIRMED'||u==='PAID') return C.green;
-  if (u==='CANCELLED'||u==='REJECTED') return C.red;
-  if (u==='PENDING'||u==='RESERVED') return C.orange;
+  if (u==='CONFIRMED'||u==='PAID'||u==='CONFIRMADA'||u==='PAGADA'||u==='COMPLETED') return C.green;
+  if (u==='CANCELLED'||u==='REJECTED'||u==='CANCELADA') return C.red;
+  if (u==='PENDING'||u==='RESERVED'||u==='PENDIENTE'||u==='PENDING_OFFLINE') return C.orange;
   return C.gray;
 }
 
@@ -40,7 +40,7 @@ function KpiCard({label,value,sub,color,icon}) {
   );
 }
 
-const ESTADOS_ES = { CONFIRMED:'Confirmada', PAID:'Pagada', CANCELLED:'Cancelada', REJECTED:'Rechazada', PENDING:'Pendiente', RESERVED:'Reservada', COMPLETED:'Completada', REFUNDED:'Reembolsada', EXPIRED:'Expirada' };
+const ESTADOS_ES = { CONFIRMED:'Confirmada', PAID:'Pagada', CANCELLED:'Cancelada', REJECTED:'Rechazada', PENDING:'Pendiente', RESERVED:'Reservada', COMPLETED:'Completada', REFUNDED:'Reembolsada', EXPIRED:'Expirada', CONFIRMADA:'Confirmada', CANCELADA:'Cancelada', PENDIENTE:'Pendiente', PENDING_OFFLINE:'Pendiente (sin conexión)' };
 
 function Badge({status}) {
   return (
@@ -1028,13 +1028,13 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
   };
 
   const handleReservaAction = async (tipo, id, action) => {
-    if (tipo === 'hospedaje') {
+    // Hospedaje guardado solo en este navegador (no está en la BD)
+    if (tipo === 'hospedaje' && (reservas.hospedaje || []).find(r => r.id === id)?.local) {
       if (action === 'cancelar') {
         let locales = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
-        locales = locales.map(r => r.id === id ? { ...r, status: 'CANCELLED' } : r);
+        locales = locales.map(r => (r.id === id || r.codigoReserva === id) ? { ...r, status: 'CANCELLED' } : r);
         localStorage.setItem('reservas_alojamientos', JSON.stringify(locales));
       }
-      if (action === 'reenviar') alert(`Comprobante de hospedaje ${id} reenviado virtualmente`);
       alert(`Acción de ${action} ejecutada exitosamente.`);
       onRefresh();
       return;
@@ -1087,10 +1087,10 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
   };
 
   const viewDetalles = async (tipo, id) => {
-    if (tipo === 'hospedaje') {
+    if (tipo === 'hospedaje' && (reservas.hospedaje || []).find(r => r.id === id)?.local) {
       const localesAloj = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
-      const reservaLocal = localesAloj.find(r => r.id === id);
-      setModal({ type: 'detalles', vista: 'reserva', tipo, data: reservaLocal || { mensaje: 'No se encontró esta reserva en este navegador.' }, title: 'Detalle de la reserva', subtitulo: id });
+      const reservaLocal = localesAloj.find(r => r.id === id || r.codigoReserva === id);
+      setModal({ type: 'detalles', vista: 'reserva', tipo, data: reservaLocal || { mensaje: 'No se encontró esta reserva en este navegador.' }, title: 'Detalle de la reserva', subtitulo: `${id} · guardada en este navegador` });
       return;
     }
     
@@ -1215,18 +1215,22 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
         )}
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
           <thead><tr style={{background:C.lightBlue}}>
-            {['PNR / ID','Estado','Total (USD)',vista==='atracciones'?'Cliente':'Moneda','Fecha','Acciones'].map(h=>(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontWeight:600,color:C.darkBlue}}>{h}</th>))}
+            {['PNR / ID','Estado','Total (USD)',(vista==='atracciones'||vista==='hospedaje')?'Cliente':'Moneda','Fecha','Acciones'].map(h=>(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontWeight:600,color:C.darkBlue}}>{h}</th>))}
           </tr></thead>
           <tbody>
             {rows.map((r,i)=>(
               <tr key={r.id||i} style={{borderTop:`1px solid ${C.border}`}}>
-                <td style={{padding:'9px 14px',fontFamily:'monospace',fontWeight:600}}>{r.pnr}</td>
+                <td style={{padding:'9px 14px',fontFamily:'monospace',fontWeight:600}}>
+                  {r.pnr}
+                  {r.alojamiento && <div style={{fontFamily:'inherit',fontWeight:400,fontSize:'0.75rem',color:C.gray}}>🏨 {r.alojamiento}</div>}
+                  {r.local && <div title="Guardada solo en este navegador" style={{fontWeight:400,fontSize:'0.7rem',color:C.orange}}>solo en este navegador</div>}
+                </td>
                 <td style={{padding:'9px 14px'}}><Badge status={r.estado}/></td>
                 <td style={{padding:'9px 14px',fontWeight:600}}>${fmt(r.total)}</td>
-                <td style={{padding:'9px 14px',color:C.gray}}>{vista==='atracciones'?(r.cliente||'—'):(r.moneda||'USD')}</td>
+                <td style={{padding:'9px 14px',color:C.gray}}>{(vista==='atracciones'||vista==='hospedaje')?(r.cliente||'—'):(r.moneda||'USD')}</td>
                 <td style={{padding:'9px 14px',color:C.gray}}>{fmtDate(r.createdAt)}</td>
                 <td style={{padding:'9px 14px',display:'flex',gap:8}}>
-                  {r.estado !== 'CANCELLED' && (
+                  {!['CANCELLED','CANCELADA'].includes(String(r.estado||'').toUpperCase()) && (
                     <button onClick={()=>requestConfirm("Cancelar Reserva", `¿Seguro que deseas cancelar la reserva ${r.pnr}? Esta acción no se puede deshacer.`, C.red, ()=>handleReservaAction(vista, r.id, 'cancelar'))} title="Cancelar Reserva" style={btnStyle}>❌</button>
                   )}
                   <button onClick={()=>requestConfirm("Reenviar Confirmación", `¿Deseas enviar el comprobante de reserva nuevamente al cliente?`, C.blue, ()=>handleReservaAction(vista, r.id, 'reenviar'))} title="Reenviar Confirmación" style={btnStyle}>📧</button>
@@ -1349,7 +1353,6 @@ function toNum(v, def = 0) {
   const n = typeof v === 'string' ? parseFloat(v) : Number(v);
   return Number.isFinite(n) ? n : def;
 }
-const round2 = (n) => Math.round(n * 100) / 100;
 
 const SPIN_CSS = '@keyframes adm-spin { to { transform: rotate(360deg); } }';
 function Spinner({ size = 14, color = C.white }) {
@@ -1415,122 +1418,37 @@ function validarPorcentaje(valor, nombre) {
 // ── Finanzas (fusionado en Observabilidad) ───────────────────────────────────
 const thFin = { padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: C.darkBlue, whiteSpace: 'nowrap' };
 const tdFin = { padding: '9px 14px' };
+/**
+ * Reservas de hospedaje que solo existen en el localStorage de este navegador
+ * (p. ej. hechas sin conexión) y que no están ya en la BD.
+ */
+function hospedajeSoloLocal(enBd = []) {
+  let locales = [];
+  try { locales = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]'); } catch { locales = []; }
+  const conocidos = new Set(enBd.flatMap(r => [r.id, r.pnr].filter(Boolean).map(String)));
+  return locales
+    .filter(al => ![al.id, al.codigoReserva, al.reservationId].filter(Boolean).some(x => conocidos.has(String(x))))
+    .map(al => ({
+      id: al.id || al.codigoReserva,
+      tipo: 'hospedaje',
+      pnr: al.codigoReserva || String(al.id || 'HOTEL').substring(0, 8).toUpperCase(),
+      estado: al.status || 'CONFIRMED',
+      total: Number(al.totalPrice?.total ?? al.total ?? 0),
+      moneda: al.totalPrice?.currency || 'USD',
+      createdAt: al.createdAt || al.fecha || new Date().toISOString().split('T')[0],
+      cliente: al.email || al.huesped || '—',
+      alojamiento: al.nombreAlojamiento || null,
+      local: true,
+    }));
+}
+
 const VERTICAL_ICON = { vuelos: '✈️', autos: '🚗', atracciones: '🎡', hospedaje: '🏨' };
 const VERTICAL_NOMBRE = { vuelos: 'Aerolíneas (Vuelos)', autos: 'Rentadoras (Autos)', atracciones: 'Operadores (Atracciones)', hospedaje: 'Hoteles (Hospedaje)' };
-const EST_PAGADAS = ['CONFIRMED', 'PAID', 'TICKET_ISSUING', 'TICKETED', 'ISSUED', 'COMPLETED'];
-const EST_PENDIENTES = ['PENDING', 'PENDING_PAYMENT', 'RESERVED', 'HELD', 'CHANGE_PENDING'];
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 function fmtMes(periodo) {
   const [y, m] = String(periodo || '').split('-');
   return m ? `${MESES[Number(m) - 1] || m} ${y}` : periodo || '—';
-}
-const periodoDe = (d) => {
-  const f = new Date(d);
-  return Number.isNaN(f.getTime()) ? 'sin-fecha' : `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}`;
-};
-
-/**
- * Las reservas de hospedaje todavía viven en el navegador (localStorage), así
- * que el backend no las ve. Se suman aquí con las mismas reglas que el backend.
- */
-function hospedajeLocal() {
-  let lista = [];
-  try { lista = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]'); } catch { lista = []; }
-  return (Array.isArray(lista) ? lista : []).map((r) => ({
-    vertical: 'hospedaje',
-    id: r.id,
-    ref: String(r.id || 'HOTEL').substring(0, 6).toUpperCase(),
-    estado: String(r.status || 'CONFIRMED').toUpperCase(),
-    monto: toNum(r.total),
-    fecha: r.createdAt || r.fecha || null,
-    cliente: r.email || r.huesped?.email || null,
-  }));
-}
-
-function combinarConHospedaje(fin, local) {
-  if (!fin) return fin;
-  const pct = toNum(fin.config?.comisionBase, 15);
-  const iva = toNum(fin.config?.tasaImpuestos, 15);
-  const pagadas = local.filter((m) => EST_PAGADAS.includes(m.estado));
-  const cobradoH = round2(pagadas.reduce((s, m) => s + m.monto, 0));
-  const porCobrarH = round2(local.filter((m) => EST_PENDIENTES.includes(m.estado)).reduce((s, m) => s + m.monto, 0));
-  const anuladoH = round2(local.filter((m) => !EST_PAGADAS.includes(m.estado) && !EST_PENDIENTES.includes(m.estado)).reduce((s, m) => s + m.monto, 0));
-
-  // Liquidaciones de hospedaje por mes (respetando lo que ya se pagó en BD)
-  const grupos = {};
-  pagadas.forEach((m) => {
-    const p = periodoDe(m.fecha);
-    grupos[p] = grupos[p] || { reservas: 0, bruto: 0 };
-    grupos[p].reservas++;
-    grupos[p].bruto += m.monto;
-  });
-  const liqBase = (fin.liquidaciones || []).filter((l) => l.vertical !== 'hospedaje');
-  const pagosH = (fin.liquidaciones || []).filter((l) => l.vertical === 'hospedaje');
-  const periodosH = new Set([...Object.keys(grupos), ...pagosH.map((l) => l.periodo)]);
-  const liqH = [...periodosH].map((periodo) => {
-    const g = grupos[periodo] || { reservas: 0, bruto: 0 };
-    const previo = pagosH.find((l) => l.periodo === periodo);
-    const bruto = round2(g.bruto);
-    const comision = round2(bruto * pct / 100);
-    const neto = round2(bruto - comision);
-    const pagado = round2(previo?.pagado || 0);
-    const pendiente = round2(Math.max(neto - pagado, 0));
-    return {
-      id: `hospedaje:${periodo}`, vertical: 'hospedaje', proveedor: VERTICAL_NOMBRE.hospedaje, periodo,
-      reservas: g.reservas, bruto, comisionPct: pct, comision, neto, pagado, pendiente,
-      estado: pendiente <= 0.009 ? 'PAGADO' : pagado > 0 ? 'PARCIAL' : 'PENDIENTE',
-      ultimoPago: previo?.ultimoPago || null, aprobadoPor: previo?.aprobadoPor || null, local: true,
-    };
-  });
-  const liquidaciones = [...liqBase, ...liqH].sort((a, b) => (a.periodo === b.periodo ? a.vertical.localeCompare(b.vertical) : b.periodo.localeCompare(a.periodo)));
-
-  const r = fin.resumen || {};
-  const cobrado = round2(toNum(r.cobrado) + cobradoH);
-  const comisiones = round2(cobrado * pct / 100);
-  const reservasPagadas = toNum(r.reservasPagadas) + pagadas.length;
-
-  const porMes = (fin.porMes || []).map((m) => {
-    const extra = round2(pagadas.filter((x) => periodoDe(x.fecha) === m.periodo).reduce((s, x) => s + x.monto, 0));
-    const c = round2(toNum(m.cobrado) + extra);
-    return { ...m, cobrado: c, comision: round2(c * pct / 100) };
-  });
-
-  const movLocales = local.map((m) => ({
-    ...m,
-    comision: EST_PAGADAS.includes(m.estado) ? round2(m.monto * pct / 100) : 0,
-    clase: EST_PAGADAS.includes(m.estado) ? 'cobrado' : EST_PENDIENTES.includes(m.estado) ? 'pendiente' : 'anulado',
-  }));
-
-  return {
-    ...fin,
-    resumen: {
-      ...r,
-      cobrado,
-      porCobrar: round2(toNum(r.porCobrar) + porCobrarH),
-      anulado: round2(toNum(r.anulado) + anuladoH),
-      comisiones,
-      netoProveedores: round2(cobrado - comisiones),
-      ivaIncluido: round2(cobrado - cobrado / (1 + iva / 100)),
-      pendientePago: round2(liquidaciones.reduce((s, l) => s + toNum(l.pendiente), 0)),
-      reservasPagadas,
-      reservasTotales: toNum(r.reservasTotales) + local.length,
-      ticketPromedio: reservasPagadas ? round2(cobrado / reservasPagadas) : 0,
-    },
-    porVertical: [
-      ...(fin.porVertical || []),
-      {
-        vertical: 'hospedaje', proveedor: VERTICAL_NOMBRE.hospedaje, reservas: local.length, pagadas: pagadas.length,
-        cobrado: cobradoH, comision: round2(cobradoH * pct / 100), neto: round2(cobradoH - cobradoH * pct / 100),
-        porCobrar: porCobrarH, anulado: anuladoH, local: true,
-      },
-    ],
-    porMes,
-    liquidaciones,
-    ultimosMovimientos: [...(fin.ultimosMovimientos || []), ...movLocales]
-      .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime())
-      .slice(0, 25),
-  };
 }
 
 function EstadoLiq({ estado }) {
@@ -1555,7 +1473,7 @@ function FinanzasPanel({ refreshKey }) {
         api.get('/admin/finanzas'),
         api.get('/admin/payouts').catch(() => ({ data: [] })),
       ]);
-      setFin(combinarConHospedaje(data, hospedajeLocal()));
+      setFin(data);
       setHistorial(Array.isArray(hist.data) ? hist.data : []);
     } catch (err) {
       setError(apiErrorMsg(err, 'No se pudieron cargar las finanzas'));
@@ -1572,7 +1490,6 @@ function FinanzasPanel({ refreshKey }) {
     setAviso(null);
     try {
       const body = { vertical: l.vertical, periodo: l.periodo };
-      if (l.vertical === 'hospedaje') Object.assign(body, { bruto: l.bruto, reservas: l.reservas });
       const { data } = await api.post('/admin/payouts/aprobar', body);
       setAviso({ tipo: 'success', texto: `${data?.message || 'Payout aprobado.'} Referencia: ${data?.referencia || '—'}` });
       await cargar(true);
@@ -2299,17 +2216,10 @@ export function AdminDashboard() {
     if(!silent) setLoadingStats(true);
     try{
       const{data}=await api.get('/admin/stats');
-      
-      const localesAloj = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
-      const hospedajeList = localesAloj.map(al => ({
-        id: al.id,
-        tipo: 'hospedaje',
-        pnr: (al.id || 'HOTEL').substring(0, 6).toUpperCase(),
-        estado: al.status || 'CONFIRMED',
-        total: al.total || 0,
-        moneda: 'USD',
-        createdAt: al.createdAt || al.fecha || new Date().toISOString().split('T')[0],
-      }));
+
+      // Hospedaje ya viene de la BD; solo se suman las reservas que existan únicamente en este navegador
+      const localesAloj = hospedajeSoloLocal((data.ultimasReservas || []).filter(r => r.tipo === 'hospedaje'));
+      const hospedajeList = localesAloj;
 
       const localesAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
       const autosList = localesAutos.map(au => ({
@@ -2334,8 +2244,8 @@ export function AdminDashboard() {
       }));
       
       const kpis = data.kpis || {};
-      const statsHospedaje = localesAloj.length;
-      const ingresosHospedaje = localesAloj.reduce((acc, curr) => acc + Number(curr.total || 0), 0);
+      const statsHospedaje = (kpis.reservasHospedaje || 0) + localesAloj.length;
+      const ingresosHospedaje = (kpis.ingresosHospedaje || 0) + localesAloj.reduce((acc, curr) => acc + Number(curr.total || 0), 0);
       
       const statsAutosLocales = localesAutos.length;
       const ingresosAutosLocales = localesAutos.reduce((acc, curr) => acc + Number(curr.totalPrice?.total || curr.total || 0), 0);
@@ -2357,8 +2267,8 @@ export function AdminDashboard() {
           ingresosAutos: (kpis.ingresosAutos || 0) + ingresosAutosLocales,
           reservasAtracciones: (kpis.reservasAtracciones || 0) + statsAtraccionesLocales,
           ingresosAtracciones: (kpis.ingresosAtracciones || 0) + ingresosAtraccionesLocales,
-          totalReservas: (kpis.totalReservas || 0) + statsHospedaje + statsAutosLocales + statsAtraccionesLocales,
-          ingresosTotal: (kpis.ingresosTotal || 0) + ingresosHospedaje + ingresosAutosLocales + ingresosAtraccionesLocales
+          totalReservas: (kpis.totalReservas || 0) + localesAloj.length + statsAutosLocales + statsAtraccionesLocales,
+          ingresosTotal: (kpis.ingresosTotal || 0) + (ingresosHospedaje - (kpis.ingresosHospedaje || 0)) + ingresosAutosLocales + ingresosAtraccionesLocales
         },
         ultimasReservas
       });
@@ -2384,17 +2294,9 @@ export function AdminDashboard() {
     if(!silent) setLoadingReservas(true);
     try{
       const{data}=await api.get('/admin/reservas');
-      
-      const localesAloj = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
-      const hospedajeList = localesAloj.map(al => ({
-        id: al.id,
-        tipo: 'hospedaje',
-        pnr: (al.id || 'HOTEL').substring(0, 6).toUpperCase(),
-        estado: al.status || 'CONFIRMED',
-        total: al.total || 0,
-        moneda: 'USD',
-        createdAt: al.createdAt || al.fecha || new Date().toISOString().split('T')[0],
-      }));
+
+      // Hospedaje viene de la BD; se agregan solo las reservas guardadas únicamente en este navegador
+      const hospedajeList = [...(data.hospedaje || []), ...hospedajeSoloLocal(data.hospedaje || [])];
 
       const localesAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
       const autosList = localesAutos.map(au => ({

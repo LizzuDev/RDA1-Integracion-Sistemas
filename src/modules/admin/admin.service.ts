@@ -5,6 +5,10 @@ import { createClient } from '@supabase/supabase-js';
 import { Reserva } from '../vuelos/entities/reserva.entity';
 import { OrderAuto } from '../autos/entities/order-auto.entity';
 import { ReservaAtraccion } from '../atracciones/entities/reserva.entity';
+import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
+import { Alojamiento } from '../alojamientos/entities/alojamiento.entity';
+
+const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Mismos correos que `frontend/src/components/AdminGuard.jsx`. */
 export const ADMIN_EMAILS = ['admin@booking.com', 'alejandroflores@booking.com'];
@@ -21,6 +25,10 @@ export class AdminService {
     private readonly orderAutoRepo: Repository<OrderAuto>,
     @InjectRepository(ReservaAtraccion)
     private readonly reservaAtraccionRepo: Repository<ReservaAtraccion>,
+    @InjectRepository(ReservaAlojamiento)
+    private readonly reservaAlojamientoRepo: Repository<ReservaAlojamiento>,
+    @InjectRepository(Alojamiento)
+    private readonly alojamientoRepo: Repository<Alojamiento>,
     private readonly dataSource: DataSource,
   ) {
     const url = process.env.SUPABASE_URL;
@@ -28,13 +36,44 @@ export class AdminService {
     this.supabase = createClient(url || 'https://placeholder.supabase.co', key || 'placeholder');
   }
 
+  /** Reservas de hospedaje guardadas en la BD (tabla reservas_alojamiento) con el nombre del alojamiento. */
+  private async reservasHospedaje(take?: number) {
+    const reservas = await this.reservaAlojamientoRepo
+      .find({ order: { createdAt: 'DESC' }, ...(take ? { take } : {}) })
+      .catch((e) => { this.logger.error(`Error hospedaje: ${e.message}`); return [] as ReservaAlojamiento[]; });
+    const ids = [...new Set(reservas.map((r) => r.alojamientoId).filter(Boolean))];
+    const nombres = new Map<string, string>();
+    if (ids.length) {
+      const alojs = await this.alojamientoRepo.find({ where: ids.map((id) => ({ id })) as any }).catch(() => [] as Alojamiento[]);
+      alojs.forEach((a: any) => nombres.set(String(a.id), a.nombre));
+    }
+    return reservas.map((r) => ({ ...r, nombreAlojamiento: nombres.get(String(r.alojamientoId)) || null }));
+  }
+
+  private mapHospedaje(h: ReservaAlojamiento & { nombreAlojamiento?: string | null }) {
+    return {
+      id: h.id,
+      tipo: 'hospedaje',
+      pnr: h.codigoReserva || h.id.substring(0, 6).toUpperCase(),
+      estado: h.status,
+      total: Number(h.totalPrice?.total ?? h.total ?? 0),
+      moneda: h.totalPrice?.currency || 'USD',
+      createdAt: h.createdAt,
+      cliente: h.customerEmail || h.customerName || '—',
+      alojamiento: h.nombreAlojamiento || null,
+      checkin: h.checkin,
+      checkout: h.checkout,
+    };
+  }
+
   async getStats() {
     this.logger.log('Admin: consultando estadísticas globales...');
 
-    const [vuelos, autos, atracciones] = await Promise.all([
+    const [vuelos, autos, atracciones, hospedaje] = await Promise.all([
       this.reservaRepo.find().catch((e) => { this.logger.error('Error vuelos:', e); return [] as Reserva[]; }),
       this.orderAutoRepo.find().catch((e) => { this.logger.error('Error autos:', e); return [] as OrderAuto[]; }),
       this.reservaAtraccionRepo.find().catch((e) => { this.logger.error('Error atracciones:', e); return [] as ReservaAtraccion[]; }),
+      this.reservasHospedaje(),
     ]);
 
     const { data: telemetry } = await this.supabase.from('telemetry_events').select('event_name, session_id, vertical');
@@ -43,7 +82,8 @@ export class AdminService {
     const ingresosVuelos = vuelos.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
     const ingresosAutos = autos.reduce((sum: number, o: any) => sum + Number(o.totalPrice?.total || 0), 0);
     const ingresosAtracciones = atracciones.reduce((sum: number, a: any) => sum + Number(a.totalPrice?.total || 0), 0);
-    const ingresosTotal = ingresosVuelos + ingresosAutos + ingresosAtracciones;
+    const ingresosHospedaje = hospedaje.reduce((sum: number, h: any) => sum + Number(h.totalPrice?.total ?? h.total ?? 0), 0);
+    const ingresosTotal = ingresosVuelos + ingresosAutos + ingresosAtracciones + ingresosHospedaje;
 
     // Reservas por estado (vuelos)
     const estadosVuelos = vuelos.reduce((acc: Record<string, number>, r: any) => {
@@ -81,7 +121,9 @@ export class AdminService {
       createdAt: a.createdAt,
     }));
 
-    const ultimasReservas = [...ultimasVuelos, ...ultimasAutos, ...ultimasAtracciones]
+    const ultimasHospedaje = hospedaje.slice(0, 5).map((h) => this.mapHospedaje(h));
+
+    const ultimasReservas = [...ultimasVuelos, ...ultimasAutos, ...ultimasAtracciones, ...ultimasHospedaje]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 10);
 
@@ -122,7 +164,9 @@ export class AdminService {
 
     return {
       kpis: {
-        totalReservas: vuelos.length + autos.length + atracciones.length,
+        totalReservas: vuelos.length + autos.length + atracciones.length + hospedaje.length,
+        reservasHospedaje: hospedaje.length,
+        ingresosHospedaje: parseFloat(ingresosHospedaje.toFixed(2)),
         reservasVuelos: vuelos.length,
         reservasAutos: autos.length,
         reservasAtracciones: atracciones.length,
@@ -213,6 +257,7 @@ export class AdminService {
       this.orderAutoRepo.find({ order: { createdAt: 'DESC' }, take: 50 }).catch(() => [] as OrderAuto[]),
       this.reservaAtraccionRepo.find({ order: { createdAt: 'DESC' }, take: 50 }).catch(() => [] as ReservaAtraccion[]),
     ]);
+    const hospedaje = await this.reservasHospedaje(50);
 
     return {
       vuelos: vuelos.map(r => ({
@@ -243,7 +288,7 @@ export class AdminService {
         createdAt: a.createdAt,
         cliente: a.customerEmail || a.customerName || '—',
       })),
-      hospedaje: [], // Módulo de hospedaje no tiene reservas implementadas aún
+      hospedaje: hospedaje.map((h) => this.mapHospedaje(h)),
     };
   }
 
@@ -363,18 +408,28 @@ export class AdminService {
     const email = await this.buscarUsuario(id).then((u) => u.email).catch(() => undefined);
 
     const vuelos = await this.reservaRepo.find({ where: { propietarioId: id } });
-    let autos = [];
+    let autos: OrderAuto[] = [];
+    let atracciones: ReservaAtraccion[] = [];
+    let hospedaje: ReservaAlojamiento[] = [];
     if (email) {
-      // Autos usa jsonb booker.email, es más complejo en TypeORM pero intentemos buscar todos y filtrar
-      const allAutos = await this.orderAutoRepo.find();
-      autos = allAutos.filter(a => a.booker?.email === email);
+      const mail = email.toLowerCase();
+      const [allAutos, allAtr, allHosp] = await Promise.all([
+        this.orderAutoRepo.find().catch(() => [] as OrderAuto[]),
+        this.reservaAtraccionRepo.find().catch(() => [] as ReservaAtraccion[]),
+        this.reservaAlojamientoRepo.find().catch(() => [] as ReservaAlojamiento[]),
+      ]);
+      autos = allAutos.filter((a) => String(a.booker?.email || '').toLowerCase() === mail);
+      atracciones = allAtr.filter((a) => String(a.customerEmail || '').toLowerCase() === mail);
+      hospedaje = allHosp.filter((h) => String(h.customerEmail || '').toLowerCase() === mail);
     }
-    
+
     return {
       success: true,
       data: {
         vuelos: vuelos.map(v => ({ pnr: v.pnr, estado: v.estado, fecha: v.fechaCreacion })),
-        autos: autos.map(a => ({ pnr: a.id.substring(0,6).toUpperCase(), estado: a.status, fecha: a.createdAt }))
+        autos: autos.map(a => ({ pnr: a.id.substring(0,6).toUpperCase(), estado: a.status, fecha: a.createdAt })),
+        atracciones: atracciones.map(a => ({ pnr: a.id.substring(0,6).toUpperCase(), estado: a.status, fecha: a.createdAt })),
+        hospedaje: hospedaje.map(h => ({ pnr: h.codigoReserva, estado: h.status, fecha: h.createdAt })),
       }
     };
   }
@@ -389,7 +444,7 @@ export class AdminService {
       } else if (tipo === 'atracciones') {
         await this.reservaAtraccionRepo.update({ id }, { status: 'CANCELLED' });
       } else if (tipo === 'hospedaje') {
-        // Módulo no tiene estado de reservas implementado
+        await this.reservaAlojamientoRepo.update(ES_UUID.test(id) ? { id } : { codigoReserva: id }, { status: 'CANCELLED' });
       }
       return { success: true, message: `Reserva ${tipo} cancelada exitosamente` };
     } catch (e) {
@@ -418,7 +473,11 @@ export class AdminService {
       } else if (tipo === 'atracciones') {
         data = await this.reservaAtraccionRepo.findOneBy({ id });
       } else if (tipo === 'hospedaje') {
-        data = null;
+        const r = await this.reservaAlojamientoRepo.findOne({ where: ES_UUID.test(id) ? { id } : { codigoReserva: id } });
+        if (r) {
+          const aloj: any = await this.alojamientoRepo.findOneBy({ id: r.alojamientoId as any }).catch(() => null);
+          data = { pnr: r.codigoReserva, ...r, alojamiento: aloj ? { nombre: aloj.nombre, destino: aloj.destino } : r.alojamientoId };
+        }
       }
       return { success: true, data };
     } catch (e) {
