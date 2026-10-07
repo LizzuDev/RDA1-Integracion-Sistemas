@@ -318,6 +318,7 @@ export function AlojamientoDetail() {
           firstName: customerName || user?.user_metadata?.nombre || 'Huésped',
           lastName: user?.user_metadata?.apellido || '',
           documentNumber: user?.user_metadata?.cedula || '',
+          email: customerEmail || user?.email || '',
         },
       ],
     };

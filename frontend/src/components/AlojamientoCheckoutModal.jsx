@@ -201,7 +201,7 @@ export function AlojamientoCheckoutModal({
           firstName: nombre || 'Huésped',
           lastName: apellidos || '',
           documentNumber: user?.user_metadata?.cedula || '',
-          email: email.trim(),
+          email: email.trim() || user?.email || '',
         },
       ],
     };

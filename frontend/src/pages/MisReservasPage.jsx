@@ -216,6 +216,17 @@ export function MisReservasPage() {
             totalRaw: al.total_price?.total || al.total || 0,
             imagen: al.photo_url || DEFAULT_IMAGES.alojamiento,
             link: al.alojamiento_id ? `/alojamientos/${al.alojamiento_id}` : '/',
+            raw: {
+              createdAt: al.created_at || new Date().toISOString(),
+              passengers: [
+                {
+                  firstName: al.customer_name || 'Huésped',
+                  lastName: '',
+                  documentNumber: '',
+                  email: al.customer_email || '',
+                },
+              ],
+            },
           };
         });
       } catch (err) {
@@ -242,6 +253,17 @@ export function MisReservasPage() {
           totalRaw: al.totalPrice || al.total || 0,
           imagen: al.photoUrl || DEFAULT_IMAGES.alojamiento,
           link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/',
+          raw: {
+            createdAt: al.createdAt || new Date().toISOString(),
+            passengers: [
+              {
+                firstName: al.huesped || al.customerName || 'Huésped',
+                lastName: '',
+                documentNumber: '',
+                email: al.email || '',
+              },
+            ],
+          },
         };
       });
 
