@@ -7,6 +7,7 @@ import { OrderAuto } from '../autos/entities/order-auto.entity';
 import { ReservaAtraccion } from '../atracciones/entities/reserva.entity';
 import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
 import { Alojamiento } from '../alojamientos/entities/alojamiento.entity';
+import { PAGADAS as ESTADOS_COBRADOS } from './admin-finanzas.service';
 
 const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -66,119 +67,110 @@ export class AdminService {
     };
   }
 
+  /**
+   * Telemetría real (tabla telemetry_events) leída por Postgres: sesiones únicas
+   * por paso del embudo y por vertical. Si la tabla no existe o está vacía
+   * se devuelve null (el panel muestra "sin datos", nunca números inventados).
+   */
+  private async telemetria() {
+    try {
+      const [porEvento, porVertical, total] = await Promise.all([
+        this.dataSource.query(`SELECT event_name, COUNT(DISTINCT session_id)::int AS n FROM telemetry_events GROUP BY event_name`),
+        this.dataSource.query(`SELECT LOWER(COALESCE(vertical, 'global')) AS vertical, COUNT(DISTINCT session_id)::int AS n FROM telemetry_events GROUP BY 1`),
+        this.dataSource.query(`SELECT COUNT(*)::int AS eventos, COUNT(DISTINCT session_id)::int AS sesiones, MAX(created_at) AS ultimo FROM telemetry_events`)
+          .catch(() => this.dataSource.query(`SELECT COUNT(*)::int AS eventos, COUNT(DISTINCT session_id)::int AS sesiones, NULL AS ultimo FROM telemetry_events`)),
+      ]);
+      const ev = (nombres: string[]) => Math.max(0, ...porEvento.filter((r: any) => nombres.includes(r.event_name)).map((r: any) => Number(r.n)));
+      const resumen = total?.[0] || {};
+      if (!Number(resumen.eventos)) return { funnel: null, trafico: { vuelos: 0, autos: 0, atracciones: 0, hospedaje: 0 }, eventos: 0, sesiones: 0, ultimoEvento: null };
+
+      const pasos = [
+        { label: 'Búsquedas', count: ev(['search_submitted']) },
+        { label: 'Inicio de checkout', count: ev(['checkout_started']) },
+        { label: 'Ingreso de datos del cliente', count: ev(['form_step_completed']) },
+        { label: 'Intento de pago', count: ev(['payment_started']) },
+        { label: '✅ Reserva exitosa', count: ev(['payment_succeeded', 'booking_confirmed']) },
+      ];
+      const base = Math.max(pasos[0].count, 1);
+      const vert = (nombres: string[]) => porVertical.filter((r: any) => nombres.includes(r.vertical)).reduce((s: number, r: any) => s + Number(r.n), 0);
+      return {
+        funnel: pasos.map((p) => ({ ...p, pct: Math.round((p.count / base) * 1000) / 10 })),
+        trafico: {
+          vuelos: vert(['vuelos', 'vuelo']),
+          autos: vert(['autos', 'auto']),
+          atracciones: vert(['atracciones', 'atraccion']),
+          hospedaje: vert(['hospedaje', 'alojamientos', 'alojamiento']),
+        },
+        eventos: Number(resumen.eventos) || 0,
+        sesiones: Number(resumen.sesiones) || 0,
+        ultimoEvento: resumen.ultimo || null,
+      };
+    } catch (e) {
+      this.logger.warn(`Telemetría no disponible: ${e.message}`);
+      return { funnel: null, trafico: { vuelos: 0, autos: 0, atracciones: 0, hospedaje: 0 }, eventos: 0, sesiones: 0, ultimoEvento: null, error: e.message };
+    }
+  }
+
   async getStats() {
     this.logger.log('Admin: consultando estadísticas globales...');
 
-    const [vuelos, autos, atracciones, hospedaje] = await Promise.all([
+    const [vuelos, autos, atracciones, hospedaje, tel] = await Promise.all([
       this.reservaRepo.find().catch((e) => { this.logger.error('Error vuelos:', e); return [] as Reserva[]; }),
       this.orderAutoRepo.find().catch((e) => { this.logger.error('Error autos:', e); return [] as OrderAuto[]; }),
       this.reservaAtraccionRepo.find().catch((e) => { this.logger.error('Error atracciones:', e); return [] as ReservaAtraccion[]; }),
       this.reservasHospedaje(),
+      this.telemetria(),
     ]);
 
-    const { data: telemetry } = await this.supabase.from('telemetry_events').select('event_name, session_id, vertical');
+    // Todas las reservas normalizadas (misma forma para las 4 verticales)
+    const todas = [
+      ...vuelos.map((r) => ({ tipo: 'vuelo', vertical: 'vuelos', id: r.idReserva, pnr: r.pnr, estado: r.estado, total: Number(r.total || 0), moneda: r.moneda || 'USD', createdAt: r.fechaCreacion })),
+      ...autos.map((o) => ({ tipo: 'auto', vertical: 'autos', id: o.id, pnr: o.id.substring(0, 6).toUpperCase(), estado: o.status, total: Number(o.totalPrice?.total || 0), moneda: o.totalPrice?.currency || 'USD', createdAt: o.createdAt })),
+      ...atracciones.map((a) => ({ tipo: 'atraccion', vertical: 'atracciones', id: a.id, pnr: a.id.substring(0, 6).toUpperCase(), estado: a.status, total: Number(a.totalPrice?.total || 0), moneda: a.totalPrice?.currency || 'USD', createdAt: a.createdAt })),
+      ...hospedaje.map((h) => ({ ...this.mapHospedaje(h), vertical: 'hospedaje' })),
+    ];
 
-    // Ingresos calculados
-    const ingresosVuelos = vuelos.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
-    const ingresosAutos = autos.reduce((sum: number, o: any) => sum + Number(o.totalPrice?.total || 0), 0);
-    const ingresosAtracciones = atracciones.reduce((sum: number, a: any) => sum + Number(a.totalPrice?.total || 0), 0);
-    const ingresosHospedaje = hospedaje.reduce((sum: number, h: any) => sum + Number(h.totalPrice?.total ?? h.total ?? 0), 0);
-    const ingresosTotal = ingresosVuelos + ingresosAutos + ingresosAtracciones + ingresosHospedaje;
+    // Ingresos = solo reservas cobradas (mismas reglas que Finanzas)
+    const cobrada = (e: any) => ESTADOS_COBRADOS.has(String(e || '').toUpperCase());
+    const ingresos = (v: string) => Math.round(todas.filter((r) => r.vertical === v && cobrada(r.estado)).reduce((s, r) => s + r.total, 0) * 100) / 100;
+    const ingresosVuelos = ingresos('vuelos');
+    const ingresosAutos = ingresos('autos');
+    const ingresosAtracciones = ingresos('atracciones');
+    const ingresosHospedaje = ingresos('hospedaje');
 
-    // Reservas por estado (vuelos)
-    const estadosVuelos = vuelos.reduce((acc: Record<string, number>, r: any) => {
-      acc[r.estado] = (acc[r.estado] || 0) + 1;
-      return acc;
-    }, {});
-
-    // Últimas 5 reservas de cada tipo combinadas
-    const ultimasVuelos = vuelos.slice(-5).map(r => ({
-      tipo: 'vuelo',
-      id: r.idReserva,
-      pnr: r.pnr,
-      estado: r.estado,
-      total: Number(r.total || 0),
-      moneda: r.moneda || 'USD',
-      createdAt: r.fechaCreacion,
-    }));
-
-    const ultimasAutos = autos.slice(-5).map(o => ({
-      tipo: 'auto',
-      id: o.id,
-      pnr: o.id.substring(0, 6).toUpperCase(),
-      estado: o.status,
-      total: Number(o.totalPrice?.total || 0),
-      moneda: o.totalPrice?.currency || 'USD',
-      createdAt: o.createdAt,
-    }));
-    const ultimasAtracciones = atracciones.slice(-5).map(a => ({
-      tipo: 'atraccion',
-      id: a.id,
-      pnr: a.id.substring(0, 6).toUpperCase(),
-      estado: a.status,
-      total: Number(a.totalPrice?.total || 0),
-      moneda: a.totalPrice?.currency || 'USD',
-      createdAt: a.createdAt,
-    }));
-
-    const ultimasHospedaje = hospedaje.slice(0, 5).map((h) => this.mapHospedaje(h));
-
-    const ultimasReservas = [...ultimasVuelos, ...ultimasAutos, ...ultimasAtracciones, ...ultimasHospedaje]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 10);
-
-    // Cálculos para el embudo real si hay eventos
-    let realFunnel = null;
-    let trafficByVertical = { vuelos: 0, autos: 0, atracciones: 0 };
-    
-    if (telemetry && telemetry.length > 0) {
-      const counts = { busquedas: new Set(), detalles: new Set(), datos_cliente: new Set(), intento_pago: new Set(), exito: new Set() };
-      const verticalSessions = { vuelos: new Set(), autos: new Set(), atracciones: new Set() };
-
-      telemetry.forEach(t => {
-        if (t.event_name === 'search_submitted') counts.busquedas.add(t.session_id);
-        if (t.event_name === 'checkout_started') counts.detalles.add(t.session_id);
-        if (t.event_name === 'form_step_completed') counts.datos_cliente.add(t.session_id);
-        if (t.event_name === 'payment_started') counts.intento_pago.add(t.session_id);
-        if (t.event_name === 'payment_succeeded' || t.event_name === 'booking_confirmed') counts.exito.add(t.session_id);
-
-        if (t.vertical === 'vuelos') verticalSessions.vuelos.add(t.session_id);
-        if (t.vertical === 'autos') verticalSessions.autos.add(t.session_id);
-        if (t.vertical === 'atracciones') verticalSessions.atracciones.add(t.session_id);
-      });
-      const b = Math.max(counts.busquedas.size, 1);
-      realFunnel = [
-        { label: 'Búsquedas (Global)', count: counts.busquedas.size, pct: 100 },
-        { label: 'Seleccionar / Iniciar Checkout', count: counts.detalles.size, pct: Math.round((counts.detalles.size / b) * 100) },
-        { label: 'Ingreso de datos', count: counts.datos_cliente.size, pct: Math.round((counts.datos_cliente.size / b) * 100) },
-        { label: 'Intento de Pago', count: counts.intento_pago.size, pct: Math.round((counts.intento_pago.size / b) * 100) },
-        { label: '✅ Reserva Exitosa', count: counts.exito.size, pct: Math.round((counts.exito.size / b) * 100) },
-      ];
-
-      trafficByVertical = {
-        vuelos: verticalSessions.vuelos.size,
-        autos: verticalSessions.autos.size,
-        atracciones: verticalSessions.atracciones.size,
-      };
+    // Reservas por estado, por vertical
+    const estadosPorVertical: Record<string, Record<string, number>> = { vuelos: {}, autos: {}, atracciones: {}, hospedaje: {} };
+    for (const r of todas) {
+      const e = String(r.estado || 'SIN_ESTADO').toUpperCase();
+      estadosPorVertical[r.vertical][e] = (estadosPorVertical[r.vertical][e] || 0) + 1;
     }
 
+    const ultimasReservas = [...todas]
+      .sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime())
+      .slice(0, 10)
+      .map(({ vertical, ...r }) => r);
+
     return {
+      generadoEn: new Date().toISOString(),
       kpis: {
-        totalReservas: vuelos.length + autos.length + atracciones.length + hospedaje.length,
-        reservasHospedaje: hospedaje.length,
-        ingresosHospedaje: parseFloat(ingresosHospedaje.toFixed(2)),
+        totalReservas: todas.length,
         reservasVuelos: vuelos.length,
         reservasAutos: autos.length,
         reservasAtracciones: atracciones.length,
-        ingresosTotal: parseFloat(ingresosTotal.toFixed(2)),
-        ingresosVuelos: parseFloat(ingresosVuelos.toFixed(2)),
-        ingresosAutos: parseFloat(ingresosAutos.toFixed(2)),
-        ingresosAtracciones: parseFloat(ingresosAtracciones.toFixed(2)),
+        reservasHospedaje: hospedaje.length,
+        reservasCobradas: todas.filter((r) => cobrada(r.estado)).length,
+        ingresosTotal: Math.round((ingresosVuelos + ingresosAutos + ingresosAtracciones + ingresosHospedaje) * 100) / 100,
+        ingresosVuelos,
+        ingresosAutos,
+        ingresosAtracciones,
+        ingresosHospedaje,
       },
-      estadosVuelos,
+      estadosVuelos: estadosPorVertical.vuelos,
+      estadosPorVertical,
       ultimasReservas,
-      realFunnel,
-      trafficByVertical,
+      realFunnel: tel.funnel,
+      trafficByVertical: tel.trafico,
+      telemetria: { eventos: tel.eventos, sesiones: tel.sesiones, ultimoEvento: tel.ultimoEvento, error: (tel as any).error || null },
     };
   }
 

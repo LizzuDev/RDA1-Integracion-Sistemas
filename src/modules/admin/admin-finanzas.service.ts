@@ -8,7 +8,7 @@ import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
 import { AdminConfigService } from './admin-config.service';
 
 /** Estados que significan "el cliente ya pagó". */
-const PAGADAS = new Set(['CONFIRMED', 'CONFIRMADA', 'PAGADA', 'PAID', 'TICKET_ISSUING', 'TICKETED', 'ISSUED', 'COMPLETED']);
+export const PAGADAS = new Set(['CONFIRMED', 'CONFIRMADA', 'PAGADA', 'PAID', 'TICKET_ISSUING', 'TICKETED', 'ISSUED', 'COMPLETED']);
 /** Estados de reserva viva pendiente de cobro. */
 const PENDIENTES = new Set(['PENDING', 'PENDIENTE', 'PENDING_PAYMENT', 'RESERVED', 'HELD', 'CHANGE_PENDING']);
 /** Estados anulados / reembolsados. */
