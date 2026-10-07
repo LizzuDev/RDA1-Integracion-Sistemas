@@ -1,6 +1,7 @@
-import { Controller, Get, Put, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { UseInterceptors, Controller, Get, Put, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { AdminErrorsInterceptor } from './admin-errors.interceptor';
 import { AdminConfigService, PlatformConfig } from './admin-config.service';
 import { AdminFinanzasService } from './admin-finanzas.service';
 import { AdminAuditService, actorDesdeRequest } from './admin-audit.service';
@@ -10,6 +11,7 @@ import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
 @ApiBearerAuth()
 @Controller('admin')
 @UseGuards(SupabaseAuthGuard)
+@UseInterceptors(AdminErrorsInterceptor)
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
