@@ -766,9 +766,18 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
     setConfirmModal(null);
   };
 
-  const execUserAction = async (id, action) => {
+  const execUserAction = async (id, action, email) => {
     try { 
-      await api.put(`/admin/users/${id}/action`, { action }); 
+      if (action === 'reset_password') {
+        // Se envía con el cliente público de Supabase (el mismo del login), así no
+        // depende de la clave secreta del backend.
+        if (!email) throw new Error('El usuario no tiene correo registrado.');
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/restablecer-contrasena` });
+        if (error) throw new Error(error.message);
+        api.post('/admin/auditoria', { accion: 'Envió reseteo de contraseña', entidadTipo: 'usuario', entidadId: email, detalle: { userId: id } }).catch(() => {});
+      } else {
+        await api.put(`/admin/users/${id}/action`, { action });
+      }
       if (action === 'reset_password') {
         alert('Enlace de reseteo enviado correctamente.');
       } else {
@@ -776,7 +785,7 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
       }
       onRefresh(); 
     }
-    catch(e) { alert(`Error al ejecutar la acción: ${apiErrorMsg(e)}`); }
+    catch(e) { alert(`Error al ejecutar la acción: ${e?.response ? apiErrorMsg(e) : (e?.message || apiErrorMsg(e))}`); }
   };
 
   const handleReservaAction = async (tipo, id, action) => {
@@ -937,7 +946,7 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
                     {u.rol === 'admin' && u.adminFijo && (
                       <span title="Administrador principal definido en el sistema: no se le puede quitar el rol" style={{alignSelf:'center',fontSize:'0.7rem',color:C.gray,fontWeight:600}}>🔒 Principal</span>
                     )}
-                    <button onClick={()=>requestConfirm("Enviar Reseteo de Contraseña", `¿Enviar enlace de reseteo a ${u.email}?`, C.orange, ()=>execUserAction(u.id, 'reset_password'))} title="Enviar Reseteo de Contraseña" style={btnStyle}>🔑</button>
+                    <button onClick={()=>requestConfirm("Enviar Reseteo de Contraseña", `¿Enviar enlace de reseteo a ${u.email}?`, C.orange, ()=>execUserAction(u.id, 'reset_password', u.email))} title="Enviar Reseteo de Contraseña" style={btnStyle}>🔑</button>
                   </td>
                 </tr>
               ))}
