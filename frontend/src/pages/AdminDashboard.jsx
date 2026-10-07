@@ -78,31 +78,15 @@ function ObservabilidadTab({stats,loadingStats,serviceHealth,refreshKey}) {
   );
   const k = stats?.kpis||{};
 
-  const res = k.totalReservas || 0;
-  
-  // Usamos el funnel real del backend si viene, si no, fallback al simulado
-  let funnel = stats?.realFunnel;
-  
-  if (!funnel) {
-    funnel = res > 0 ? [
-      {label:'Búsquedas Globales (Vuelos, Autos, Atracciones)',count:res * 14, pct: 100},
-      {label:'Selección de producto / Ver detalles',count:Math.round(res * 11.06), pct: 79},
-      {label:'Inicio de Checkout',count:Math.round(res * 4.76), pct: 34},
-      {label:'Ingreso de datos del cliente',count:Math.round(res * 2.1), pct: 15},
-      {label:'Confirmación de Pago',count:Math.round(res * 1.07), pct: 7.7},
-      {label:'✅ Reserva Exitosa (Global - Real)',count:res, pct: 7.1},
-    ] : [
-      {label:'Búsquedas Globales (Vuelos, Autos, Atracciones)',count:0, pct: 0},
-      {label:'Selección de producto / Ver detalles',count:0, pct: 0},
-      {label:'Inicio de Checkout',count:0, pct: 0},
-      {label:'Ingreso de datos del cliente',count:0, pct: 0},
-      {label:'Confirmación de Pago',count:0, pct: 0},
-      {label:'✅ Reserva Exitosa (Global - Real)',count:0, pct: 0},
-    ];
-  }
+  // Embudo real (telemetría guardada en la BD). Si no hay eventos, se muestra vacío: nunca se inventan cifras.
+  const funnel = Array.isArray(stats?.realFunnel) ? stats.realFunnel : null;
+  const tel = stats?.telemetria || {};
+  const trafico = stats?.trafficByVertical || {};
+  const estadosPorVertical = stats?.estadosPorVertical || (stats?.estadosVuelos ? { vuelos: stats.estadosVuelos } : {});
 
   return (
     <div>
+      {stats?.error && <Alerta tipo="error">{stats.error}</Alerta>}
       <SectionTitle>📈 KPIs de Negocio (Tiempo Real)</SectionTitle>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))',gap:12}}>
         <KpiCard icon="🎫" label="Total Reservas" value={k.totalReservas??0} color={C.blue}/>
@@ -110,7 +94,7 @@ function ObservabilidadTab({stats,loadingStats,serviceHealth,refreshKey}) {
         <KpiCard icon="🚗" label="Autos" value={k.reservasAutos??0} sub="reservas" color={C.cyan}/>
         <KpiCard icon="🎡" label="Atracciones" value={k.reservasAtracciones??0} sub="reservas" color={C.green}/>
         <KpiCard icon="🏨" label="Hospedajes" value={k.reservasHospedaje??0} sub="reservas" color={'#8e44ad'}/>
-        <KpiCard icon="💵" label="Ingresos Totales" value={`$${fmt(k.ingresosTotal)}`} sub="USD" color={C.green}/>
+        <KpiCard icon="💵" label="Ingresos cobrados" value={`$${fmt(k.ingresosTotal)}`} sub={`USD · ${k.reservasCobradas??0} reservas pagadas`} color={C.green}/>
       </div>
       <SectionTitle badge="Real">💰 Finanzas del Booking</SectionTitle>
       <FinanzasPanel refreshKey={refreshKey}/>
@@ -121,49 +105,60 @@ function ObservabilidadTab({stats,loadingStats,serviceHealth,refreshKey}) {
         {serviceHealth.length===0 && <div style={{color:C.gray,fontSize:'0.85rem',padding:'10px 0'}}>Comprobando servicios...</div>}
       </div>
 
-      <SectionTitle>📊 Tráfico por Vertical (Nuevas Sesiones)</SectionTitle>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))',gap:12,marginBottom:20}}>
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
-          <div style={{fontSize:'0.85rem',color:C.text}}>✈️ Vuelos</div>
-          <div style={{fontSize:'1.6rem',fontWeight:700,color:C.darkBlue}}>{stats?.trafficByVertical?.vuelos || 0}</div>
-        </div>
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
-          <div style={{fontSize:'0.85rem',color:C.text}}>🚗 Autos</div>
-          <div style={{fontSize:'1.6rem',fontWeight:700,color:C.orange}}>{stats?.trafficByVertical?.autos || 0}</div>
-        </div>
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
-          <div style={{fontSize:'0.85rem',color:C.text}}>🎡 Atracciones</div>
-          <div style={{fontSize:'1.6rem',fontWeight:700,color:C.green}}>{stats?.trafficByVertical?.atracciones || 0}</div>
-        </div>
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
-          <div style={{fontSize:'0.85rem',color:C.text}}>🏨 Hospedaje</div>
-          <div style={{fontSize:'1.6rem',fontWeight:700,color:'#8e44ad'}}>{stats?.kpis?.reservasHospedaje || 0}</div>
-        </div>
+      <SectionTitle>📊 Tráfico por Vertical (sesiones únicas)</SectionTitle>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))',gap:12,marginBottom:8}}>
+        {[['✈️ Vuelos','vuelos',C.darkBlue],['🚗 Autos','autos',C.orange],['🎡 Atracciones','atracciones',C.green],['🏨 Hospedaje','hospedaje','#8e44ad']].map(([label,key,color])=>(
+          <div key={key} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
+            <div style={{fontSize:'0.85rem',color:C.text}}>{label}</div>
+            <div style={{fontSize:'1.6rem',fontWeight:700,color}}>{toNum(trafico[key])}</div>
+          </div>
+        ))}
       </div>
-      {stats?.estadosVuelos && Object.keys(stats.estadosVuelos).length>0 && (
+      <div style={{fontSize:'0.75rem',color:C.gray,marginBottom:20}}>
+        {tel.eventos
+          ? `${toNum(tel.eventos).toLocaleString('es-EC')} eventos de ${toNum(tel.sesiones).toLocaleString('es-EC')} sesiones registrados${tel.ultimoEvento ? ` · último: ${fmtDate(tel.ultimoEvento)}` : ''}.`
+          : 'Aún no hay eventos de telemetría guardados en la base de datos.'}
+      </div>
+
+      {Object.values(estadosPorVertical).some(e => Object.keys(e||{}).length>0) && (
         <>
-          <SectionTitle>📋 Distribución de Estados (Vuelos)</SectionTitle>
-          <div style={{display:'flex',flexWrap:'wrap',gap:10}}>
-            {Object.entries(stats.estadosVuelos).map(([estado,count])=>(
-              <div key={estado} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px',textAlign:'center',minWidth:100}}>
-                <div style={{fontSize:'1.4rem',fontWeight:700,color:estadoColor(estado)}}>{count}</div>
-                <Badge status={estado}/>
-              </div>
-            ))}
+          <SectionTitle>📋 Reservas por estado</SectionTitle>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:12}}>
+            {[['vuelos','✈️ Vuelos'],['autos','🚗 Autos'],['atracciones','🎡 Atracciones'],['hospedaje','🏨 Hospedaje']].filter(([v])=>estadosPorVertical[v]).map(([v,label])=>{
+              const entradas=Object.entries(estadosPorVertical[v]||{}).sort((a,b)=>b[1]-a[1]);
+              return (
+                <div key={v} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 16px'}}>
+                  <div style={{fontWeight:700,fontSize:'0.85rem',marginBottom:8,color:C.text}}>{label}</div>
+                  {entradas.length===0 && <div style={{fontSize:'0.8rem',color:C.gray}}>Sin reservas</div>}
+                  {entradas.map(([estado,count])=>(
+                    <div key={estado} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'4px 0'}}>
+                      <Badge status={estado}/>
+                      <span style={{fontWeight:700,color:estadoColor(estado)}}>{count}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </>
       )}
 
-      <SectionTitle>🎯 Embudo de Conversión (Extrapolado desde reservas reales)</SectionTitle>
+      <SectionTitle>🎯 Embudo de Conversión (telemetría real)</SectionTitle>
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'16px 20px'}}>
-        {funnel.map((f,i)=>(
+        {!funnel && (
+          <div style={{textAlign:'center',color:C.gray,fontSize:'0.88rem',padding:'12px 0'}}>
+            Sin datos de telemetría todavía. El embudo se llenará cuando los usuarios busquen y reserven en el sitio.
+            {tel.error && <div style={{fontSize:'0.75rem',marginTop:6,color:C.orange}}>Detalle: {tel.error}</div>}
+          </div>
+        )}
+        {funnel && funnel.map((f,i)=>(
           <div key={f.label} style={{marginBottom:14}}>
             <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.85rem',marginBottom:4}}>
               <span style={{color:C.text}}>{f.label}</span>
-              <span style={{fontWeight:700,color:f.pct<20 && f.count > 0 ? C.orange : C.text}}>{f.count.toLocaleString()} ({f.pct}%)</span>
+              <span style={{fontWeight:700,color:f.pct<20 && f.count > 0 ? C.orange : C.text}}>{toNum(f.count).toLocaleString('es-EC')} sesiones ({f.pct}%)</span>
             </div>
             <div style={{background:C.border,borderRadius:4,height:12,overflow:'hidden'}}>
-              <div style={{width:`${f.pct}%`,height:'100%',borderRadius:4,background:`linear-gradient(90deg, ${C.blue}, ${C.darkBlue})`,opacity:0.5+(i*0.08)}}/>
+              <div style={{width:`${Math.min(100, toNum(f.pct))}%`,height:'100%',borderRadius:4,background:`linear-gradient(90deg, ${C.blue}, ${C.darkBlue})`,opacity:0.5+(i*0.08)}}/>
             </div>
           </div>
         ))}
@@ -2201,6 +2196,7 @@ export function AdminDashboard() {
       {label:'Módulo Vuelos',url:'/vuelos/bookings?limit=1'},
       {label:'Módulo Autos',url:'/autos/orders'},
       {label:'Módulo Atracciones',url:'/atracciones?page=1&limit=1'},
+      {label:'Módulo Hospedaje',url:'/alojamientos?page=1&limit=1'},
       {label:'Módulo Chatbot',url:'/chatbot/estado'},
       {label:'Módulo Admin (Stats)',url:'/admin/stats'},
     ];
@@ -2216,64 +2212,10 @@ export function AdminDashboard() {
     if(!silent) setLoadingStats(true);
     try{
       const{data}=await api.get('/admin/stats');
-
-      // Hospedaje ya viene de la BD; solo se suman las reservas que existan únicamente en este navegador
-      const localesAloj = hospedajeSoloLocal((data.ultimasReservas || []).filter(r => r.tipo === 'hospedaje'));
-      const hospedajeList = localesAloj;
-
-      const localesAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
-      const autosList = localesAutos.map(au => ({
-        id: au.id || au.orderId,
-        tipo: 'auto',
-        pnr: (au.id || au.orderId || 'AUTO').substring(0, 6).toUpperCase(),
-        estado: au.status || 'CONFIRMED',
-        total: au.totalPrice?.total || au.total || 0,
-        moneda: 'USD',
-        createdAt: au.createdAt || au.date || new Date().toISOString().split('T')[0],
-      }));
-
-      const localesAtracciones = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
-      const atraccionesList = localesAtracciones.map(at => ({
-        id: at.id || at.reservation_id,
-        tipo: 'atraccion',
-        pnr: (at.id || at.reservation_id || 'ATRAC').substring(0, 6).toUpperCase(),
-        estado: at.status || 'CONFIRMED',
-        total: at.totalPrice?.total || at.total || 0,
-        moneda: 'USD',
-        createdAt: at.createdAt || at.date || new Date().toISOString().split('T')[0],
-      }));
-      
-      const kpis = data.kpis || {};
-      const statsHospedaje = (kpis.reservasHospedaje || 0) + localesAloj.length;
-      const ingresosHospedaje = (kpis.ingresosHospedaje || 0) + localesAloj.reduce((acc, curr) => acc + Number(curr.total || 0), 0);
-      
-      const statsAutosLocales = localesAutos.length;
-      const ingresosAutosLocales = localesAutos.reduce((acc, curr) => acc + Number(curr.totalPrice?.total || curr.total || 0), 0);
-
-      const statsAtraccionesLocales = localesAtracciones.length;
-      const ingresosAtraccionesLocales = localesAtracciones.reduce((acc, curr) => acc + Number(curr.totalPrice?.total || curr.total || 0), 0);
-      
-      let ultimasReservas = [...(data.ultimasReservas || []), ...hospedajeList, ...autosList, ...atraccionesList]
-        .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0,10);
-        
-      setStats({
-        ...data,
-        kpis: {
-          ...kpis,
-          reservasHospedaje: statsHospedaje,
-          ingresosHospedaje: ingresosHospedaje,
-          reservasAutos: (kpis.reservasAutos || 0) + statsAutosLocales,
-          ingresosAutos: (kpis.ingresosAutos || 0) + ingresosAutosLocales,
-          reservasAtracciones: (kpis.reservasAtracciones || 0) + statsAtraccionesLocales,
-          ingresosAtracciones: (kpis.ingresosAtracciones || 0) + ingresosAtraccionesLocales,
-          totalReservas: (kpis.totalReservas || 0) + localesAloj.length + statsAutosLocales + statsAtraccionesLocales,
-          ingresosTotal: (kpis.ingresosTotal || 0) + (ingresosHospedaje - (kpis.ingresosHospedaje || 0)) + ingresosAutosLocales + ingresosAtraccionesLocales
-        },
-        ultimasReservas
-      });
+      // Todo sale de la base de datos (el backend ya incluye las 4 verticales).
+      setStats(data);
     }
-    catch{setStats({kpis:{},ultimasReservas:[],estadosVuelos:{}});}
+    catch(err){setStats({kpis:{},ultimasReservas:[],estadosPorVertical:{},error:apiErrorMsg(err,'No se pudieron cargar las estadísticas')});}
     finally{if(!silent) setLoadingStats(false);setLastRefresh(new Date());}
   },[]);
 
