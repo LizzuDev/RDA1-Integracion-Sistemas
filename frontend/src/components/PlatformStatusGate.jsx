@@ -34,7 +34,7 @@ export function PlatformStatusGate({ children }) {
   }, [pathname]);
 
   const esAdmin = isAdminUser(user);
-  const rutaLibre = pathname.startsWith('/admin') || pathname.startsWith('/login');
+  const rutaLibre = pathname.startsWith('/admin') || pathname.startsWith('/login') || pathname.startsWith('/restablecer-contrasena');
 
   if (estado?.maintenanceMode && !esAdmin && !rutaLibre) {
     return (
