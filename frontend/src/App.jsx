@@ -48,6 +48,7 @@ import { LanguageProvider } from './hooks/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { AdminGuard } from './components/AdminGuard';
+import { PlatformStatusGate } from './components/PlatformStatusGate';
 import './index.css';
 import './vuelos.css';
 
@@ -75,6 +76,7 @@ function App() {
 
       <div className="app-wrapper">
         <Navbar />
+        <PlatformStatusGate>
         <Routes>
           {/* Rutas de Alojamientos (Página principal por defecto) */}
           <Route path="/" element={<AlojamientosPage />} />
@@ -127,6 +129,7 @@ function App() {
           <Route path="/legal/terminos" element={<TerminosPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </PlatformStatusGate>
 
         <Footer onAbrirPreferenciasCookies={() => setPreferenciasCookies(true)} />
       </div>

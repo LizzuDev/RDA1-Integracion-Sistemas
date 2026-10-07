@@ -4,6 +4,15 @@ import { useAuth } from '../hooks/useAuth';
 const ADMIN_EMAILS = ['admin@booking.com', 'alejandroflores@booking.com'];
 
 /**
+ * Es administrador si su email está en la lista fija o si fue promovido desde
+ * el panel (Gestión → 👑), que guarda `user_metadata.role = 'admin'`.
+ */
+export function isAdminUser(user) {
+  if (!user) return false;
+  return ADMIN_EMAILS.includes((user.email || '').toLowerCase()) || user.user_metadata?.role === 'admin' || user.app_metadata?.role === 'admin';
+}
+
+/**
  * Protege rutas exclusivas de administrador.
  * - Si el auth todavía está cargando, muestra un spinner.
  * - Si no hay sesión, redirige a /login.
@@ -40,7 +49,7 @@ export function AdminGuard({ children }) {
     return <Navigate to="/login" state={{ from: '/admin', message: 'Debes iniciar sesión para acceder al panel de administración.' }} replace />;
   }
 
-  if (!ADMIN_EMAILS.includes(user.email)) {
+  if (!isAdminUser(user)) {
     return <Navigate to="/" state={{ message: 'No tienes permisos de administrador.' }} replace />;
   }
 

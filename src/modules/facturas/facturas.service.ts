@@ -5,11 +5,13 @@ import {
   Injectable,
   Logger,
   OnModuleDestroy,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, Transporter } from 'nodemailer';
 import { EnviarFacturaDto } from './dto/enviar-factura.dto';
+import { AdminConfigService } from '../admin/admin-config.service';
 
 /** Cabeceras y cuerpo que Gmail no acepta: rompen el mensaje o inyectan otro. */
 const CR_O_LF = /[\r\n]+/g;
@@ -28,7 +30,11 @@ export class FacturasService implements OnModuleDestroy {
    */
   private transporter: Transporter | null = null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    // Ajuste global "Envío de emails" del panel de administración
+    @Optional() private readonly platformConfig?: AdminConfigService,
+  ) {}
 
   onModuleDestroy(): void {
     this.transporter?.close();
@@ -42,6 +48,9 @@ export class FacturasService implements OnModuleDestroy {
    *   nunca del cuerpo de la peticion.
    */
   async enviarFactura(dto: EnviarFacturaDto, destinatario: string) {
+    if (this.platformConfig && !(await this.platformConfig.getValor('emailsEnabled'))) {
+      throw new ServiceUnavailableException('El envío de emails está desactivado desde el panel de administración.');
+    }
     const pdf = this.decodificarPdf(dto.pdfBase64);
     const nombreAdjunto = this.nombreArchivo(dto.pnr);
 

@@ -10,10 +10,9 @@ const C = {
 };
 
 const TABS = [
-  { id: 'observabilidad', label: '📊 Observabilidad', sub: 'Estado en vivo' },
+  { id: 'observabilidad', label: '📊 Observabilidad & Finanzas', sub: 'Estado en vivo y dinero' },
   { id: 'microservicios', label: '🔬 Servicios & Prov.', sub: 'RDA2 Simulado' },
   { id: 'gestion', label: '🗂️ Gestión', sub: 'Usuarios & Reservas' },
-  { id: 'finanzas', label: '💰 Finanzas', sub: 'Pagos & Payouts' },
   { id: 'soporte', label: '🎧 Soporte', sub: 'Ticketing & QC' },
   { id: 'auditoria', label: '🛡️ Auditoría', sub: 'Logs de Seguridad' },
   { id: 'configuracion', label: '⚙️ Ajustes', sub: 'Global' },
@@ -68,7 +67,7 @@ function ServiceDot({ok,label,latency}) {
   );
 }
 
-function ObservabilidadTab({stats,loadingStats,serviceHealth}) {
+function ObservabilidadTab({stats,loadingStats,serviceHealth,refreshKey}) {
   if (loadingStats) return (
     <div style={{textAlign:'center',padding:60,color:C.gray}}>
       <div style={{fontSize:'2rem',marginBottom:12}}>⏳</div>
@@ -111,6 +110,9 @@ function ObservabilidadTab({stats,loadingStats,serviceHealth}) {
         <KpiCard icon="🏨" label="Hospedajes" value={k.reservasHospedaje??0} sub="reservas" color={'#8e44ad'}/>
         <KpiCard icon="💵" label="Ingresos Totales" value={`$${fmt(k.ingresosTotal)}`} sub="USD" color={C.green}/>
       </div>
+      <SectionTitle badge="Real">💰 Finanzas del Booking</SectionTitle>
+      <FinanzasPanel refreshKey={refreshKey}/>
+
       <SectionTitle>🔌 Estado de Servicios</SectionTitle>
       <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'12px 20px'}}>
         {serviceHealth.map((s)=>(<ServiceDot key={s.label} ok={s.ok} label={s.label} latency={s.latency}/>))}
@@ -746,7 +748,7 @@ function ProveedoresTab() {
   );
 }
 
-function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
+function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loadingReservas,onRefresh}) {
   const [vista,setVista]=useState('usuarios');
   const [modal,setModal]=useState(null);
   const [confirmModal,setConfirmModal]=useState(null);
@@ -884,6 +886,14 @@ function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
       const admins = users.filter(u => u.rol === 'admin').length;
       return (
         <div>
+          {usersError && (
+            <div style={{padding:'16px 16px 0'}}>
+              <Alerta tipo="error">
+                <strong>Error al cargar usuarios:</strong> {usersError}
+                <button type="button" onClick={onRetryUsers} style={{marginLeft:8,background:'transparent',border:`1px solid ${C.red}`,color:C.red,borderRadius:4,padding:'2px 8px',cursor:'pointer'}}>Reintentar</button>
+              </Alerta>
+            </div>
+          )}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,padding:16,background:C.bg,borderBottom:`1px solid ${C.border}`}}>
             <div style={{background:C.white,padding:12,borderRadius:8,border:`1px solid ${C.border}`}}>
               <div style={{fontSize:'0.8rem',color:C.gray}}>Total Usuarios Registrados</div>
@@ -896,16 +906,21 @@ function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
           </div>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
             <thead><tr style={{background:C.lightBlue}}>
-              {['Email','Rol','Registrado','Acciones'].map(h=>(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontWeight:600,color:C.darkBlue}}>{h}</th>))}
+              {['Usuario','Rol','Registrado','Último acceso','Acciones'].map(h=>(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontWeight:600,color:C.darkBlue}}>{h}</th>))}
             </tr></thead>
             <tbody>
               {users.map((u,i)=>(
                 <tr key={u.id||i} style={{borderTop:`1px solid ${C.border}`}}>
-                  <td style={{padding:'9px 14px'}}>{u.email}</td>
+                  <td style={{padding:'9px 14px'}}>
+                    <div style={{fontWeight:600}}>{u.email}</div>
+                    {u.nombre&&<div style={{fontSize:'0.75rem',color:C.gray}}>{u.nombre}</div>}
+                    {u.status==='bloquear'&&<span style={{fontSize:'0.68rem',color:C.red,fontWeight:700}}>🚫 Bloqueado</span>}
+                  </td>
                   <td style={{padding:'9px 14px'}}>
                     <span style={{background:u.rol==='admin'?C.blue:C.border,color:u.rol==='admin'?'white':C.text,padding:'2px 8px',borderRadius:20,fontSize:'0.75rem',fontWeight:600}}>{u.rol||'usuario'}</span>
                   </td>
                   <td style={{padding:'9px 14px',color:C.gray}}>{fmtDate(u.created_at)}</td>
+                  <td style={{padding:'9px 14px',color:C.gray}}>{u.last_sign_in?fmtDate(u.last_sign_in):'Nunca'}</td>
                   <td style={{padding:'9px 14px',display:'flex',gap:8}}>
                     {u.rol !== 'admin' && (
                       <>
@@ -920,7 +935,7 @@ function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
                   </td>
                 </tr>
               ))}
-              {users.length===0&&(<tr><td colSpan={4} style={{padding:24,textAlign:'center',color:C.gray}}>Sin usuarios. Ejecuta el Trigger SQL en Supabase para sincronizar.</td></tr>)}
+              {users.length===0&&(<tr><td colSpan={5} style={{padding:24,textAlign:'center',color:C.gray}}>{usersError?'No se pudieron cargar los usuarios (ver el error arriba).':'No hay usuarios registrados todavía.'}</td></tr>)}
             </tbody>
           </table>
         </div>
@@ -1022,55 +1037,431 @@ function GestionTab({users,reservas,loadingUsers,loadingReservas,onRefresh}) {
 // NUEVAS PESTAÑAS (BOOKING.COM CLONE)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function FinanzasTab() {
-  return (
-    <div>
-      <div style={{ background: '#e8f5e9', border: '1px solid #2e7d32', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: '1.2rem' }}>💰</span>
-        <span style={{ fontSize: '0.85rem', color: '#2e7d32' }}>
-          <strong>Admin Financiero.</strong> Gestión de comisiones, conciliación bancaria y pagos a proveedores (Payouts).
-        </span>
-      </div>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
-        <KpiCard icon="💳" label="Cobrado a Clientes" value="$42,500.00" color={C.blue} />
-        <KpiCard icon="🏦" label="Payouts Pendientes" value="$36,125.00" color={C.orange} />
-        <KpiCard icon="📈" label="Comisiones (Revenue)" value="$6,375.00" color={C.green} />
-      </div>
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS COMPARTIDOS (Finanzas / Ajustes)
+// ─────────────────────────────────────────────────────────────────────────────
 
-      <SectionTitle>🏦 Liquidaciones Pendientes (Payouts)</SectionTitle>
-      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-          <thead>
-            <tr style={{ background: C.lightBlue, color: C.darkBlue }}>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Proveedor</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Periodo</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Total Reservas</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Comisión (15%)</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>A Pagar</th>
-              <th style={{ padding: '10px 14px', textAlign: 'center' }}>Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {['TravelEcuador Pro', 'HotelHub EC', 'AeroLink Ecuador'].map((p, i) => (
-              <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
-                <td style={{ padding: '10px 14px', fontWeight: 600 }}>{p}</td>
-                <td style={{ padding: '10px 14px' }}>Sept 1 - Sept 15</td>
-                <td style={{ padding: '10px 14px' }}>$5,000.00</td>
-                <td style={{ padding: '10px 14px', color: C.red }}>-$750.00</td>
-                <td style={{ padding: '10px 14px', fontWeight: 700, color: C.green }}>$4,250.00</td>
-                <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                  <button style={{ background: C.green, color: 'white', border: 'none', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}>Aprobar Payout</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+/** Traduce un error de axios (incluido el formato RFC 7807 del backend) a texto legible. */
+function apiErrorMsg(err, fallback = 'Error inesperado') {
+  if (!err) return fallback;
+  if (!err.response) {
+    return err.code === 'ECONNABORTED'
+      ? 'El servidor tardó demasiado en responder (timeout). Si el backend en Render estaba dormido, reintenta en unos segundos.'
+      : 'No se pudo contactar con el servidor. Verifica tu conexión o el estado del backend.';
+  }
+  const { status, data } = err.response;
+  if (status === 404) return `El endpoint no existe en el backend (404 ${err.config?.url || ''}).`;
+  if (status === 401 || status === 403) return 'No autorizado. Inicia sesión con una cuenta de administrador.';
+  const detail = data?.detail || data?.message || data?.title;
+  return `${Array.isArray(detail) ? detail.join(', ') : (detail || fallback)} (HTTP ${status})`;
+}
+const isNotFound = (err) => err?.response?.status === 404;
+
+function toNum(v, def = 0) {
+  if (v === null || v === undefined || v === '') return def;
+  const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+  return Number.isFinite(n) ? n : def;
+}
+const round2 = (n) => Math.round(n * 100) / 100;
+
+const SPIN_CSS = '@keyframes adm-spin { to { transform: rotate(360deg); } }';
+function Spinner({ size = 14, color = C.white }) {
+  return (
+    <span aria-hidden="true" style={{ display: 'inline-block', width: size, height: size, border: `2px solid ${color}55`, borderTopColor: color, borderRadius: '50%', animation: 'adm-spin 0.8s linear infinite', verticalAlign: 'middle', flexShrink: 0 }} />
+  );
+}
+
+function Alerta({ tipo = 'error', children, onClose }) {
+  const pal = {
+    success: { bg: '#e8f5e9', fg: C.green, icon: '✅' },
+    error: { bg: '#ffebee', fg: C.red, icon: '⚠️' },
+    warning: { bg: '#fff3e0', fg: C.orange, icon: 'ℹ️' },
+  }[tipo] || { bg: C.lightBlue, fg: C.darkBlue, icon: 'ℹ️' };
+  return (
+    <div role={tipo === 'error' ? 'alert' : 'status'} style={{ background: pal.bg, border: `1px solid ${pal.fg}`, color: pal.fg, borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: '0.85rem' }}>
+      <span>{pal.icon}</span>
+      <span style={{ flex: 1, lineHeight: 1.45 }}>{children}</span>
+      {onClose && <button type="button" onClick={onClose} aria-label="Cerrar" style={{ background: 'transparent', border: 'none', color: pal.fg, cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: 0 }}>×</button>}
     </div>
   );
 }
 
+// ── Configuración global: valores por defecto y normalización ────────────────
+const CONFIG_DEFAULTS = { comisionBase: 15, tasaImpuestos: 15, stripeEnabled: true, emailsEnabled: true, maintenanceMode: false };
+/** Claves snake_case de la tabla `configuraciones` (clave/valor) -> campos del formulario. */
+const CONFIG_CLAVES = { comision_base: 'comisionBase', tasa_impuestos: 'tasaImpuestos', stripe_enabled: 'stripeEnabled', emails_enabled: 'emailsEnabled', maintenance_mode: 'maintenanceMode' };
+
+function toBool(v, def) {
+  if (typeof v === 'boolean') return v;
+  if (v === 'true' || v === '1' || v === 1) return true;
+  if (v === 'false' || v === '0' || v === 0) return false;
+  return def;
+}
+
+/** Acepta `{comisionBase,...}`, `{data:{...}}` o filas `[{clave, valor}]` de la tabla configuraciones. */
+function normalizarConfig(raw) {
+  let src = raw?.data ?? raw ?? {};
+  if (Array.isArray(src)) {
+    src = src.reduce((acc, row) => {
+      const k = CONFIG_CLAVES[row?.clave] || row?.clave;
+      if (k) acc[k] = row.valor;
+      return acc;
+    }, {});
+  }
+  return {
+    comisionBase: toNum(src.comisionBase, CONFIG_DEFAULTS.comisionBase),
+    tasaImpuestos: toNum(src.tasaImpuestos, CONFIG_DEFAULTS.tasaImpuestos),
+    stripeEnabled: toBool(src.stripeEnabled, CONFIG_DEFAULTS.stripeEnabled),
+    emailsEnabled: toBool(src.emailsEnabled, CONFIG_DEFAULTS.emailsEnabled),
+    maintenanceMode: toBool(src.maintenanceMode, CONFIG_DEFAULTS.maintenanceMode),
+  };
+}
+
+function validarPorcentaje(valor, nombre) {
+  if (valor === '' || valor === null || valor === undefined) return `${nombre} es obligatoria.`;
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return `${nombre} debe ser un número.`;
+  if (n < 0 || n > 100) return `${nombre} debe estar entre 0 y 100.`;
+  return null;
+}
+
+// ── Finanzas (fusionado en Observabilidad) ───────────────────────────────────
+const thFin = { padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: C.darkBlue, whiteSpace: 'nowrap' };
+const tdFin = { padding: '9px 14px' };
+const VERTICAL_ICON = { vuelos: '✈️', autos: '🚗', atracciones: '🎡', hospedaje: '🏨' };
+const VERTICAL_NOMBRE = { vuelos: 'Aerolíneas (Vuelos)', autos: 'Rentadoras (Autos)', atracciones: 'Operadores (Atracciones)', hospedaje: 'Hoteles (Hospedaje)' };
+const EST_PAGADAS = ['CONFIRMED', 'PAID', 'TICKET_ISSUING', 'TICKETED', 'ISSUED', 'COMPLETED'];
+const EST_PENDIENTES = ['PENDING', 'PENDING_PAYMENT', 'RESERVED', 'HELD', 'CHANGE_PENDING'];
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+function fmtMes(periodo) {
+  const [y, m] = String(periodo || '').split('-');
+  return m ? `${MESES[Number(m) - 1] || m} ${y}` : periodo || '—';
+}
+const periodoDe = (d) => {
+  const f = new Date(d);
+  return Number.isNaN(f.getTime()) ? 'sin-fecha' : `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}`;
+};
+
+/**
+ * Las reservas de hospedaje todavía viven en el navegador (localStorage), así
+ * que el backend no las ve. Se suman aquí con las mismas reglas que el backend.
+ */
+function hospedajeLocal() {
+  let lista = [];
+  try { lista = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]'); } catch { lista = []; }
+  return (Array.isArray(lista) ? lista : []).map((r) => ({
+    vertical: 'hospedaje',
+    id: r.id,
+    ref: String(r.id || 'HOTEL').substring(0, 6).toUpperCase(),
+    estado: String(r.status || 'CONFIRMED').toUpperCase(),
+    monto: toNum(r.total),
+    fecha: r.createdAt || r.fecha || null,
+    cliente: r.email || r.huesped?.email || null,
+  }));
+}
+
+function combinarConHospedaje(fin, local) {
+  if (!fin) return fin;
+  const pct = toNum(fin.config?.comisionBase, 15);
+  const iva = toNum(fin.config?.tasaImpuestos, 15);
+  const pagadas = local.filter((m) => EST_PAGADAS.includes(m.estado));
+  const cobradoH = round2(pagadas.reduce((s, m) => s + m.monto, 0));
+  const porCobrarH = round2(local.filter((m) => EST_PENDIENTES.includes(m.estado)).reduce((s, m) => s + m.monto, 0));
+  const anuladoH = round2(local.filter((m) => !EST_PAGADAS.includes(m.estado) && !EST_PENDIENTES.includes(m.estado)).reduce((s, m) => s + m.monto, 0));
+
+  // Liquidaciones de hospedaje por mes (respetando lo que ya se pagó en BD)
+  const grupos = {};
+  pagadas.forEach((m) => {
+    const p = periodoDe(m.fecha);
+    grupos[p] = grupos[p] || { reservas: 0, bruto: 0 };
+    grupos[p].reservas++;
+    grupos[p].bruto += m.monto;
+  });
+  const liqBase = (fin.liquidaciones || []).filter((l) => l.vertical !== 'hospedaje');
+  const pagosH = (fin.liquidaciones || []).filter((l) => l.vertical === 'hospedaje');
+  const periodosH = new Set([...Object.keys(grupos), ...pagosH.map((l) => l.periodo)]);
+  const liqH = [...periodosH].map((periodo) => {
+    const g = grupos[periodo] || { reservas: 0, bruto: 0 };
+    const previo = pagosH.find((l) => l.periodo === periodo);
+    const bruto = round2(g.bruto);
+    const comision = round2(bruto * pct / 100);
+    const neto = round2(bruto - comision);
+    const pagado = round2(previo?.pagado || 0);
+    const pendiente = round2(Math.max(neto - pagado, 0));
+    return {
+      id: `hospedaje:${periodo}`, vertical: 'hospedaje', proveedor: VERTICAL_NOMBRE.hospedaje, periodo,
+      reservas: g.reservas, bruto, comisionPct: pct, comision, neto, pagado, pendiente,
+      estado: pendiente <= 0.009 ? 'PAGADO' : pagado > 0 ? 'PARCIAL' : 'PENDIENTE',
+      ultimoPago: previo?.ultimoPago || null, aprobadoPor: previo?.aprobadoPor || null, local: true,
+    };
+  });
+  const liquidaciones = [...liqBase, ...liqH].sort((a, b) => (a.periodo === b.periodo ? a.vertical.localeCompare(b.vertical) : b.periodo.localeCompare(a.periodo)));
+
+  const r = fin.resumen || {};
+  const cobrado = round2(toNum(r.cobrado) + cobradoH);
+  const comisiones = round2(cobrado * pct / 100);
+  const reservasPagadas = toNum(r.reservasPagadas) + pagadas.length;
+
+  const porMes = (fin.porMes || []).map((m) => {
+    const extra = round2(pagadas.filter((x) => periodoDe(x.fecha) === m.periodo).reduce((s, x) => s + x.monto, 0));
+    const c = round2(toNum(m.cobrado) + extra);
+    return { ...m, cobrado: c, comision: round2(c * pct / 100) };
+  });
+
+  const movLocales = local.map((m) => ({
+    ...m,
+    comision: EST_PAGADAS.includes(m.estado) ? round2(m.monto * pct / 100) : 0,
+    clase: EST_PAGADAS.includes(m.estado) ? 'cobrado' : EST_PENDIENTES.includes(m.estado) ? 'pendiente' : 'anulado',
+  }));
+
+  return {
+    ...fin,
+    resumen: {
+      ...r,
+      cobrado,
+      porCobrar: round2(toNum(r.porCobrar) + porCobrarH),
+      anulado: round2(toNum(r.anulado) + anuladoH),
+      comisiones,
+      netoProveedores: round2(cobrado - comisiones),
+      ivaIncluido: round2(cobrado - cobrado / (1 + iva / 100)),
+      pendientePago: round2(liquidaciones.reduce((s, l) => s + toNum(l.pendiente), 0)),
+      reservasPagadas,
+      reservasTotales: toNum(r.reservasTotales) + local.length,
+      ticketPromedio: reservasPagadas ? round2(cobrado / reservasPagadas) : 0,
+    },
+    porVertical: [
+      ...(fin.porVertical || []),
+      {
+        vertical: 'hospedaje', proveedor: VERTICAL_NOMBRE.hospedaje, reservas: local.length, pagadas: pagadas.length,
+        cobrado: cobradoH, comision: round2(cobradoH * pct / 100), neto: round2(cobradoH - cobradoH * pct / 100),
+        porCobrar: porCobrarH, anulado: anuladoH, local: true,
+      },
+    ],
+    porMes,
+    liquidaciones,
+    ultimosMovimientos: [...(fin.ultimosMovimientos || []), ...movLocales]
+      .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime())
+      .slice(0, 25),
+  };
+}
+
+function EstadoLiq({ estado }) {
+  const pal = { PAGADO: [C.green, '✅ Pagado'], PARCIAL: [C.blue, '◐ Parcial'], PENDIENTE: [C.orange, '🕐 Pendiente'] }[estado] || [C.gray, estado];
+  return <span style={{ background: pal[0] + '1f', color: pal[0], padding: '2px 8px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{pal[1]}</span>;
+}
+
+function FinanzasPanel({ refreshKey }) {
+  const [fin, setFin] = useState(null);
+  const [historial, setHistorial] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [aviso, setAviso] = useState(null);
+  const [aprobando, setAprobando] = useState(null);
+  const [filtroLiq, setFiltroLiq] = useState('pendientes');
+
+  const cargar = useCallback(async (silencioso = false) => {
+    if (!silencioso) setLoading(true);
+    setError(null);
+    try {
+      const [{ data }, hist] = await Promise.all([
+        api.get('/admin/finanzas'),
+        api.get('/admin/payouts').catch(() => ({ data: [] })),
+      ]);
+      setFin(combinarConHospedaje(data, hospedajeLocal()));
+      setHistorial(Array.isArray(hist.data) ? hist.data : []);
+    } catch (err) {
+      setError(apiErrorMsg(err, 'No se pudieron cargar las finanzas'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar, refreshKey]);
+
+  const aprobar = async (l) => {
+    if (!window.confirm(`¿Aprobar el payout de $${fmt(l.pendiente)} para ${l.proveedor} (${fmtMes(l.periodo)})?\n\nSe registrará como pagado y quedará en auditoría.`)) return;
+    setAprobando(l.id);
+    setAviso(null);
+    try {
+      const body = { vertical: l.vertical, periodo: l.periodo };
+      if (l.vertical === 'hospedaje') Object.assign(body, { bruto: l.bruto, reservas: l.reservas });
+      const { data } = await api.post('/admin/payouts/aprobar', body);
+      setAviso({ tipo: 'success', texto: `${data?.message || 'Payout aprobado.'} Referencia: ${data?.referencia || '—'}` });
+      await cargar(true);
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: `No se pudo aprobar el payout: ${apiErrorMsg(err)}` });
+    } finally {
+      setAprobando(null);
+    }
+  };
+
+  if (loading && !fin) {
+    return <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: 30, textAlign: 'center', color: C.gray }}><style>{SPIN_CSS}</style><Spinner color={C.blue} /> Calculando finanzas reales…</div>;
+  }
+  if (error && !fin) {
+    return <Alerta tipo="error">{error} <button type="button" onClick={() => cargar()} style={{ marginLeft: 8, background: 'transparent', border: `1px solid ${C.red}`, color: C.red, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}>Reintentar</button></Alerta>;
+  }
+
+  const r = fin?.resumen || {};
+  const liqs = (fin?.liquidaciones || []).filter((l) => (filtroLiq === 'pendientes' ? l.pendiente > 0.009 : true));
+  const maxMes = Math.max(1, ...(fin?.porMes || []).map((m) => toNum(m.cobrado)));
+  const nPend = (fin?.liquidaciones || []).filter((l) => l.pendiente > 0.009).length;
+
+  return (
+    <div>
+      <style>{SPIN_CSS}</style>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12, fontSize: '0.8rem', color: C.gray }}>
+        <span style={{ background: C.lightBlue, color: C.darkBlue, padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>Comisión plataforma: {fin?.config?.comisionBase}%</span>
+        <span style={{ background: C.lightBlue, color: C.darkBlue, padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>IVA: {fin?.config?.tasaImpuestos}%</span>
+        <span>Se cambian en ⚙️ Ajustes · Calculado: {fmtDate(fin?.generadoEn)}</span>
+        {loading && <Spinner color={C.blue} size={12} />}
+      </div>
+      {error && <Alerta tipo="error" onClose={() => setError(null)}>{error}</Alerta>}
+      {aviso && <Alerta tipo={aviso.tipo} onClose={() => setAviso(null)}>{aviso.texto}</Alerta>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+        <KpiCard icon="💳" label="Cobrado a clientes" value={`$${fmt(r.cobrado)}`} sub={`${r.reservasPagadas || 0} reservas pagadas`} color={C.blue} />
+        <KpiCard icon="📈" label="Comisiones (ingreso)" value={`$${fmt(r.comisiones)}`} sub={`${fin?.config?.comisionBase}% del cobrado`} color={C.green} />
+        <KpiCard icon="🤝" label="Neto a proveedores" value={`$${fmt(r.netoProveedores)}`} sub="cobrado − comisión" color={C.darkBlue} />
+        <KpiCard icon="🏦" label="Pagado a proveedores" value={`$${fmt(r.pagadoProveedores)}`} sub="payouts aprobados" color={C.cyan} />
+        <KpiCard icon="⏳" label="Pendiente de pago" value={`$${fmt(r.pendientePago)}`} sub={`${nPend} liquidaciones`} color={C.orange} />
+        <KpiCard icon="🧾" label="Por cobrar" value={`$${fmt(r.porCobrar)}`} sub="reservas sin pagar" color={C.yellow} />
+        <KpiCard icon="↩️" label="Anulado / reembolsos" value={`$${fmt(r.anulado)}`} sub="canceladas o fallidas" color={C.red} />
+        <KpiCard icon="🏛️" label="IVA incluido" value={`$${fmt(r.ivaIncluido)}`} sub={`al ${fin?.config?.tasaImpuestos}%`} color={C.gray} />
+        <KpiCard icon="🎟️" label="Ticket promedio" value={`$${fmt(r.ticketPromedio)}`} sub="por reserva pagada" color={'#8e44ad'} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, marginTop: 16 }}>
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 20px' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 12 }}>📅 Cobrado por mes (últimos 6)</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 150 }}>
+            {(fin?.porMes || []).map((m) => (
+              <div key={m.periodo} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'flex-end' }} title={`Cobrado $${fmt(m.cobrado)} · Comisión $${fmt(m.comision)}`}>
+                <span style={{ fontSize: '0.68rem', color: C.gray, whiteSpace: 'nowrap' }}>${Math.round(toNum(m.cobrado)).toLocaleString('es-EC')}</span>
+                <div style={{ width: '100%', maxWidth: 42, height: `${Math.max(2, (toNum(m.cobrado) / maxMes) * 110)}px`, background: `linear-gradient(180deg, ${C.blue}, ${C.darkBlue})`, borderRadius: '4px 4px 0 0', position: 'relative' }}>
+                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${toNum(m.cobrado) ? (toNum(m.comision) / toNum(m.cobrado)) * 100 : 0}%`, background: C.green, borderRadius: 0 }} />
+                </div>
+                <span style={{ fontSize: '0.72rem', color: C.text }}>{fmtMes(m.periodo)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 14, fontSize: '0.72rem', color: C.gray, marginTop: 8 }}>
+            <span><span style={{ display: 'inline-block', width: 10, height: 10, background: C.blue, borderRadius: 2, marginRight: 4 }} />Cobrado</span>
+            <span><span style={{ display: 'inline-block', width: 10, height: 10, background: C.green, borderRadius: 2, marginRight: 4 }} />Comisión</span>
+          </div>
+        </div>
+
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', padding: '16px 20px 8px' }}>🧩 Dinero por vertical</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <thead><tr style={{ background: C.lightBlue }}>{['Vertical', 'Pagadas', 'Cobrado', 'Comisión', 'Neto prov.', 'Por cobrar'].map((h) => <th key={h} style={thFin}>{h}</th>)}</tr></thead>
+              <tbody>
+                {(fin?.porVertical || []).map((v) => (
+                  <tr key={v.vertical} style={{ borderTop: `1px solid ${C.border}` }}>
+                    <td style={tdFin}>{VERTICAL_ICON[v.vertical]} <span style={{ textTransform: 'capitalize' }}>{v.vertical}</span>{v.local && <span title="Reservas guardadas en este navegador" style={{ marginLeft: 4, fontSize: '0.65rem', color: C.gray }}>(local)</span>}</td>
+                    <td style={tdFin}>{v.pagadas}/{v.reservas}</td>
+                    <td style={{ ...tdFin, fontWeight: 600 }}>${fmt(v.cobrado)}</td>
+                    <td style={{ ...tdFin, color: C.green }}>${fmt(v.comision)}</td>
+                    <td style={tdFin}>${fmt(v.neto)}</td>
+                    <td style={{ ...tdFin, color: C.orange }}>${fmt(v.porCobrar)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <SectionTitle badge={nPend ? `${nPend} pendientes` : null}>🏦 Liquidaciones a proveedores (Payouts)</SectionTitle>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[['pendientes', 'Pendientes'], ['todas', 'Todas']].map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setFiltroLiq(id)} style={{ background: filtroLiq === id ? C.blue : C.white, color: filtroLiq === id ? 'white' : C.text, border: `1px solid ${filtroLiq === id ? C.blue : C.border}`, borderRadius: 20, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <thead><tr style={{ background: C.lightBlue }}>{['Proveedor', 'Periodo', 'Reservas', 'Bruto', 'Comisión', 'Neto', 'Pagado', 'Pendiente', 'Estado', 'Acción'].map((h) => <th key={h} style={thFin}>{h}</th>)}</tr></thead>
+          <tbody>
+            {liqs.map((l) => (
+              <tr key={l.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                <td style={{ ...tdFin, fontWeight: 600 }}>{VERTICAL_ICON[l.vertical]} {l.proveedor}</td>
+                <td style={tdFin}>{fmtMes(l.periodo)}</td>
+                <td style={tdFin}>{l.reservas}</td>
+                <td style={tdFin}>${fmt(l.bruto)}</td>
+                <td style={{ ...tdFin, color: C.red }}>−${fmt(l.comision)} <span style={{ color: C.gray, fontSize: '0.72rem' }}>({l.comisionPct}%)</span></td>
+                <td style={{ ...tdFin, fontWeight: 600 }}>${fmt(l.neto)}</td>
+                <td style={{ ...tdFin, color: C.green }}>${fmt(l.pagado)}</td>
+                <td style={{ ...tdFin, fontWeight: 700, color: l.pendiente > 0.009 ? C.orange : C.gray }}>${fmt(l.pendiente)}</td>
+                <td style={tdFin}><EstadoLiq estado={l.estado} />{l.aprobadoPor && <div style={{ fontSize: '0.68rem', color: C.gray, marginTop: 2 }}>por {l.aprobadoPor}</div>}</td>
+                <td style={tdFin}>
+                  {l.pendiente > 0.009 ? (
+                    <button type="button" onClick={() => aprobar(l)} disabled={!!aprobando} style={{ background: C.green, color: 'white', border: 'none', borderRadius: 4, padding: '5px 10px', cursor: aprobando ? 'wait' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: aprobando && aprobando !== l.id ? 0.5 : 1 }}>
+                      {aprobando === l.id && <Spinner size={12} />} Aprobar Payout
+                    </button>
+                  ) : <span style={{ color: C.gray, fontSize: '0.8rem' }}>—</span>}
+                </td>
+              </tr>
+            ))}
+            {liqs.length === 0 && (
+              <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: C.gray }}>
+                {filtroLiq === 'pendientes' ? 'No hay payouts pendientes. Todo está liquidado. ✅' : 'Aún no hay reservas pagadas para liquidar.'}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
+        <div>
+          <SectionTitle>💸 Últimos movimientos</SectionTitle>
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflowX: 'auto', maxHeight: 380, overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <thead><tr style={{ background: C.lightBlue, position: 'sticky', top: 0 }}>{['Fecha', 'Tipo', 'Ref', 'Estado', 'Monto', 'Comisión'].map((h) => <th key={h} style={thFin}>{h}</th>)}</tr></thead>
+              <tbody>
+                {(fin?.ultimosMovimientos || []).map((m, i) => (
+                  <tr key={`${m.vertical}-${m.id}-${i}`} style={{ borderTop: `1px solid ${C.border}` }}>
+                    <td style={{ ...tdFin, color: C.gray, whiteSpace: 'nowrap' }}>{fmtDate(m.fecha)}</td>
+                    <td style={tdFin}>{VERTICAL_ICON[m.vertical]}</td>
+                    <td style={{ ...tdFin, fontFamily: 'monospace', fontWeight: 600 }}>{m.ref}</td>
+                    <td style={tdFin}><Badge status={m.estado} /></td>
+                    <td style={{ ...tdFin, fontWeight: 600, color: m.clase === 'anulado' ? C.gray : C.text, textDecoration: m.clase === 'anulado' ? 'line-through' : 'none' }}>${fmt(m.monto)}</td>
+                    <td style={{ ...tdFin, color: C.green }}>{m.comision ? `$${fmt(m.comision)}` : '—'}</td>
+                  </tr>
+                ))}
+                {(fin?.ultimosMovimientos || []).length === 0 && <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: C.gray }}>Sin movimientos aún</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <SectionTitle>📜 Historial de payouts aprobados</SectionTitle>
+          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflowX: 'auto', maxHeight: 380, overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <thead><tr style={{ background: C.lightBlue, position: 'sticky', top: 0 }}>{['Fecha', 'Proveedor', 'Periodo', 'Pagado', 'Referencia', 'Aprobó'].map((h) => <th key={h} style={thFin}>{h}</th>)}</tr></thead>
+              <tbody>
+                {historial.map((h) => (
+                  <tr key={h.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                    <td style={{ ...tdFin, color: C.gray, whiteSpace: 'nowrap' }}>{fmtDate(h.aprobadoEn)}</td>
+                    <td style={tdFin}>{VERTICAL_ICON[h.vertical]} {h.proveedor}</td>
+                    <td style={tdFin}>{fmtMes(h.periodo)}</td>
+                    <td style={{ ...tdFin, fontWeight: 700, color: C.green }}>${fmt(toNum(h.pagado))}</td>
+                    <td style={{ ...tdFin, fontFamily: 'monospace', fontSize: '0.72rem' }}>{h.referencia}</td>
+                    <td style={{ ...tdFin, fontSize: '0.75rem' }}>{h.aprobadoPor || '—'}</td>
+                  </tr>
+                ))}
+                {historial.length === 0 && <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: C.gray }}>Todavía no se ha aprobado ningún payout</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function SoporteTab() {
   const [tickets, setTickets] = useState([]);
@@ -1250,100 +1641,338 @@ function SoporteTab() {
   );
 }
 
-function AuditoriaTab() {
+// ── Auditoría (datos reales: admin_audit_logs + eventos del sistema) ─────────
+const AUD_CATEGORIAS = { usuario: '👤 Usuarios', sesion: '🔐 Sesiones', reserva: '🎫 Reservas', soporte: '🎧 Soporte', liquidacion: '🏦 Payouts', config: '⚙️ Ajustes' };
+const AUD_POR_PAGINA = 25;
+
+function catLabel(c) {
+  if (AUD_CATEGORIAS[c]) return AUD_CATEGORIAS[c];
+  if (String(c).startsWith('reserva')) return AUD_CATEGORIAS.reserva;
+  return c;
+}
+function catGrupo(c) { return String(c).startsWith('reserva') ? 'reserva' : c; }
+
+function tiempoRelativo(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (!Number.isFinite(diff)) return '';
+  if (diff < 60) return 'hace segundos';
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+  if (diff < 86400 * 30) return `hace ${Math.floor(diff / 86400)} d`;
+  return '';
+}
+
+function exportarCsv(filas) {
+  const cols = ['fecha', 'origen', 'categoria', 'actor', 'accion', 'entidad', 'detalle', 'ip'];
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [cols.join(','), ...filas.map((f) => cols.map((c) => esc(f[c])).join(','))].join('\n');
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `auditoria-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function AuditoriaTab({ refreshKey }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [origen, setOrigen] = useState('todos');
+  const [categoria, setCategoria] = useState('todas');
+  const [busqueda, setBusqueda] = useState('');
+  const [pagina, setPagina] = useState(1);
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data } = await api.get('/admin/auditoria', { params: { limit: 500 } });
+      setItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (err) {
+      setError(apiErrorMsg(err, 'No se pudo cargar la auditoría'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar, refreshKey]);
+  useEffect(() => { setPagina(1); }, [origen, categoria, busqueda]);
+
+  const q = busqueda.trim().toLowerCase();
+  const filtrados = items.filter((i) =>
+    (origen === 'todos' || i.origen === origen)
+    && (categoria === 'todas' || catGrupo(i.categoria) === categoria)
+    && (!q || [i.actor, i.accion, i.entidad, i.detalle, i.ip].some((v) => String(v || '').toLowerCase().includes(q))));
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / AUD_POR_PAGINA));
+  const visibles = filtrados.slice((pagina - 1) * AUD_POR_PAGINA, pagina * AUD_POR_PAGINA);
+  const categorias = [...new Set(items.map((i) => catGrupo(i.categoria)))];
+  const hoy = new Date().toDateString();
+  const nHoy = items.filter((i) => new Date(i.fecha).toDateString() === hoy).length;
+
+  const selStyle = { padding: '7px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: C.white, fontSize: '0.85rem' };
+
   return (
     <div>
-      <div style={{ background: '#ffebee', border: '1px solid #d32f2f', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <style>{SPIN_CSS}</style>
+      <div style={{ background: C.lightBlue, border: `1px solid ${C.blue}`, borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: '1.2rem' }}>🛡️</span>
-        <span style={{ fontSize: '0.85rem', color: '#d32f2f' }}>
-          <strong>Registro de Auditoría (Audit Trail).</strong> Historial inmutable de acciones críticas ejecutadas por el equipo de administración. Cumplimiento de seguridad.
+        <span style={{ fontSize: '0.85rem', color: C.darkBlue, flex: 1 }}>
+          <strong>Registro de Auditoría.</strong> Acciones del equipo de administración (usuarios, reservas, payouts, ajustes, tickets) y eventos del sistema (registros, inicios de sesión y reservas) leídos de la base de datos.
         </span>
+        {loading && <Spinner color={C.blue} size={14} />}
       </div>
 
-      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+      {error && <Alerta tipo="error" onClose={() => setError(null)}>{error} <button type="button" onClick={cargar} style={{ marginLeft: 8, background: 'transparent', border: `1px solid ${C.red}`, color: C.red, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}>Reintentar</button></Alerta>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 16 }}>
+        <KpiCard icon="📚" label="Eventos registrados" value={items.length} color={C.blue} />
+        <KpiCard icon="🧑‍💼" label="Acciones de admin" value={items.filter((i) => i.origen === 'ADMIN').length} color={C.darkBlue} />
+        <KpiCard icon="🖥️" label="Eventos del sistema" value={items.filter((i) => i.origen === 'SISTEMA').length} color={C.cyan} />
+        <KpiCard icon="📅" label="Hoy" value={nHoy} color={C.green} />
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+        <input type="search" placeholder="Buscar por usuario, acción, entidad, IP…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ ...selStyle, flex: '1 1 240px' }} aria-label="Buscar en auditoría" />
+        <select value={origen} onChange={(e) => setOrigen(e.target.value)} style={selStyle} aria-label="Origen">
+          <option value="todos">Todos los orígenes</option>
+          <option value="ADMIN">Solo administración</option>
+          <option value="SISTEMA">Solo sistema</option>
+        </select>
+        <select value={categoria} onChange={(e) => setCategoria(e.target.value)} style={selStyle} aria-label="Categoría">
+          <option value="todas">Todas las categorías</option>
+          {categorias.map((c) => <option key={c} value={c}>{catLabel(c)}</option>)}
+        </select>
+        <button type="button" onClick={() => exportarCsv(filtrados)} disabled={!filtrados.length} style={{ ...selStyle, cursor: filtrados.length ? 'pointer' : 'not-allowed', fontWeight: 600 }}>⬇️ Exportar CSV</button>
+      </div>
+
+      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
           <thead>
-            <tr style={{ background: C.bg, color: C.text }}>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Fecha y Hora</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Administrador</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Acción</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Entidad Afectada</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>IP Origen</th>
+            <tr style={{ background: C.lightBlue }}>
+              {['Fecha y hora', 'Origen', 'Usuario / Actor', 'Acción', 'Entidad afectada', 'Detalle', 'IP'].map((h) => <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: C.darkBlue, whiteSpace: 'nowrap' }}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
-            {[
-              { time: 'Hace 5 min', admin: 'admin_principal@booking.ec', action: 'Aprobó Payout', target: 'TravelEcuador Pro', ip: '192.168.1.45' },
-              { time: 'Hace 32 min', admin: 'soporte_maria@booking.ec', action: 'Canceló Reserva', target: 'PNR: ABC12', ip: '192.168.1.112' },
-              { time: 'Hace 2 horas', admin: 'sysadmin@booking.ec', action: 'Modificó Ajuste Global', target: 'Comisión Base (Cambio: 10% -> 15%)', ip: '200.10.20.5' },
-              { time: 'Hace 5 horas', admin: 'qc_team@booking.ec', action: 'Aprobó Proveedor', target: 'RentAuto Ecuador', ip: '192.168.1.88' },
-            ].map((log, i) => (
-              <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
-                <td style={{ padding: '10px 14px', color: C.gray }}>{log.time}</td>
-                <td style={{ padding: '10px 14px', fontWeight: 600, color: C.darkBlue }}>{log.admin}</td>
-                <td style={{ padding: '10px 14px' }}>
-                  <span style={{ background: C.lightBlue, padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>{log.action}</span>
+            {visibles.map((log) => (
+              <tr key={log.id} style={{ borderTop: `1px solid ${C.border}`, verticalAlign: 'top' }}>
+                <td style={{ padding: '9px 14px', whiteSpace: 'nowrap' }}>
+                  <div>{fmtDate(log.fecha)}</div>
+                  <div style={{ fontSize: '0.7rem', color: C.gray }}>{tiempoRelativo(log.fecha)}</div>
                 </td>
-                <td style={{ padding: '10px 14px', fontFamily: 'monospace' }}>{log.target}</td>
-                <td style={{ padding: '10px 14px', color: C.gray, fontSize: '0.8rem' }}>{log.ip}</td>
+                <td style={{ padding: '9px 14px' }}>
+                  <span style={{ background: log.origen === 'ADMIN' ? C.darkBlue : C.border, color: log.origen === 'ADMIN' ? 'white' : C.text, padding: '2px 8px', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700 }}>{log.origen === 'ADMIN' ? 'Admin' : 'Sistema'}</span>
+                </td>
+                <td style={{ padding: '9px 14px', fontWeight: 600, color: C.darkBlue, wordBreak: 'break-all' }}>{log.actor}</td>
+                <td style={{ padding: '9px 14px' }}>
+                  <span style={{ background: C.lightBlue, padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{log.accion}</span>
+                  <div style={{ fontSize: '0.68rem', color: C.gray, marginTop: 3 }}>{catLabel(log.categoria)}</div>
+                </td>
+                <td style={{ padding: '9px 14px', fontFamily: 'monospace', fontSize: '0.78rem' }}>{log.entidad}</td>
+                <td style={{ padding: '9px 14px', color: C.gray, fontSize: '0.78rem', maxWidth: 280 }}>{log.detalle || '—'}</td>
+                <td style={{ padding: '9px 14px', color: C.gray, fontSize: '0.78rem', fontFamily: 'monospace' }}>{log.ip || '—'}</td>
               </tr>
             ))}
+            {!loading && visibles.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: C.gray }}>
+                {items.length ? 'Ningún evento coincide con los filtros.' : 'Aún no hay eventos registrados.'}
+              </td></tr>
+            )}
+            {loading && items.length === 0 && <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: C.gray }}>Cargando registros…</td></tr>}
           </tbody>
         </table>
       </div>
+
+      {filtrados.length > AUD_POR_PAGINA && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: '0.82rem', color: C.gray }}>
+          <span>{filtrados.length} eventos · página {pagina} de {totalPaginas}</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={pagina === 1} style={{ ...selStyle, cursor: pagina === 1 ? 'not-allowed' : 'pointer' }}>‹ Anterior</button>
+            <button type="button" onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={pagina === totalPaginas} style={{ ...selStyle, cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer' }}>Siguiente ›</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+const aFormularioConfig = (cfg) => ({ ...cfg, comisionBase: String(cfg.comisionBase), tasaImpuestos: String(cfg.tasaImpuestos) });
+const configIgual = (a, b) => !!a && !!b && Object.keys(CONFIG_DEFAULTS).every((k) => a[k] === b[k]);
+
+function ToggleAjuste({ titulo, descripcion, checked, onChange, disabled, color = C.green, tituloColor, ultimo }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: ultimo ? 0 : 16, paddingBottom: ultimo ? 0 : 16, borderBottom: ultimo ? 'none' : `1px solid ${C.border}`, cursor: disabled ? 'default' : 'pointer' }}>
+      <div>
+        <div style={{ fontWeight: 700, color: tituloColor || C.text }}>{titulo}</div>
+        <div style={{ fontSize: '0.8rem', color: C.gray }}>{descripcion}</div>
+      </div>
+      <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} style={{ transform: 'scale(1.5)', accentColor: color, cursor: disabled ? 'default' : 'pointer' }} />
+    </label>
+  );
+}
+
 function ConfiguracionTab() {
+  const [form, setForm] = useState(() => aFormularioConfig(CONFIG_DEFAULTS));
+  const [original, setOriginal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errores, setErrores] = useState({});
+  const [mensaje, setMensaje] = useState(null); // { tipo, texto }
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    setMensaje(null);
+    setErrores({});
+    try {
+      const { data } = await api.get('/admin/config');
+      const cfg = normalizarConfig(data);
+      setOriginal(cfg);
+      setForm(aFormularioConfig(cfg));
+    } catch (err) {
+      const cfg = { ...CONFIG_DEFAULTS };
+      setOriginal(cfg);
+      setForm(aFormularioConfig(cfg));
+      setMensaje(isNotFound(err)
+        ? { tipo: 'warning', texto: 'GET /admin/config aún no existe en el backend. Se muestran los valores por defecto; guardar fallará hasta que se cree PUT /admin/config.' }
+        : { tipo: 'error', texto: `No se pudo cargar la configuración actual: ${apiErrorMsg(err)} Se muestran los valores por defecto.` });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  useEffect(() => {
+    if (mensaje?.tipo !== 'success') return undefined;
+    const t = setTimeout(() => setMensaje(null), 4000);
+    return () => clearTimeout(t);
+  }, [mensaje]);
+
+  // ── Handlers ──
+  const onPorcentaje = (campo, etiqueta) => (e) => {
+    const valor = e.target.value;
+    setForm((f) => ({ ...f, [campo]: valor }));
+    setErrores((er) => ({ ...er, [campo]: validarPorcentaje(valor, etiqueta) }));
+  };
+  const onComisionChange = onPorcentaje('comisionBase', 'La comisión');
+  const onImpuestosChange = onPorcentaje('tasaImpuestos', 'La tasa de impuestos');
+  const onToggle = (campo) => (e) => {
+    const checked = e.target.checked;
+    setForm((f) => ({ ...f, [campo]: checked }));
+  };
+
+  const payload = {
+    comisionBase: Number(form.comisionBase),
+    tasaImpuestos: Number(form.tasaImpuestos),
+    stripeEnabled: form.stripeEnabled,
+    emailsEnabled: form.emailsEnabled,
+    maintenanceMode: form.maintenanceMode,
+  };
+  const hayErrores = Boolean(errores.comisionBase || errores.tasaImpuestos);
+  const hayCambios = !!original && !configIgual(payload, original);
+  const bloqueado = loading || saving;
+
+  const descartar = () => {
+    if (!original) return;
+    setForm(aFormularioConfig(original));
+    setErrores({});
+    setMensaje(null);
+  };
+
+  const guardar = async () => {
+    const nuevos = {
+      comisionBase: validarPorcentaje(form.comisionBase, 'La comisión'),
+      tasaImpuestos: validarPorcentaje(form.tasaImpuestos, 'La tasa de impuestos'),
+    };
+    setErrores(nuevos);
+    if (nuevos.comisionBase || nuevos.tasaImpuestos) {
+      setMensaje({ tipo: 'error', texto: 'Corrige los campos marcados antes de guardar.' });
+      return;
+    }
+    if (payload.maintenanceMode && !original?.maintenanceMode
+      && !window.confirm('Activar el Modo Mantenimiento bloqueará el acceso público a toda la plataforma. ¿Deseas continuar?')) {
+      return;
+    }
+    setSaving(true);
+    setMensaje(null);
+    try {
+      const body = { ...payload };
+      const { data } = await api.put('/admin/config', body);
+      // Si el backend devuelve la configuración persistida, se usa como fuente de verdad.
+      const src = data?.data ?? data;
+      const devuelveConfig = Array.isArray(src) || (src && typeof src === 'object' && Object.keys(CONFIG_DEFAULTS).some((k) => k in src));
+      const cfg = devuelveConfig ? normalizarConfig(Array.isArray(src) ? src : { ...body, ...src }) : body;
+      setOriginal(cfg);
+      setForm(aFormularioConfig(cfg));
+      setMensaje({ tipo: 'success', texto: 'Configuración guardada correctamente.' });
+    } catch (err) {
+      setMensaje({
+        tipo: 'error',
+        texto: isNotFound(err)
+          ? 'PUT /admin/config todavía no existe en el backend. Los cambios NO se guardaron.'
+          : `No se pudieron guardar los cambios: ${apiErrorMsg(err)}`,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle = (err) => ({ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 6, border: `1px solid ${err ? C.red : C.border}`, background: bloqueado ? C.bg : C.white, outline: 'none' });
+  const errStyle = { fontSize: '0.75rem', color: C.red, marginTop: 4 };
+
   return (
     <div>
+      <style>{SPIN_CSS}</style>
       <div style={{ background: '#f5f5f5', border: `1px solid ${C.gray}`, borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: '1.2rem' }}>⚙️</span>
-        <span style={{ fontSize: '0.85rem', color: C.text }}>
+        <span style={{ fontSize: '0.85rem', color: C.text, flex: 1 }}>
           <strong>Ajustes Globales del Sistema.</strong> Configuración central del comportamiento de la plataforma Booking Ecuador.
         </span>
+        {loading && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: C.gray }}><Spinner color={C.blue} size={12} /> Cargando…</span>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      {mensaje && <Alerta tipo={mensaje.tipo} onClose={() => setMensaje(null)}>{mensaje.texto}</Alerta>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
         {/* Panel Finanzas Globales */}
         <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px' }}>
           <SectionTitle badge="Global">Finanzas y Comisiones</SectionTitle>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>Comisión Base de la Plataforma (%)</label>
-            <input type="number" defaultValue={15} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${C.border}` }} />
+            <label htmlFor="cfg-comision" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>Comisión Base de la Plataforma (%)</label>
+            <input id="cfg-comision" type="number" min={0} max={100} step="0.01" inputMode="decimal" value={form.comisionBase} onChange={onComisionChange} disabled={bloqueado} aria-invalid={!!errores.comisionBase} style={inputStyle(errores.comisionBase)} />
+            {errores.comisionBase
+              ? <div style={errStyle}>{errores.comisionBase}</div>
+              : <div style={{ fontSize: '0.75rem', color: C.gray, marginTop: 4 }}>Se descuenta del total de cada reserva al liquidar al proveedor.</div>}
           </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>Tasa de Impuestos (IVA %)</label>
-            <input type="number" defaultValue={15} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${C.border}` }} />
+          <div>
+            <label htmlFor="cfg-iva" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: 6 }}>Tasa de Impuestos (IVA %)</label>
+            <input id="cfg-iva" type="number" min={0} max={100} step="0.01" inputMode="decimal" value={form.tasaImpuestos} onChange={onImpuestosChange} disabled={bloqueado} aria-invalid={!!errores.tasaImpuestos} style={inputStyle(errores.tasaImpuestos)} />
+            {errores.tasaImpuestos && <div style={errStyle}>{errores.tasaImpuestos}</div>}
           </div>
-          <button style={{ background: C.blue, color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontWeight: 600 }}>Guardar Cambios</button>
         </div>
 
         {/* Panel Integraciones */}
         <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px' }}>
           <SectionTitle badge="APIs">Pasarelas y Servicios</SectionTitle>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>Stripe Payments</div>
-              <div style={{ fontSize: '0.8rem', color: C.gray }}>Modo de pruebas (Test Mode)</div>
-            </div>
-            <input type="checkbox" defaultChecked style={{ transform: 'scale(1.5)', accentColor: C.green }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>Envío de Emails (Resend/SendGrid)</div>
-              <div style={{ fontSize: '0.8rem', color: C.gray }}>Envío de comprobantes automático</div>
-            </div>
-            <input type="checkbox" defaultChecked style={{ transform: 'scale(1.5)', accentColor: C.green }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: C.red }}>Modo Mantenimiento</div>
-              <div style={{ fontSize: '0.8rem', color: C.gray }}>Bloquea el acceso público a toda la plataforma</div>
-            </div>
-            <input type="checkbox" style={{ transform: 'scale(1.5)', accentColor: C.red }} />
-          </div>
+          <ToggleAjuste titulo="Pasarela de Pagos (Stripe – Test Mode)" descripcion="Si se apaga, se avisa en toda la web que los pagos en línea están suspendidos" checked={form.stripeEnabled} onChange={onToggle('stripeEnabled')} disabled={bloqueado} />
+          <ToggleAjuste titulo="Envío de Emails (SMTP)" descripcion="Si se apaga, el backend deja de enviar facturas/comprobantes por correo" checked={form.emailsEnabled} onChange={onToggle('emailsEnabled')} disabled={bloqueado} />
+          <ToggleAjuste titulo="Modo Mantenimiento" tituloColor={C.red} color={C.red} descripcion="Muestra una pantalla de mantenimiento a todos los visitantes (los administradores siguen entrando)" checked={form.maintenanceMode} onChange={onToggle('maintenanceMode')} disabled={bloqueado} ultimo />
+        </div>
+      </div>
+
+      {/* Barra de acciones (un único PUT guarda todos los ajustes) */}
+      <div style={{ marginTop: 20, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.8rem', color: hayCambios ? C.orange : C.gray, fontWeight: hayCambios ? 600 : 400 }}>
+          {loading ? 'Obteniendo configuración actual…' : hayCambios ? '● Tienes cambios sin guardar' : 'Sin cambios pendientes'}
+        </span>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" onClick={descartar} disabled={!hayCambios || saving} style={{ background: C.white, color: C.text, border: `1px solid ${C.border}`, borderRadius: 6, padding: '8px 16px', cursor: !hayCambios || saving ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: !hayCambios || saving ? 0.55 : 1 }}>
+            Descartar
+          </button>
+          <button type="button" onClick={guardar} disabled={bloqueado || hayErrores || !hayCambios} style={{ background: C.blue, color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: bloqueado || hayErrores || !hayCambios ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: bloqueado || hayErrores || !hayCambios ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {saving && <Spinner size={13} />}
+            {saving ? 'Guardando…' : 'Guardar Cambios'}
+          </button>
         </div>
       </div>
     </div>
@@ -1354,6 +1983,8 @@ export function AdminDashboard() {
   const [activeTab,setActiveTab]=useState('observabilidad');
   const [stats,setStats]=useState(null);
   const [users,setUsers]=useState([]);
+  const [usersError,setUsersError]=useState(null);
+  const [refreshKey,setRefreshKey]=useState(0);
   const [reservas,setReservas]=useState({vuelos:[],autos:[],atracciones:[],hospedaje:[]});
   const [serviceHealth,setServiceHealth]=useState([]);
   const [loadingStats,setLoadingStats]=useState(true);
@@ -1451,8 +2082,14 @@ export function AdminDashboard() {
 
   const fetchUsers=useCallback(async(silent=false)=>{
     if(!silent) setLoadingUsers(true);
-    try{const{data}=await api.get('/admin/users');setUsers(Array.isArray(data)?data:[]);}
-    catch{setUsers([]);}
+    setUsersError(null);
+    try{
+      const{data}=await api.get('/admin/users');
+      const lista=Array.isArray(data)?data:(Array.isArray(data?.data)?data.data:(Array.isArray(data?.users)?data.users:null));
+      if(!lista) throw new Error('Respuesta inesperada del backend en /admin/users');
+      setUsers(lista);
+    }
+    catch(err){setUsers([]);setUsersError(err?.response?apiErrorMsg(err,'No se pudieron cargar los usuarios'):(err?.message||apiErrorMsg(err)));}
     finally{if(!silent) setLoadingUsers(false);}
   },[]);
 
@@ -1512,7 +2149,7 @@ export function AdminDashboard() {
   },[activeTab]);
 
   const handleRefresh=()=>{
-    fetchStats(true);checkServices();
+    fetchStats(true);checkServices();setRefreshKey(k=>k+1);
     if(activeTab==='gestion'){fetchUsers(true);fetchReservas(true);}
   };
 
@@ -1544,7 +2181,7 @@ export function AdminDashboard() {
         </div>
       </div>
       <div style={{maxWidth:1280,margin:'0 auto',padding:'24px'}}>
-        {activeTab==='observabilidad'&&<ObservabilidadTab stats={stats} loadingStats={loadingStats} serviceHealth={serviceHealth}/>}
+        {activeTab==='observabilidad'&&<ObservabilidadTab stats={stats} loadingStats={loadingStats} serviceHealth={serviceHealth} refreshKey={refreshKey}/>}
         {activeTab==='microservicios'&&(
           <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
             <MicroserviciosTab/>
@@ -1554,10 +2191,9 @@ export function AdminDashboard() {
             </div>
           </div>
         )}
-        {activeTab==='gestion'&&<GestionTab users={users} reservas={reservas} loadingUsers={loadingUsers} loadingReservas={loadingReservas} onRefresh={handleRefresh}/>}
-        {activeTab==='finanzas'&&<FinanzasTab/>}
+        {activeTab==='gestion'&&<GestionTab users={users} usersError={usersError} onRetryUsers={()=>fetchUsers()} reservas={reservas} loadingUsers={loadingUsers} loadingReservas={loadingReservas} onRefresh={handleRefresh}/>}
         {activeTab==='soporte'&&<SoporteTab/>}
-        {activeTab==='auditoria'&&<AuditoriaTab/>}
+        {activeTab==='auditoria'&&<AuditoriaTab refreshKey={refreshKey}/>}
         {activeTab==='configuracion'&&<ConfiguracionTab/>}
       </div>
     </div>
