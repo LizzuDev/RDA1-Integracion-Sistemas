@@ -40,10 +40,12 @@ function KpiCard({label,value,sub,color,icon}) {
   );
 }
 
+const ESTADOS_ES = { CONFIRMED:'Confirmada', PAID:'Pagada', CANCELLED:'Cancelada', REJECTED:'Rechazada', PENDING:'Pendiente', RESERVED:'Reservada', COMPLETED:'Completada', REFUNDED:'Reembolsada', EXPIRED:'Expirada' };
+
 function Badge({status}) {
   return (
     <span style={{background:estadoColor(status)+'22',color:estadoColor(status),padding:'2px 8px',borderRadius:20,fontSize:'0.75rem',fontWeight:600}}>
-      {status||'—'}
+      {ESTADOS_ES[String(status||'').toUpperCase()]||status||'—'}
     </span>
   );
 }
@@ -748,6 +750,229 @@ function ProveedoresTab() {
   );
 }
 
+// ── Vistas legibles para los modales de Gestión (historial y detalle de reserva) ──
+const VERTICAL_INFO = {
+  vuelos: { icon: '✈️', label: 'Vuelos' }, vuelo: { icon: '✈️', label: 'Vuelo' },
+  autos: { icon: '🚗', label: 'Autos' }, auto: { icon: '🚗', label: 'Auto' },
+  atracciones: { icon: '🎡', label: 'Atracciones' }, atraccion: { icon: '🎡', label: 'Atracción' },
+  hospedaje: { icon: '🏨', label: 'Hospedaje' },
+};
+
+const ETIQUETAS = {
+  idReserva: 'ID de reserva', pnr: 'Código (PNR)', propietarioId: 'ID del usuario', estado: 'Estado', status: 'Estado',
+  moneda: 'Moneda', currency: 'Moneda', tarifaBase: 'Tarifa base', impuestos: 'Impuestos', total: 'Total',
+  referenciaPago: 'Referencia de pago', fechaCreacion: 'Creada', fechaActualizacion: 'Actualizada',
+  createdAt: 'Creada', updatedAt: 'Actualizada', created_at: 'Creada', updated_at: 'Actualizada',
+  corteCheckIn: 'Cierre de check-in', version: 'Versión', pasajeros: 'Pasajeros', itinerarios: 'Itinerario',
+  tarifas: 'Tarifas', boletos: 'Boletos', checkin: 'Check-in', idPasajero: 'ID pasajero', passengerId: 'Ref. pasajero',
+  tipo: 'Tipo', adultoAsociadoId: 'Adulto asociado', nombre: 'Nombre', apellido: 'Apellido',
+  tipoDocumento: 'Tipo de documento', numeroDocumento: 'N.º de documento', fechaNacimiento: 'Fecha de nacimiento',
+  email: 'Correo', telefono: 'Teléfono', phone: 'Teléfono', booker: 'Titular de la reserva', vehicle: 'Vehículo',
+  totalPrice: 'Precio', customerEmail: 'Correo del cliente', customerName: 'Cliente', firstName: 'Nombre',
+  lastName: 'Apellido', name: 'Nombre', origen: 'Origen', destino: 'Destino', fechaSalida: 'Salida',
+  fechaLlegada: 'Llegada', numeroVuelo: 'N.º de vuelo', aerolinea: 'Aerolínea', clase: 'Clase', asiento: 'Asiento',
+  numeroBoleto: 'N.º de boleto', pickUp: 'Retiro', dropOff: 'Devolución', pickupDate: 'Retiro', dropoffDate: 'Devolución',
+  quantity: 'Cantidad', date: 'Fecha', checkIn: 'Entrada', checkOut: 'Salida', huespedes: 'Huéspedes',
+};
+const ENUMS_ES = { ADULT: 'Adulto', CHILD: 'Niño', INFANT: 'Infante', NATIONAL_ID: 'Cédula', PASSPORT: 'Pasaporte', ID_CARD: 'Cédula', DRIVER_LICENSE: 'Licencia', MALE: 'Masculino', FEMALE: 'Femenino', ECONOMY: 'Económica', BUSINESS: 'Ejecutiva', FIRST: 'Primera' };
+const CLAVES_ESTADO = new Set(['estado', 'status']);
+const CLAVES_DINERO = /^(total|tarifaBase|impuestos|precio|price|amount|monto|subtotal|base|taxes|tax)$/i;
+const ISO_FECHA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+function etiqueta(k) {
+  if (ETIQUETAS[k]) return ETIQUETAS[k];
+  const t = String(k).replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function fmtDinero(v, moneda = 'USD') {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return `${n.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${moneda}`;
+}
+function esPrimitivo(v) { return v === null || v === undefined || typeof v !== 'object'; }
+
+function Valor({ k, v, moneda }) {
+  if (v === null || v === undefined || v === '') return <span style={{ color: '#9a9a9a' }}>—</span>;
+  if (typeof v === 'boolean') return <span>{v ? 'Sí' : 'No'}</span>;
+  if (CLAVES_ESTADO.has(k)) return <Badge status={String(v)} />;
+  if (CLAVES_DINERO.test(k) && Number.isFinite(Number(v))) return <span style={{ fontWeight: 600 }}>{fmtDinero(v, moneda)}</span>;
+  if (typeof v === 'string' && ENUMS_ES[v]) return <span>{ENUMS_ES[v]}</span>;
+  if (typeof v === 'string' && ISO_FECHA.test(v)) return <span>{fmtDate(v)}</span>;
+  if (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v)) return <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', wordBreak: 'break-all' }}>{v}</span>;
+  return <span style={{ wordBreak: 'break-word' }}>{String(v)}</span>;
+}
+
+/** Aplana objetos anidados de un nivel: { documento: { tipo } } → "Documento · tipo" */
+function camposPlanos(obj, prefijo = '') {
+  const out = [];
+  Object.entries(obj || {}).forEach(([k, v]) => {
+    if (esPrimitivo(v)) out.push([k, prefijo ? `${prefijo} · ${etiqueta(k).toLowerCase()}` : etiqueta(k), v]);
+    else if (!Array.isArray(v) && !prefijo) out.push(...camposPlanos(v, etiqueta(k)));
+    else if (Array.isArray(v) && v.every(esPrimitivo)) out.push([k, prefijo ? `${prefijo} · ${etiqueta(k).toLowerCase()}` : etiqueta(k), v.join(', ')]);
+  });
+  return out;
+}
+
+function GridCampos({ obj, moneda, omitir = [] }) {
+  const campos = camposPlanos(obj).filter(([k]) => !omitir.includes(k));
+  if (!campos.length) return <div style={{ color: C.gray, fontSize: '0.85rem' }}>Sin datos.</div>;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px 18px' }}>
+      {campos.map(([k, label, v], i) => (
+        <div key={`${label}-${i}`} style={{ minWidth: 0 }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: C.gray, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 2 }}>{label}</div>
+          <div style={{ fontSize: '0.88rem', color: C.text }}><Valor k={k} v={v} moneda={moneda} /></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Seccion({ titulo, contador, children }) {
+  return (
+    <section style={{ marginTop: 18 }}>
+      <h4 style={{ margin: '0 0 10px', fontSize: '0.9rem', color: C.darkBlue, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {titulo}
+        {contador !== undefined && <span style={{ background: C.lightBlue, color: C.darkBlue, borderRadius: 20, padding: '1px 8px', fontSize: '0.72rem' }}>{contador}</span>}
+      </h4>
+      {children}
+    </section>
+  );
+}
+
+const tarjeta = { background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 14px' };
+
+function JsonTecnico({ data }) {
+  return (
+    <details style={{ marginTop: 20 }}>
+      <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: C.gray, fontWeight: 600 }}>Ver datos técnicos (JSON)</summary>
+      <pre style={{ background: C.bg, padding: 12, borderRadius: 6, fontSize: '0.75rem', marginTop: 8, overflowX: 'auto' }}>{JSON.stringify(data, null, 2)}</pre>
+    </details>
+  );
+}
+
+function DetalleReservaVista({ data, tipo }) {
+  if (!data || typeof data !== 'object' || (Object.keys(data).length === 1 && data.mensaje)) {
+    return <div style={{ textAlign: 'center', padding: '32px 0', color: C.gray }}>{data?.mensaje || 'No hay detalles para esta reserva.'}</div>;
+  }
+  const moneda = data.moneda || data.currency || data.totalPrice?.currency || data.precio?.currency || 'USD';
+  const codigo = data.pnr || data.bookingReference || data.reservation_id || data.orderId || String(data.idReserva || data.id || '').slice(0, 8).toUpperCase();
+  const estado = data.estado || data.status;
+  const total = data.total ?? data.totalPrice?.total ?? data.precio?.total ?? data.total_price;
+  const creada = data.fechaCreacion || data.createdAt || data.created_at;
+  const info = VERTICAL_INFO[tipo] || { icon: '📄', label: tipo };
+
+  const resumenKeys = ['pnr', 'estado', 'status', 'total', 'moneda', 'currency', 'fechaCreacion', 'createdAt', 'created_at'];
+  const escalares = {};
+  const objetos = [];
+  const listas = [];
+  Object.entries(data).forEach(([k, v]) => {
+    if (resumenKeys.includes(k)) return;
+    if (esPrimitivo(v)) escalares[k] = v;
+    else if (Array.isArray(v)) { if (v.length) listas.push([k, v]); }
+    else if (k === 'totalPrice' || k === 'precio') objetos.push([k, v]);
+    else objetos.push([k, v]);
+  });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, background: C.lightBlue, borderRadius: 10, padding: '14px 18px' }}>
+        <div style={{ fontSize: '2rem' }}>{info.icon}</div>
+        <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+          <div style={{ fontSize: '0.72rem', color: C.gray, fontWeight: 600, textTransform: 'uppercase' }}>{info.label} · Código</div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 700, color: C.darkBlue, letterSpacing: '0.04em' }}>{codigo || '—'}</div>
+          {creada && <div style={{ fontSize: '0.78rem', color: C.gray }}>Creada {fmtDate(creada)}</div>}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          {estado && <div style={{ marginBottom: 6 }}><Badge status={estado} /></div>}
+          {total !== undefined && total !== null && <div style={{ fontSize: '1.2rem', fontWeight: 700, color: C.text }}>{fmtDinero(total, moneda)}</div>}
+        </div>
+      </div>
+
+      {Object.keys(escalares).length > 0 && (
+        <Seccion titulo="Información general">
+          <div style={tarjeta}><GridCampos obj={escalares} moneda={moneda} /></div>
+        </Seccion>
+      )}
+
+      {objetos.map(([k, v]) => (
+        <Seccion key={k} titulo={etiqueta(k)}>
+          <div style={tarjeta}><GridCampos obj={v} moneda={moneda} /></div>
+        </Seccion>
+      ))}
+
+      {listas.map(([k, arr]) => (
+        <Seccion key={k} titulo={etiqueta(k)} contador={arr.length}>
+          {arr.every(esPrimitivo) ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{arr.map((x, i) => <span key={i} style={{ background: C.bg, borderRadius: 4, padding: '2px 8px', fontSize: '0.8rem' }}>{String(x)}</span>)}</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {arr.map((item, i) => {
+                const nombre = [item.nombre || item.firstName || item.name, item.apellido || item.lastName].filter(Boolean).join(' ');
+                return (
+                  <div key={i} style={tarjeta}>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: C.text, marginBottom: 8 }}>
+                      {nombre || `${etiqueta(k).replace(/s$/, '')} ${i + 1}`}
+                      {item.tipo && <span style={{ marginLeft: 8, background: C.bg, borderRadius: 4, padding: '1px 6px', fontSize: '0.7rem', fontWeight: 600, color: C.gray }}>{ENUMS_ES[item.tipo] || item.tipo}</span>}
+                    </div>
+                    <GridCampos obj={item} moneda={moneda} omitir={nombre ? ['nombre', 'apellido', 'firstName', 'lastName', 'name', 'tipo'] : ['tipo']} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Seccion>
+      ))}
+
+      <JsonTecnico data={data} />
+    </div>
+  );
+}
+
+function HistorialUsuarioVista({ data }) {
+  const grupos = Object.entries(data || {}).filter(([, v]) => Array.isArray(v));
+  const total = grupos.reduce((s, [, v]) => s + v.length, 0);
+  if (!total) return <div style={{ textAlign: 'center', padding: '32px 0', color: C.gray }}>🗂️ Este usuario aún no tiene reservas.</div>;
+  return (
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 4 }}>
+        <div style={{ ...tarjeta, flex: '1 1 120px', background: C.lightBlue, borderColor: C.lightBlue }}>
+          <div style={{ fontSize: '0.72rem', color: C.gray, fontWeight: 600, textTransform: 'uppercase' }}>Total reservas</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: C.darkBlue }}>{total}</div>
+        </div>
+        {grupos.map(([k, v]) => (
+          <div key={k} style={{ ...tarjeta, flex: '1 1 120px' }}>
+            <div style={{ fontSize: '0.72rem', color: C.gray, fontWeight: 600, textTransform: 'uppercase' }}>{VERTICAL_INFO[k]?.icon} {VERTICAL_INFO[k]?.label || etiqueta(k)}</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: C.text }}>{v.length}</div>
+          </div>
+        ))}
+      </div>
+      {grupos.filter(([, v]) => v.length).map(([k, v]) => (
+        <Seccion key={k} titulo={`${VERTICAL_INFO[k]?.icon || ''} ${VERTICAL_INFO[k]?.label || etiqueta(k)}`} contador={v.length}>
+          <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: C.bg }}>
+                  {['Código', 'Estado', 'Fecha'].map((h) => <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', color: C.gray, textTransform: 'uppercase' }}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {[...v].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).map((r, i) => (
+                  <tr key={`${r.pnr}-${i}`} style={{ borderTop: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '9px 12px', fontFamily: 'monospace', fontWeight: 700, color: C.darkBlue, letterSpacing: '0.04em' }}>{r.pnr || '—'}</td>
+                    <td style={{ padding: '9px 12px' }}><Badge status={r.estado} /></td>
+                    <td style={{ padding: '9px 12px', color: C.gray }}>{fmtDate(r.fecha)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Seccion>
+      ))}
+    </div>
+  );
+}
+
 function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loadingReservas,onRefresh}) {
   const [vista,setVista]=useState('usuarios');
   const [modal,setModal]=useState(null);
@@ -857,7 +1082,7 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
   const viewHistorial = async (id, email) => {
     try {
       const { data } = await api.get(`/admin/users/${id}/historial`);
-      setModal({ type: 'detalles', data: data.data, title: `Historial de Reservas - ${email}` });
+      setModal({ type: 'detalles', vista: 'historial', data: data.data, title: 'Historial de reservas', subtitulo: email });
     } catch (e) { alert('Error al obtener historial'); }
   };
 
@@ -865,7 +1090,7 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
     if (tipo === 'hospedaje') {
       const localesAloj = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
       const reservaLocal = localesAloj.find(r => r.id === id);
-      setModal({ type: 'detalles', data: reservaLocal || { mensaje: 'No encontrada localmente' }, title: `Detalles Técnicos - ${tipo} ${id}` });
+      setModal({ type: 'detalles', vista: 'reserva', tipo, data: reservaLocal || { mensaje: 'No se encontró esta reserva en este navegador.' }, title: 'Detalle de la reserva', subtitulo: id });
       return;
     }
     
@@ -874,7 +1099,7 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
       const localesAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
       const reservaLocal = localesAutos.find(r => (r.id === id || r.orderId === id));
       if (reservaLocal) {
-        setModal({ type: 'detalles', data: reservaLocal, title: `Detalles Técnicos (Local) - ${tipo} ${id}` });
+        setModal({ type: 'detalles', vista: 'reserva', tipo, data: reservaLocal, title: 'Detalle de la reserva', subtitulo: `${id} · guardada en este navegador` });
         return;
       }
     }
@@ -883,14 +1108,14 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
       const localesAtracciones = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
       const reservaLocal = localesAtracciones.find(r => (r.id === id || r.reservation_id === id));
       if (reservaLocal) {
-        setModal({ type: 'detalles', data: reservaLocal, title: `Detalles Técnicos (Local) - ${tipo} ${id}` });
+        setModal({ type: 'detalles', vista: 'reserva', tipo, data: reservaLocal, title: 'Detalle de la reserva', subtitulo: `${id} · guardada en este navegador` });
         return;
       }
     }
 
     try {
       const { data } = await api.get(`/admin/reservas/${tipo}/${id}/detalles`);
-      setModal({ type: 'detalles', data: data.data || { mensaje: 'Sin detalles en el backend' }, title: `Detalles Técnicos - ${tipo} ${id}` });
+      setModal({ type: 'detalles', vista: 'reserva', tipo, data: data.data || { mensaje: 'No hay detalles guardados para esta reserva.' }, title: 'Detalle de la reserva', subtitulo: id });
     } catch (e) {
       alert('Error al obtener detalles del backend');
     }
@@ -1029,15 +1254,23 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
 
       {/* Modal de detalles */}
       {modal && modal.type === 'detalles' && (
-        <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
-          <div style={{background:'white',padding:24,borderRadius:8,width:600,maxHeight:'80vh',display:'flex',flexDirection:'column',boxShadow:'0 10px 25px rgba(0,0,0,0.2)'}}>
-            <h3 style={{marginTop:0,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>{modal.title}</h3>
-            <div style={{overflow:'auto',flex:1}}>
-              <pre style={{background:C.bg,padding:16,borderRadius:4,fontSize:'0.8rem',margin:0}}>
-                {JSON.stringify(modal.data, null, 2)}
-              </pre>
+        <div onClick={()=>setModal(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999,padding:16}}>
+          <div role="dialog" aria-modal="true" aria-labelledby="detalle-titulo" onClick={(e)=>e.stopPropagation()} style={{background:C.bg,borderRadius:12,width:'100%',maxWidth:720,maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 15px 40px rgba(0,0,0,0.25)',overflow:'hidden'}}>
+            <div style={{display:'flex',alignItems:'flex-start',gap:12,padding:'16px 20px',background:C.white,borderBottom:`1px solid ${C.border}`}}>
+              <div style={{flex:1,minWidth:0}}>
+                <h3 id="detalle-titulo" style={{margin:0,fontSize:'1.1rem',color:C.text}}>{modal.title}</h3>
+                {modal.subtitulo && <div style={{fontSize:'0.8rem',color:C.gray,marginTop:2,wordBreak:'break-all'}}>{modal.subtitulo}</div>}
+              </div>
+              <button type="button" onClick={()=>setModal(null)} aria-label="Cerrar" style={{background:'none',border:'none',fontSize:'1.3rem',cursor:'pointer',color:C.gray,lineHeight:1}}>✕</button>
             </div>
-            <div style={{display:'flex',justifyContent:'flex-end',marginTop:16,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+            <div style={{overflowY:'auto',flex:1,padding:'16px 20px'}}>
+              {modal.vista === 'historial'
+                ? <HistorialUsuarioVista data={modal.data} />
+                : modal.vista === 'reserva'
+                  ? <DetalleReservaVista data={modal.data} tipo={modal.tipo} />
+                  : <pre style={{background:C.white,padding:16,borderRadius:6,fontSize:'0.8rem',margin:0}}>{JSON.stringify(modal.data, null, 2)}</pre>}
+            </div>
+            <div style={{display:'flex',justifyContent:'flex-end',padding:'12px 20px',background:C.white,borderTop:`1px solid ${C.border}`}}>
               <button type="button" onClick={()=>setModal(null)} style={{padding:'8px 24px',border:'none',background:C.blue,color:'white',borderRadius:6,cursor:'pointer',fontWeight:600}}>Cerrar</button>
             </div>
           </div>
