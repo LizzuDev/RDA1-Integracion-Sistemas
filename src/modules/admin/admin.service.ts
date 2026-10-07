@@ -129,11 +129,11 @@ export class AdminService {
 
     // Cálculos para el embudo real si hay eventos
     let realFunnel = null;
-    let trafficByVertical = { vuelos: 0, autos: 0, atracciones: 0 };
+    let trafficByVertical = { vuelos: 0, autos: 0, atracciones: 0, alojamientos: 0 };
     
     if (telemetry && telemetry.length > 0) {
       const counts = { busquedas: new Set(), detalles: new Set(), datos_cliente: new Set(), intento_pago: new Set(), exito: new Set() };
-      const verticalSessions = { vuelos: new Set(), autos: new Set(), atracciones: new Set() };
+      const verticalSessions = { vuelos: new Set(), autos: new Set(), atracciones: new Set(), alojamientos: new Set() };
 
       telemetry.forEach(t => {
         if (t.event_name === 'search_submitted') counts.busquedas.add(t.session_id);
@@ -145,6 +145,7 @@ export class AdminService {
         if (t.vertical === 'vuelos') verticalSessions.vuelos.add(t.session_id);
         if (t.vertical === 'autos') verticalSessions.autos.add(t.session_id);
         if (t.vertical === 'atracciones') verticalSessions.atracciones.add(t.session_id);
+        if (t.vertical === 'alojamientos' || t.vertical === 'hospedaje') verticalSessions.alojamientos.add(t.session_id);
       });
       const b = Math.max(counts.busquedas.size, 1);
       realFunnel = [
@@ -159,6 +160,7 @@ export class AdminService {
         vuelos: verticalSessions.vuelos.size,
         autos: verticalSessions.autos.size,
         atracciones: verticalSessions.atracciones.size,
+        alojamientos: verticalSessions.alojamientos.size,
       };
     }
 
