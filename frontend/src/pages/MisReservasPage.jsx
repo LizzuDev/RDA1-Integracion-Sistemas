@@ -269,8 +269,11 @@ export function MisReservasPage() {
 
       if (currentFetch !== fetchId.current) return;
 
-      // Combinar todas las listas eliminando duplicados por ID
+      // Combinar todas las listas eliminando duplicados por ID o código de reserva (PNR)
+      const seenIds = new Set();
+      const seenPnrs = new Set();
       const mapaCombinado = new Map();
+
       [
         ...alojamientosApiItems,
         ...alojamientosLocalesFormatted,
@@ -280,9 +283,20 @@ export function MisReservasPage() {
         ...atraccionesItems,
         ...atraccionesLocalesFormatted,
       ].forEach((item) => {
-        if (!mapaCombinado.has(item.id)) {
-          mapaCombinado.set(item.id, item);
+        const pnrVal = item.pnr && item.pnr !== '—' && !['HOTEL', 'AUTO', 'ATRAC'].includes(item.pnr) ? item.pnr : null;
+        const idVal = item.id;
+
+        // Si ya registramos este PNR o este ID para este tipo de servicio, lo evitamos
+        const pnrKey = pnrVal ? `${item.tipo}_${pnrVal}` : null;
+        const idKey = idVal ? `${item.tipo}_${idVal}` : null;
+
+        if ((pnrKey && seenPnrs.has(pnrKey)) || (idKey && seenIds.has(idKey))) {
+          return;
         }
+
+        if (pnrKey) seenPnrs.add(pnrKey);
+        if (idKey) seenIds.add(idKey);
+        mapaCombinado.set(idKey || pnrKey, item);
       });
 
       let listaFinal = Array.from(mapaCombinado.values());
