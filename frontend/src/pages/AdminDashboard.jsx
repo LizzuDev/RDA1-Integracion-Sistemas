@@ -766,26 +766,40 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
     setConfirmModal(null);
   };
 
-  const execUserAction = async (id, action, email) => {
+  const execUserAction = async (id, action) => {
     try { 
-      if (action === 'reset_password') {
-        // Se envía con el cliente público de Supabase (el mismo del login), así no
-        // depende de la clave secreta del backend.
-        if (!email) throw new Error('El usuario no tiene correo registrado.');
-        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/restablecer-contrasena` });
-        if (error) throw new Error(error.message);
-        api.post('/admin/auditoria', { accion: 'Envió reseteo de contraseña', entidadTipo: 'usuario', entidadId: email, detalle: { userId: id } }).catch(() => {});
-      } else {
-        await api.put(`/admin/users/${id}/action`, { action });
-      }
-      if (action === 'reset_password') {
-        alert('Enlace de reseteo enviado correctamente.');
-      } else {
-        alert('Acción ejecutada correctamente.');
-      }
+      await api.put(`/admin/users/${id}/action`, { action });
+      alert('Acción ejecutada correctamente.');
       onRefresh(); 
     }
-    catch(e) { alert(`Error al ejecutar la acción: ${e?.response ? apiErrorMsg(e) : (e?.message || apiErrorMsg(e))}`); }
+    catch(e) { alert(`Error al ejecutar la acción: ${apiErrorMsg(e)}`); }
+  };
+
+  // Modal para que el admin escriba directamente la nueva contraseña del usuario
+  const [pwdModal, setPwdModal] = useState(null); // { id, email }
+  const [pwdNueva, setPwdNueva] = useState('');
+  const [pwdConfirma, setPwdConfirma] = useState('');
+  const [pwdVer, setPwdVer] = useState(false);
+  const [pwdError, setPwdError] = useState('');
+  const [pwdGuardando, setPwdGuardando] = useState(false);
+
+  const abrirPwdModal = (u) => { setPwdModal({ id: u.id, email: u.email }); setPwdNueva(''); setPwdConfirma(''); setPwdVer(false); setPwdError(''); };
+
+  const guardarPassword = async (e) => {
+    e.preventDefault();
+    setPwdError('');
+    if (pwdNueva.length < 8) return setPwdError('La contraseña debe tener al menos 8 caracteres.');
+    if (pwdNueva !== pwdConfirma) return setPwdError('Las contraseñas no coinciden.');
+    setPwdGuardando(true);
+    try {
+      await api.put(`/admin/users/${pwdModal.id}/action`, { action: 'cambiar_password', password: pwdNueva });
+      setPwdModal(null);
+      alert(`Contraseña de ${pwdModal.email} actualizada.`);
+    } catch (err) {
+      setPwdError(apiErrorMsg(err, 'No se pudo cambiar la contraseña'));
+    } finally {
+      setPwdGuardando(false);
+    }
   };
 
   const handleReservaAction = async (tipo, id, action) => {
@@ -946,7 +960,7 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
                     {u.rol === 'admin' && u.adminFijo && (
                       <span title="Administrador principal definido en el sistema: no se le puede quitar el rol" style={{alignSelf:'center',fontSize:'0.7rem',color:C.gray,fontWeight:600}}>🔒 Principal</span>
                     )}
-                    <button onClick={()=>requestConfirm("Enviar Reseteo de Contraseña", `¿Enviar enlace de reseteo a ${u.email}?`, C.orange, ()=>execUserAction(u.id, 'reset_password', u.email))} title="Enviar Reseteo de Contraseña" style={btnStyle}>🔑</button>
+                    <button onClick={()=>abrirPwdModal(u)} title="Cambiar contraseña" style={btnStyle}>🔑</button>
                   </td>
                 </tr>
               ))}
@@ -1027,6 +1041,28 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
               <button type="button" onClick={()=>setModal(null)} style={{padding:'8px 24px',border:'none',background:C.blue,color:'white',borderRadius:6,cursor:'pointer',fontWeight:600}}>Cerrar</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Modal: cambiar contraseña */}
+      {pwdModal && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16}} onClick={()=>!pwdGuardando && setPwdModal(null)}>
+          <form onSubmit={guardarPassword} onClick={(e)=>e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="pwd-titulo" style={{background:'white',padding:24,borderRadius:12,width:'100%',maxWidth:400,boxShadow:'0 15px 35px rgba(0,0,0,0.2)'}}>
+            <h3 id="pwd-titulo" style={{marginTop:0,marginBottom:4,color:C.text}}>🔑 Cambiar contraseña</h3>
+            <p style={{fontSize:'0.85rem',color:C.gray,marginTop:0,marginBottom:18,wordBreak:'break-all'}}>{pwdModal.email}</p>
+            <label htmlFor="pwd-nueva" style={{display:'block',fontWeight:600,fontSize:'0.85rem',marginBottom:6}}>Nueva contraseña</label>
+            <input id="pwd-nueva" type={pwdVer?'text':'password'} autoComplete="new-password" autoFocus value={pwdNueva} onChange={(e)=>setPwdNueva(e.target.value)} style={{width:'100%',boxSizing:'border-box',padding:'10px 12px',border:`1px solid ${C.border}`,borderRadius:6,marginBottom:12,fontSize:'0.95rem'}} />
+            <label htmlFor="pwd-confirma" style={{display:'block',fontWeight:600,fontSize:'0.85rem',marginBottom:6}}>Confirmar contraseña</label>
+            <input id="pwd-confirma" type={pwdVer?'text':'password'} autoComplete="new-password" value={pwdConfirma} onChange={(e)=>setPwdConfirma(e.target.value)} style={{width:'100%',boxSizing:'border-box',padding:'10px 12px',border:`1px solid ${C.border}`,borderRadius:6,marginBottom:10,fontSize:'0.95rem'}} />
+            <label style={{display:'flex',alignItems:'center',gap:6,fontSize:'0.82rem',color:C.gray,marginBottom:14,cursor:'pointer'}}>
+              <input type="checkbox" checked={pwdVer} onChange={(e)=>setPwdVer(e.target.checked)} /> Mostrar contraseña
+            </label>
+            {pwdError && <p role="alert" style={{color:C.red,fontSize:'0.85rem',margin:'0 0 12px'}}>{pwdError}</p>}
+            <div style={{display:'flex',gap:12}}>
+              <button type="button" disabled={pwdGuardando} onClick={()=>setPwdModal(null)} style={{padding:'10px 20px',border:`1px solid ${C.border}`,background:C.white,color:C.text,borderRadius:8,cursor:'pointer',fontWeight:600,flex:1}}>Cancelar</button>
+              <button type="submit" disabled={pwdGuardando} style={{padding:'10px 20px',border:'none',background:C.blue,color:'white',borderRadius:8,cursor:pwdGuardando?'wait':'pointer',fontWeight:600,flex:1}}>{pwdGuardando?'Guardando…':'Guardar'}</button>
+            </div>
+          </form>
         </div>
       )}
 

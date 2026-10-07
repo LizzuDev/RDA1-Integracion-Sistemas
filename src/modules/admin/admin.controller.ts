@@ -38,15 +38,15 @@ export class AdminController {
   }
 
   @Put('users/:id/action')
-  @ApiOperation({ summary: 'Acción sobre un usuario (bloquear, desbloquear, promover_admin, quitar_admin, reset_password)' })
-  async userAction(@Param('id') id: string, @Body() body: { action: string }, @Req() req: any) {
+  @ApiOperation({ summary: 'Acción sobre un usuario (bloquear, desbloquear, promover_admin, quitar_admin, cambiar_password)' })
+  async userAction(@Param('id') id: string, @Body() body: { action: string; password?: string }, @Req() req: any) {
     if (body?.action === 'quitar_admin' && req?.user?.id === id) {
       throw new BadRequestException('No puedes quitarte a ti mismo el rol de administrador.');
     }
-    const res = await this.adminService.executeUserAction(id, body?.action);
+    const res = await this.adminService.executeUserAction(id, body?.action, body?.password);
     const etiquetas: Record<string, string> = {
       bloquear: 'Bloqueó usuario', desbloquear: 'Desbloqueó usuario', promover_admin: 'Promovió a administrador',
-      quitar_admin: 'Quitó rol de administrador', reset_password: 'Envió reseteo de contraseña',
+      quitar_admin: 'Quitó rol de administrador', cambiar_password: 'Cambió la contraseña',
     };
     await this.auditService.registrar(actorDesdeRequest(req), etiquetas[body.action] || body.action, 'usuario', res.email || id, { userId: id });
     return res;

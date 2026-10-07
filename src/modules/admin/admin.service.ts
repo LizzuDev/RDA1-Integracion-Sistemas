@@ -304,7 +304,41 @@ export class AdminService {
     throw new BadRequestException(`No se pudo actualizar el usuario. Detalle: ${errores.join(' | ')}`);
   }
 
-  async executeUserAction(id: string, action: string) {
+  /**
+   * El administrador fija directamente la nueva contraseña del usuario.
+   * Se guarda en auth.users con bcrypt (el mismo formato que usa Supabase Auth);
+   * si la BD no lo permite se usa la Admin API como respaldo.
+   */
+  private async cambiarPassword(id: string, password?: string) {
+    const pwd = String(password ?? '');
+    if (pwd.length < 8) throw new BadRequestException('La contraseña debe tener al menos 8 caracteres.');
+    if (pwd.length > 72) throw new BadRequestException('La contraseña no puede superar los 72 caracteres.');
+    const errores: string[] = [];
+    // pgcrypto en Supabase vive en el esquema "extensions"; se prueba también sin esquema.
+    for (const fn of ['extensions.crypt($2, extensions.gen_salt(\'bf\', 10))', 'crypt($2, gen_salt(\'bf\', 10))']) {
+      try {
+        const res = await this.dataSource.query(
+          `UPDATE auth.users SET encrypted_password = ${fn}, updated_at = now() WHERE id = $1 RETURNING id`, [id, pwd],
+        );
+        const filas = Array.isArray(res?.[0]) ? res[0] : res;
+        if (filas?.length) return;
+        errores.push('UPDATE no afectó filas');
+        break;
+      } catch (e) {
+        errores.push(`auth.users vía Postgres: ${e.message}`);
+      }
+    }
+    try {
+      const { error } = await this.supabase.auth.admin.updateUserById(id, { password: pwd });
+      if (error) throw new Error(error.message);
+      return;
+    } catch (e) {
+      errores.push(`Supabase Admin API: ${e.message}`);
+    }
+    throw new BadRequestException(`No se pudo cambiar la contraseña. Detalle: ${errores.join(' | ')}`);
+  }
+
+  async executeUserAction(id: string, action: string, password?: string) {
     this.logger.log(`Admin: ejecutando accion ${action} sobre usuario ${id}`);
     const user = await this.buscarUsuario(id);
 
@@ -316,10 +350,8 @@ export class AdminService {
         throw new BadRequestException(`${user.email} es administrador principal (definido en el sistema) y no se le puede quitar el rol.`);
       }
       await this.actualizarUsuario(id, { meta: { role: action === 'promover_admin' ? 'admin' : 'user' } });
-    } else if (action === 'reset_password') {
-      const redirectTo = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL.replace(/\/$/, '')}/login` : undefined;
-      const { error } = await this.supabase.auth.resetPasswordForEmail(user.email, redirectTo ? { redirectTo } : undefined);
-      if (error) throw new BadRequestException(error.message);
+    } else if (action === 'cambiar_password') {
+      await this.cambiarPassword(id, password);
     } else {
       throw new BadRequestException(`Acción no soportada: ${action}`);
     }
