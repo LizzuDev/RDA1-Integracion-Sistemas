@@ -776,7 +776,7 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
       }
       onRefresh(); 
     }
-    catch(e) { alert('Error al ejecutar la acción'); }
+    catch(e) { alert(`Error al ejecutar la acción: ${apiErrorMsg(e)}`); }
   };
 
   const handleReservaAction = async (tipo, id, action) => {
@@ -930,6 +930,12 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
                         <button onClick={()=>requestConfirm("Promover a Administrador", `¿Seguro que quieres hacer administrador a ${u.email}?`, C.blue, ()=>execUserAction(u.id, 'promover_admin'))} title="Hacer Administrador" style={btnStyle}>👑</button>
                         <button onClick={()=>viewHistorial(u.id, u.email)} title="Ver Historial" style={btnStyle}>📋</button>
                       </>
+                    )}
+                    {u.rol === 'admin' && !u.adminFijo && (
+                      <button onClick={()=>requestConfirm("Quitar rol de Administrador", `¿Seguro que quieres quitarle el rol de administrador a ${u.email}? Pasará a ser un usuario normal y perderá acceso al panel.`, C.red, ()=>execUserAction(u.id, 'quitar_admin'))} title="Quitar Administrador (volver a usuario)" style={btnStyle}>⬇️</button>
+                    )}
+                    {u.rol === 'admin' && u.adminFijo && (
+                      <span title="Administrador principal definido en el sistema: no se le puede quitar el rol" style={{alignSelf:'center',fontSize:'0.7rem',color:C.gray,fontWeight:600}}>🔒 Principal</span>
                     )}
                     <button onClick={()=>requestConfirm("Enviar Reseteo de Contraseña", `¿Enviar enlace de reseteo a ${u.email}?`, C.orange, ()=>execUserAction(u.id, 'reset_password'))} title="Enviar Reseteo de Contraseña" style={btnStyle}>🔑</button>
                   </td>
