@@ -1,10 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { createClient } from '@supabase/supabase-js';
 import { Reserva } from '../vuelos/entities/reserva.entity';
 import { OrderAuto } from '../autos/entities/order-auto.entity';
 import { ReservaAtraccion } from '../atracciones/entities/reserva.entity';
+
+/** Mismos correos que `frontend/src/components/AdminGuard.jsx`. */
+export const ADMIN_EMAILS = ['admin@booking.com', 'alejandroflores@booking.com'];
 
 @Injectable()
 export class AdminService {
@@ -18,6 +21,7 @@ export class AdminService {
     private readonly orderAutoRepo: Repository<OrderAuto>,
     @InjectRepository(ReservaAtraccion)
     private readonly reservaAtraccionRepo: Repository<ReservaAtraccion>,
+    private readonly dataSource: DataSource,
   ) {
     const url = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -134,26 +138,70 @@ export class AdminService {
     };
   }
 
+  /**
+   * Lista de usuarios.
+   *
+   * Antes solo se usaba `supabase.auth.admin.listUsers()` y cualquier fallo
+   * (clave secreta ausente en el despliegue, clave sin permisos de admin, etc.)
+   * se tragaba devolviendo `[]`: el panel mostraba "0 usuarios" sin decir por qué.
+   *
+   * Ahora:
+   *  1. Se lee directamente `auth.users` por la conexión Postgres (DATABASE_URL),
+   *     que no depende de la clave de Supabase.
+   *  2. Si eso falla, se usa la Admin API de Supabase (paginada a 1000).
+   *  3. Si ambas fallan se responde 503 con el motivo real, para verlo en el panel.
+   */
   async getUsers() {
-    this.logger.log('Admin: consultando usuarios desde Supabase auth...');
+    this.logger.log('Admin: consultando usuarios...');
+    const errores: string[] = [];
+
     try {
-      const { data, error } = await this.supabase.auth.admin.listUsers();
-      if (error) {
-        this.logger.warn(`No se pudo leer usuarios de auth: ${error.message}`);
-        return [];
-      }
-      return (data.users || []).map(u => ({
-        id: u.id,
-        email: u.email,
-        rol: u.user_metadata?.role || 'usuario',
-        status: u.user_metadata?.status || 'activo',
-        created_at: u.created_at,
-        last_sign_in: u.last_sign_in_at,
+      const rows = await this.dataSource.query(
+        `SELECT id, email, raw_user_meta_data AS meta, raw_app_meta_data AS app_meta,
+                created_at, last_sign_in_at, banned_until, email_confirmed_at
+         FROM auth.users ORDER BY created_at DESC`,
+      );
+      return rows.map((u: any) => this.mapUsuario({
+        id: u.id, email: u.email, user_metadata: u.meta, app_metadata: u.app_meta,
+        created_at: u.created_at, last_sign_in_at: u.last_sign_in_at,
+        banned_until: u.banned_until, email_confirmed_at: u.email_confirmed_at,
       }));
-    } catch (err) {
-      this.logger.error('Error al obtener usuarios', err.message);
-      return [];
+    } catch (e) {
+      errores.push(`auth.users vía Postgres: ${e.message}`);
+      this.logger.warn(`No se pudo leer auth.users por SQL (${e.message}); probando Admin API...`);
     }
+
+    try {
+      const { data, error } = await this.supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (error) throw new Error(error.message);
+      return (data?.users || []).map((u: any) => this.mapUsuario(u));
+    } catch (e) {
+      errores.push(`Supabase Admin API: ${e.message}`);
+    }
+
+    this.logger.error(`No se pudo obtener usuarios: ${errores.join(' | ')}`);
+    throw new ServiceUnavailableException(
+      `No se pudo obtener la lista de usuarios. Revisa DATABASE_URL y SUPABASE_SECRET_KEY en el backend. Detalle: ${errores.join(' | ')}`,
+    );
+  }
+
+  private mapUsuario(u: any) {
+    const meta = u.user_metadata || {};
+    const app = u.app_metadata || {};
+    const email = (u.email || '').toLowerCase();
+    const esAdmin = meta.role === 'admin' || app.role === 'admin' || ADMIN_EMAILS.includes(email);
+    const baneado = u.banned_until && new Date(u.banned_until).getTime() > Date.now();
+    return {
+      id: u.id,
+      email: u.email,
+      nombre: [meta.nombre || meta.name || meta.full_name, meta.apellido].filter(Boolean).join(' ') || null,
+      rol: esAdmin ? 'admin' : (meta.role || app.role || 'usuario'),
+      // El panel usa 'bloquear' para pintar el botón de desbloquear
+      status: baneado || meta.status === 'bloquear' ? 'bloquear' : 'activo',
+      created_at: u.created_at,
+      last_sign_in: u.last_sign_in_at || null,
+      email_confirmado: Boolean(u.email_confirmed_at),
+    };
   }
 
   async getReservasGlobales() {
@@ -199,20 +247,31 @@ export class AdminService {
 
   async executeUserAction(id: string, action: string) {
     this.logger.log(`Admin: ejecutando accion ${action} sobre usuario ${id}`);
+    const { data: found, error: findErr } = await this.supabase.auth.admin.getUserById(id);
+    if (findErr || !found?.user) throw new NotFoundException(`Usuario no encontrado: ${findErr?.message || id}`);
+    const user = found.user;
+    const meta = user.user_metadata || {};
+
     if (action === 'bloquear' || action === 'desbloquear') {
-      const { error } = await this.supabase.auth.admin.updateUserById(id, { user_metadata: { status: action } });
-      if (error) throw new Error(error.message);
-    } else if (action === 'promover_admin') {
-      const { error } = await this.supabase.auth.admin.updateUserById(id, { user_metadata: { role: 'admin' } });
-      if (error) throw new Error(error.message);
+      // Bloqueo REAL: Supabase rechaza el login de un usuario baneado.
+      const { error } = await this.supabase.auth.admin.updateUserById(id, {
+        ban_duration: action === 'bloquear' ? '876000h' : 'none',
+        user_metadata: { ...meta, status: action },
+      } as any);
+      if (error) throw new BadRequestException(error.message);
+    } else if (action === 'promover_admin' || action === 'quitar_admin') {
+      const { error } = await this.supabase.auth.admin.updateUserById(id, {
+        user_metadata: { ...meta, role: action === 'promover_admin' ? 'admin' : 'user' },
+      });
+      if (error) throw new BadRequestException(error.message);
     } else if (action === 'reset_password') {
-      // Find user email
-      const { data, error: userErr } = await this.supabase.auth.admin.getUserById(id);
-      if (userErr || !data.user) throw new Error('Usuario no encontrado');
-      const { error } = await this.supabase.auth.resetPasswordForEmail(data.user.email);
-      if (error) throw new Error(error.message);
+      const redirectTo = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL.replace(/\/$/, '')}/login` : undefined;
+      const { error } = await this.supabase.auth.resetPasswordForEmail(user.email, redirectTo ? { redirectTo } : undefined);
+      if (error) throw new BadRequestException(error.message);
+    } else {
+      throw new BadRequestException(`Acción no soportada: ${action}`);
     }
-    return { success: true, message: `Acción ${action} ejecutada` };
+    return { success: true, message: `Acción ${action} ejecutada`, email: user.email };
   }
 
   async getUserHistorial(id: string) {
@@ -251,7 +310,7 @@ export class AdminService {
       }
       return { success: true, message: `Reserva ${tipo} cancelada exitosamente` };
     } catch (e) {
-      throw new Error(e.message);
+      throw new BadRequestException(e.message);
     }
   }
 
