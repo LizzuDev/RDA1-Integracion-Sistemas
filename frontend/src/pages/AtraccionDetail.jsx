@@ -8,7 +8,6 @@ import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { ReportModal } from '../components/ReportModal';
 import { OfflineReservaModal } from '../components/OfflineReservaModal';
-import { isAdminUser } from '../components/AdminGuard';
 
 export function AtraccionDetail() {
   const { id } = useParams();
@@ -16,7 +15,7 @@ export function AtraccionDetail() {
   const { user } = useAuth();
   const isLoggedIn = !!user;
   const { convertPrice } = useCurrency();
-  const isAdmin = isAdminUser(user);
+  const isAdmin = user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin';
   
   const [atraccion, setAtraccion] = useState(null);
   const [loading, setLoading] = useState(true);

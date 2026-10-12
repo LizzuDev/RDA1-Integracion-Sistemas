@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { isAdminUser } from '../components/AdminGuard';
 
 export function FacturasPage() {
   const { user } = useAuth();
@@ -30,7 +29,7 @@ export function FacturasPage() {
         `)
         .order('created_at', { ascending: false });
 
-      if (!isAdminUser(user)) {
+      if (user.user_metadata?.role !== 'admin') {
         query = query.eq('usuario_id', user.id);
       }
 
@@ -76,8 +75,8 @@ export function FacturasPage() {
                   
                   <div style={{ marginBottom: '1rem' }}>
                     <p style={{ margin: 0, fontSize: '0.9rem', color: '#555' }}>
-                      <strong>{isAdminUser(user) && factura.usuario_id !== user.id ? `Usuario ID: ${factura.usuario_id}` : 'Datos de facturación:'}</strong><br/>
-                      {(!isAdminUser(user) || factura.usuario_id === user.id) && (
+                      <strong>{user.user_metadata?.role === 'admin' && factura.usuario_id !== user.id ? `Usuario ID: ${factura.usuario_id}` : 'Datos de facturación:'}</strong><br/>
+                      {(!user.user_metadata?.role || factura.usuario_id === user.id) && (
                         <>
                           Nombre: {user.user_metadata?.nombre} {user.user_metadata?.apellido}<br/>
                           Cédula / RUC: {user.user_metadata?.cedula}<br/>
