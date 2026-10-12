@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { createClient } from '@supabase/supabase-js';
@@ -8,11 +8,13 @@ import { ReservaAtraccion } from '../atracciones/entities/reserva.entity';
 import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
 import { Alojamiento } from '../alojamientos/entities/alojamiento.entity';
 import { PAGADAS as ESTADOS_COBRADOS } from './admin-finanzas.service';
+import { AlojamientosService } from '../alojamientos/alojamientos.service';
+import { randomUUID } from 'crypto';
 
 const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Mismos correos que `frontend/src/components/AdminGuard.jsx`. */
-export const ADMIN_EMAILS = ['admin@booking.com', 'alejandroflores@booking.com'];
+import { ADMIN_EMAILS } from '../../core/auth/administradores';
+export { ADMIN_EMAILS };
 
 @Injectable()
 export class AdminService {
@@ -31,6 +33,7 @@ export class AdminService {
     @InjectRepository(Alojamiento)
     private readonly alojamientoRepo: Repository<Alojamiento>,
     private readonly dataSource: DataSource,
+    private readonly alojamientosService: AlojamientosService,
   ) {
     const url = process.env.SUPABASE_URL;
     const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -225,13 +228,14 @@ export class AdminService {
     const meta = u.user_metadata || {};
     const app = u.app_metadata || {};
     const email = (u.email || '').toLowerCase();
-    const esAdmin = meta.role === 'admin' || app.role === 'admin' || ADMIN_EMAILS.includes(email);
+    // El rol se lee SOLO de app_metadata: user_metadata lo puede editar el propio usuario.
+    const esAdmin = app.role === 'admin' || ADMIN_EMAILS.includes(email);
     const baneado = u.banned_until && new Date(u.banned_until).getTime() > Date.now();
     return {
       id: u.id,
       email: u.email,
       nombre: [meta.nombre || meta.name || meta.full_name, meta.apellido].filter(Boolean).join(' ') || null,
-      rol: esAdmin ? 'admin' : (meta.role || app.role || 'usuario'),
+      rol: esAdmin ? 'admin' : (app.role || 'usuario'),
       // Admin definido por correo en el código: no se le puede quitar el rol desde el panel
       adminFijo: ADMIN_EMAILS.includes(email),
       // El panel usa 'bloquear' para pintar el botón de desbloquear
@@ -313,13 +317,22 @@ export class AdminService {
    * Actualiza metadata/baneo del usuario. Va directo a auth.users (misma vía
    * que el listado) y usa la Admin API solo como respaldo.
    */
-  private async actualizarUsuario(id: string, cambios: { meta: Record<string, any>; banear?: boolean }) {
+  private async actualizarUsuario(
+    id: string,
+    cambios: { meta?: Record<string, any>; appMeta?: Record<string, any>; banear?: boolean },
+  ) {
     const errores: string[] = [];
+    const meta = cambios.meta ?? {};
+    const appMeta = cambios.appMeta ?? {};
     try {
-      const sets = [`raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || $2::jsonb`, 'updated_at = now()'];
+      const sets = [
+        `raw_user_meta_data = COALESCE(raw_user_meta_data, '{}'::jsonb) || $2::jsonb`,
+        `raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || $3::jsonb`,
+        'updated_at = now()',
+      ];
       if (cambios.banear !== undefined) sets.push(cambios.banear ? `banned_until = now() + interval '100 years'` : 'banned_until = NULL');
       const res = await this.dataSource.query(
-        `UPDATE auth.users SET ${sets.join(', ')} WHERE id = $1 RETURNING id`, [id, JSON.stringify(cambios.meta)],
+        `UPDATE auth.users SET ${sets.join(', ')} WHERE id = $1 RETURNING id`, [id, JSON.stringify(meta), JSON.stringify(appMeta)],
       );
       const filas = Array.isArray(res?.[0]) ? res[0] : res;
       if (filas?.length) return;
@@ -329,8 +342,11 @@ export class AdminService {
       this.logger.warn(`No se pudo actualizar auth.users por SQL (${e.message}); probando Admin API...`);
     }
     try {
-      const actual = await this.buscarUsuario(id);
-      const payload: any = { user_metadata: { ...actual.user_metadata, ...cambios.meta } };
+      const actual: any = await this.buscarUsuario(id);
+      const payload: any = {
+        user_metadata: { ...actual.user_metadata, ...meta },
+        app_metadata: { ...(actual.app_metadata || {}), ...appMeta },
+      };
       if (cambios.banear !== undefined) payload.ban_duration = cambios.banear ? '876000h' : 'none';
       const { error } = await this.supabase.auth.admin.updateUserById(id, payload);
       if (error) throw new Error(error.message);
@@ -386,13 +402,47 @@ export class AdminService {
       if (action === 'quitar_admin' && ADMIN_EMAILS.includes((user.email || '').toLowerCase())) {
         throw new BadRequestException(`${user.email} es administrador principal (definido en el sistema) y no se le puede quitar el rol.`);
       }
-      await this.actualizarUsuario(id, { meta: { role: action === 'promover_admin' ? 'admin' : 'user' } });
+      // El rol va en app_metadata (solo el backend puede escribirlo). Se limpia el
+      // `role` antiguo de user_metadata, que el propio usuario podía modificar.
+      await this.actualizarUsuario(id, {
+        appMeta: { role: action === 'promover_admin' ? 'admin' : 'user' },
+        meta: { role: null },
+      });
     } else if (action === 'cambiar_password') {
       await this.cambiarPassword(id, password);
     } else {
       throw new BadRequestException(`Acción no soportada: ${action}`);
     }
     return { success: true, message: `Acción ${action} ejecutada`, email: user.email };
+  }
+
+  /**
+   * Alta de un usuario desde el panel (modal "Agregar usuario"). Usa la Admin API
+   * de Supabase con la clave de servicio: el correo queda confirmado y el rol se
+   * guarda en app_metadata.
+   */
+  async crearUsuario(body: { email?: string; password?: string; rol?: string }) {
+    const email = String(body?.email || '').trim().toLowerCase();
+    const password = String(body?.password || '');
+    const rol = body?.rol === 'admin' ? 'admin' : 'cliente';
+    const errores: string[] = [];
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) errores.push('El correo no es válido.');
+    if (password.length < 6 || password.length > 72) errores.push('La contraseña debe tener entre 6 y 72 caracteres.');
+    if (errores.length) throw new BadRequestException(errores);
+
+    const { data, error } = await this.supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      app_metadata: { role: rol === 'admin' ? 'admin' : 'user' },
+    });
+    if (error) {
+      if (/already|registered|exists/i.test(error.message)) {
+        throw new ConflictException('Ya existe un usuario con ese correo.');
+      }
+      throw new ServiceUnavailableException(`No se pudo crear el usuario en Supabase: ${error.message}`);
+    }
+    return { success: true, id: data.user?.id, email, rol };
   }
 
   async getUserHistorial(id: string) {
@@ -428,6 +478,18 @@ export class AdminService {
 
   async cancelarReserva(tipo: string, id: string) {
     this.logger.log(`Admin: cancelando reserva ${tipo} ${id}`);
+
+    if (tipo === 'hospedaje') {
+      // Se delega en el módulo de alojamientos: aplica sus reglas (no cancelar una
+      // estancia ya terminada, idempotencia, webhook ORDER_CANCELLED, telemetría).
+      // Antes era un UPDATE directo que se saltaba todo eso.
+      const reserva = await this.reservaAlojamientoRepo.findOne({ where: ES_UUID.test(id) ? { id } : { codigoReserva: id } });
+      if (!reserva) throw new NotFoundException(`La reserva de hospedaje '${id}' no existe.`);
+      await this.alojamientosService.cancelarReserva(reserva.id, { reason: 'Cancelada por el administrador' }, randomUUID());
+      return { success: true, message: 'Reserva hospedaje cancelada exitosamente' };
+    }
+
+    // Vuelos, autos y atracciones: lógica original de sus equipos, sin cambios.
     try {
       if (tipo === 'vuelos') {
         await this.reservaRepo.update({ idReserva: id }, { estado: 'CANCELLED' as any });
@@ -435,8 +497,6 @@ export class AdminService {
         await this.orderAutoRepo.update({ id }, { status: 'CANCELLED' });
       } else if (tipo === 'atracciones') {
         await this.reservaAtraccionRepo.update({ id }, { status: 'CANCELLED' });
-      } else if (tipo === 'hospedaje') {
-        await this.reservaAlojamientoRepo.update(ES_UUID.test(id) ? { id } : { codigoReserva: id }, { status: 'CANCELLED' });
       }
       return { success: true, message: `Reserva ${tipo} cancelada exitosamente` };
     } catch (e) {

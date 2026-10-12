@@ -10,7 +10,7 @@
  *   y el día de salida queda libre para la siguiente llegada.
  * - Sin cupo para esas fechas, no se ofrecen productos.
  */
-import { AppPrueba, crearAppPrueba, esperarProblema, camposInvalidos, dia } from './app-prueba';
+import { AppPrueba, crearAppPrueba, esperarProblema, camposInvalidos, dia, TIPOS_EPIQ } from './app-prueba';
 
 const ocupar = (t: AppPrueba, alojamientoId: string, desde: number, hasta: number, habitaciones = 1, status = 'CONFIRMED') =>
   t.repos.reservas.sembrar({
@@ -34,7 +34,8 @@ describe('05 · Disponibilidad y tarifas', () => {
   const disponibilidad = (body: Record<string, unknown>) => t.pedir('POST', '/alojamientos/availability', { body });
 
   describe('POST /alojamientos/availability (contrato)', () => {
-    it('200 con 3 tarifas del alojamiento pedido', async () => {
+    it('200 con un producto por cada tipo de habitación del alojamiento pedido', async () => {
+      t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
       const res = await disponibilidad({ accommodation: 'quito-epiq', checkin: dia(10), checkout: dia(13) });
       expect(res.status).toBe(200);
       expect(res.body.data.id).toBe('quito-epiq');
@@ -42,38 +43,80 @@ describe('05 · Disponibilidad y tarifas', () => {
       expect(res.body.data.products).toHaveLength(3);
     });
 
-    it('precio = tarifa × noches, con recargos por tipo de habitación (3 noches a 120 USD)', async () => {
+    it('sin tipos propios, el alojamiento ofrece su tipo "estándar" a su precio', async () => {
+      const res = await disponibilidad({ accommodation: 'quito-epiq', checkin: dia(10), checkout: dia(13) });
+      expect(res.body.data.products).toHaveLength(1);
+      expect(res.body.data.products[0]).toMatchObject({ codigo: 'estandar', price: 360, price_per_night: 120 });
+    });
+
+    it('precio = tarifa del tipo × noches, ordenados del más barato al más caro (3 noches)', async () => {
+      t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
       const res = await disponibilidad({ accommodation: 'quito-epiq', checkin: dia(10), checkout: dia(13) });
       const [std, deluxe, suite] = res.body.data.products;
       expect(std.price).toBe(360); // 120 × 3
-      expect(deluxe.price).toBe(450); // 120 × 1.25 × 3
-      expect(suite.price).toBe(576); // 120 × 1.6 × 3
+      expect(deluxe.price).toBe(450); // 150 × 3
+      expect(suite.price).toBe(576); // 192 × 3
     });
 
-    it('precio con decimales redondeado a céntimos (45.50 × 3 × 1.25 = 170.63)', async () => {
+    it('precio con decimales redondeado a céntimos (56.88 × 3 = 170.64, no 170.64000000000001)', async () => {
+      t.sembrarTipos('quito-ejido', [
+        { codigo: 'a', nombre: 'Individual', precioNoche: 45.5, cantidad: 1, capacidadAdultos: 2 },
+        { codigo: 'b', nombre: 'Doble', precioNoche: 56.88, cantidad: 1, capacidadAdultos: 2 },
+        { codigo: 'c', nombre: 'Triple', precioNoche: 72.8, cantidad: 1, capacidadAdultos: 2 },
+      ]);
       const res = await disponibilidad({ accommodation: 'quito-ejido', checkin: dia(10), checkout: dia(13) });
-      expect(res.body.data.products.map((p: any) => p.price)).toEqual([136.5, 170.63, 218.4]);
+      expect(res.body.data.products.map((p: any) => p.price)).toEqual([136.5, 170.64, 218.4]);
     });
 
-    it('cada producto informa régimen de comidas y política de cancelación', async () => {
+    it('cada producto informa tipo, régimen, política de cancelación, cupo y capacidad', async () => {
+      const [estandar] = t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
       const res = await disponibilidad({ accommodation: 'quito-epiq', checkin: dia(10), checkout: dia(11) });
-      for (const p of res.body.data.products) {
-        expect(p).toEqual({
-          product_id: expect.stringMatching(/^prod_quito-epiq_/),
-          room_name: expect.any(String),
-          meal_plan: expect.any(String),
-          cancellation_type: expect.any(String),
-          price: expect.any(Number),
-          currency: 'USD',
-        });
-      }
-      expect(res.body.data.products.map((p: any) => p.cancellation_type).join(' ')).toMatch(/No Reembolsable/);
+      expect(res.body.data.products[0]).toMatchObject({
+        product_id: estandar.id,
+        tipo_habitacion_id: estandar.id,
+        codigo: 'estandar',
+        room_name: 'Apartamento estándar',
+        meal_plan: 'Solo alojamiento',
+        cancellation_type: 'Cancelación gratuita hasta 48 horas antes',
+        reembolsable: true,
+        price: 120,
+        price_per_night: 120,
+        currency: 'USD',
+        available_rooms: 2,
+        capacidad: { adultos: 4, ninos: 2 },
+      });
+      const suite = res.body.data.products.find((p: any) => p.codigo === 'suite');
+      expect(suite).toMatchObject({ meal_plan: 'Todo incluido', cancellation_type: 'No reembolsable', reembolsable: false });
     });
 
     it('los product_id son únicos', async () => {
+      t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
       const res = await disponibilidad({ accommodation: 'quito-epiq', checkin: dia(10), checkout: dia(11) });
       const idsProd = res.body.data.products.map((p: any) => p.product_id);
       expect(new Set(idsProd).size).toBe(3);
+    });
+
+    it('solo ofrece los tipos donde cabe la ocupación pedida', async () => {
+      t.sembrarTipos('quito-epiq', [
+        { codigo: 'individual', nombre: 'Individual', precioNoche: 60, cantidad: 3, capacidadAdultos: 1 },
+        { codigo: 'familiar', nombre: 'Familiar', precioNoche: 200, cantidad: 1, capacidadAdultos: 4, capacidadNinos: 2 },
+      ]);
+      const res = await disponibilidad({
+        accommodation: 'quito-epiq', checkin: dia(10), checkout: dia(11),
+        guests: { number_of_adults: 3, number_of_rooms: 1 },
+      });
+      expect(res.body.data.products.map((p: any) => p.codigo)).toEqual(['familiar']);
+    });
+
+    it('un tipo agotado desaparece y los demás se siguen ofreciendo (cupo por tipo)', async () => {
+      const [estandar] = t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
+      t.repos.reservas.sembrar({
+        codigoReserva: 'BKG-111111', alojamientoId: 'quito-epiq', tipoHabitacionId: estandar.id, customerName: 'X',
+        status: 'CONFIRMED', checkin: dia(10), checkout: dia(12), noches: 2, habitacionesCount: 2, total: 1,
+      });
+      const res = await disponibilidad({ accommodation: 'quito-epiq', checkin: dia(10), checkout: dia(11) });
+      expect(res.body.data.products.map((p: any) => p.codigo)).toEqual(['deluxe', 'suite']);
+      expect(res.body.data.available_rooms).toBe(2);
     });
 
     it('usa la moneda del alojamiento por defecto (COP en Cartagena)', async () => {

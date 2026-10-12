@@ -28,6 +28,7 @@ describe('02 · Catálogo y administración de alojamientos', () => {
   afterAll(() => t.cerrar());
   beforeEach(async () => {
     t.sembrarCatalogo();
+    t.repos.reservas.limpiar();
     await (t.app.get('CACHE_MANAGER') as any).reset();
   });
 
@@ -170,7 +171,7 @@ describe('02 · Catálogo y administración de alojamientos', () => {
       expect(res.status).toBe(201);
       expect(res.body).toEqual(
         expect.objectContaining({
-          id: expect.stringMatching(/^aloj-\d+$/),
+          id: expect.stringMatching(/^aloj-[0-9a-f-]+$/),
           nombre: 'Hostal Andino',
           precioPorNoche: 38.9,
           amenidades: [],

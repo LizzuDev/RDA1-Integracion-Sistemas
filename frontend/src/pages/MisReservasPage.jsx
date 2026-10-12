@@ -206,8 +206,9 @@ export function MisReservasPage() {
             tipo: 'alojamiento',
             servicioTexto: 'Alojamiento',
             destino: al.destino || 'Quito',
+            // Nombre del hotel, tipo de habitación reservado y número de huéspedes.
             titulo: al.nombre_alojamiento
-              ? `${al.nombre_alojamiento} (${al.huespedes || 1} persona${(al.huespedes || 1) > 1 ? 's' : ''})`
+              ? `${al.nombre_alojamiento}${al.tipo_habitacion?.nombre ? ` · ${(al.habitaciones_count || 1) > 1 ? `${al.habitaciones_count} × ` : ''}${al.tipo_habitacion.nombre}` : ''} (${al.huespedes || 1} persona${(al.huespedes || 1) > 1 ? 's' : ''})`
               : 'Alojamiento reservado',
             fechasTexto: `${checkinStr} – ${checkoutStr}`,
             fecha: checkinStr,
@@ -218,14 +219,14 @@ export function MisReservasPage() {
             link: al.alojamiento_id ? `/alojamientos/${al.alojamiento_id}` : '/',
             raw: {
               createdAt: al.created_at || new Date().toISOString(),
-              passengers: [
-                {
-                  firstName: al.customer_name || 'Huésped',
-                  lastName: '',
-                  documentNumber: '',
-                  email: al.customer_email || '',
-                },
-              ],
+              // Huéspedes registrados en la reserva (titular y acompañantes); si la
+              // reserva es antigua y no los tiene, el cliente que reservó.
+              passengers: (al.huespedes_detalle?.length ? al.huespedes_detalle : [{ nombre: al.customer_name || 'Huésped', apellido: '' }]).map((h, i) => ({
+                firstName: h.nombre,
+                lastName: h.apellido || '',
+                documentNumber: '',
+                email: i === 0 ? al.customer_email || '' : '',
+              })),
             },
           };
         });

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import { supabase } from '../services/supabase';
+import { GestionAlojamientos } from '../components/admin/GestionAlojamientos';
 
 const C = {
   blue: '#006ce4', darkBlue: '#003b95', lightBlue: '#ebf3ff',
@@ -1156,13 +1157,15 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
   };
   const VISTAS=[
     {id:'usuarios',label:'👤 Usuarios',count:users.length},
+    {id:'catalogo',label:'🏨 Catálogo de alojamientos'},
     {id:'vuelos',label:'✈️ Vuelos',count:reservas.vuelos?.length||0},
     {id:'hospedaje',label:'🏨 Hospedaje',count:reservas.hospedaje?.length||0},
     {id:'autos',label:'🚗 Autos',count:reservas.autos?.length||0},
     {id:'atracciones',label:'🎡 Atracciones',count:reservas.atracciones?.length||0},
   ];
-  const isLoading=vista==='usuarios'?loadingUsers:loadingReservas;
+  const isLoading=vista==='usuarios'?loadingUsers:vista==='catalogo'?false:loadingReservas;
   const renderTable=()=>{
+    if(vista==='catalogo') return <GestionAlojamientos />;
     if(isLoading) return <div style={{padding:40,textAlign:'center',color:C.gray}}>Cargando...</div>;
     if(vista==='usuarios') {
       const admins = users.filter(u => u.rol === 'admin').length;
@@ -1293,7 +1296,7 @@ function GestionTab({users,usersError,onRetryUsers,reservas,loadingUsers,loading
         {VISTAS.map(v=>(
           <button key={v.id} onClick={()=>setVista(v.id)} style={{padding:'8px 16px',borderRadius:20,border:`1px solid ${vista===v.id?C.blue:C.border}`,background:vista===v.id?C.blue:C.white,color:vista===v.id?'white':C.text,fontWeight:600,cursor:'pointer',fontSize:'0.85rem',display:'flex',alignItems:'center',gap:6}}>
             {v.label}
-            <span style={{background:vista===v.id?'rgba(255,255,255,0.3)':C.border,borderRadius:20,padding:'0 6px',fontSize:'0.75rem'}}>{v.count}</span>
+            {v.count!==undefined && <span style={{background:vista===v.id?'rgba(255,255,255,0.3)':C.border,borderRadius:20,padding:'0 6px',fontSize:'0.75rem'}}>{v.count}</span>}
           </button>
         ))}
       </div>

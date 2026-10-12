@@ -1,6 +1,53 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsInt, Min, Max, IsEmail, IsOptional, IsNotEmpty, MaxLength, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsString, IsInt, Min, Max, IsEmail, IsOptional, IsNotEmpty, MaxLength, IsBoolean, IsIn, IsArray,
+  ArrayMaxSize, ValidateNested, Matches, MinLength,
+} from 'class-validator';
 import { PriceDto } from './nested-types.dto';
+
+/** Acompañante del huésped titular (Booking pide el nombre de cada huésped). */
+export class AcompananteDto {
+  @ApiProperty({ example: 'María' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  nombre: string;
+
+  @ApiProperty({ required: false, example: 'Pérez' })
+  @IsString()
+  @MaxLength(100)
+  @IsOptional()
+  apellido?: string;
+
+  @ApiProperty({ required: false, enum: ['ADULTO', 'NINO'], default: 'ADULTO' })
+  @IsIn(['ADULTO', 'NINO'])
+  @IsOptional()
+  tipo?: 'ADULTO' | 'NINO';
+
+  @ApiProperty({ required: false, example: 8, description: 'Obligatoria para niños (0–17).' })
+  @IsInt()
+  @Min(0)
+  @Max(120)
+  @IsOptional()
+  edad?: number;
+
+  @ApiProperty({ required: false, enum: ['CEDULA', 'PASAPORTE', 'DNI', 'OTRO'] })
+  @IsIn(['CEDULA', 'PASAPORTE', 'DNI', 'OTRO'])
+  @IsOptional()
+  documento_tipo?: string;
+
+  @ApiProperty({ required: false, example: '1712345678' })
+  @IsString()
+  @MaxLength(30)
+  @IsOptional()
+  documento_numero?: string;
+
+  @ApiProperty({ required: false, example: 'EC', description: 'ISO 3166-1 alfa-2' })
+  @Matches(/^[A-Z]{2}$/, { message: 'nacionalidad debe ser un código ISO de 2 letras mayúsculas (ej. EC).' })
+  @IsOptional()
+  nacionalidad?: string;
+}
 
 export class ReservationRequestDto {
   @ApiProperty({ description: 'Fecha de check-in', example: '2026-10-10', format: 'date' })
@@ -50,11 +97,13 @@ export class ReservationRequestDto {
 
   @ApiProperty({ description: 'Teléfono de contacto', example: '+593 0991234567', required: false })
   @IsString()
+  @MaxLength(30)
   @IsOptional()
   phone?: string;
 
-  @ApiProperty({ description: 'Nombre del huésped principal', example: 'Juan Perez', required: false })
+  @ApiProperty({ description: 'Nombre del huésped principal (si no es quien reserva)', example: 'Juan Perez', required: false })
   @IsString()
+  @MaxLength(150)
   @IsOptional()
   guest_name?: string;
 
@@ -66,6 +115,7 @@ export class ReservationRequestDto {
 
   @ApiProperty({ description: 'Hora estimada de llegada', example: '15:00 - 16:00', required: false })
   @IsString()
+  @MaxLength(20)
   @IsOptional()
   arrival_time?: string;
 
@@ -83,6 +133,29 @@ export class ReservationRequestDto {
   @IsString()
   @IsOptional()
   payment_method?: string;
+
+  @ApiProperty({
+    required: false,
+    example: '3f1c2a9e-7b6d-4e8f-9a0b-1c2d3e4f5a6b',
+    description:
+      'Tipo de habitación (id o código, de GET /alojamientos/{id} → tipos_habitacion). Si no se indica, se asigna el más barato que tenga cupo y capacidad.',
+  })
+  @IsString()
+  @MaxLength(60)
+  @IsOptional()
+  tipo_habitacion_id?: string;
+
+  @ApiProperty({
+    required: false,
+    type: [AcompananteDto],
+    description: 'Acompañantes del titular. Como máximo (adultos − 1) adultos y `ninos` niños.',
+  })
+  @IsArray()
+  @ArrayMaxSize(60)
+  @ValidateNested({ each: true })
+  @Type(() => AcompananteDto)
+  @IsOptional()
+  acompanantes?: AcompananteDto[];
 
   @ApiProperty({
     description:

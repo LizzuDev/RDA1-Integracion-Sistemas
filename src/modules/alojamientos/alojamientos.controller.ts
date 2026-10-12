@@ -16,6 +16,9 @@ import {
   BadRequestException,
   ParseUUIDPipe,
   Inject,
+  Req,
+  UseGuards,
+  Optional,
 } from '@nestjs/common';
 import { CacheInterceptor, CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
@@ -27,7 +30,21 @@ import {
   ApiParam,
   ApiHeader,
   ApiBody,
+  ApiBearerAuth,
+  ApiSecurity,
+  ApiQuery,
 } from '@nestjs/swagger';
+import {
+  GestionAlojamientosGuard,
+  ClienteAutenticadoGuard,
+  SesionOpcionalGuard,
+  SoloAdministradorGuard,
+} from './guards/gestion-alojamientos.guard';
+import { ProveedoresAlojamientoService } from './proveedores.service';
+import { CreateTipoHabitacionDto, UpdateTipoHabitacionDto } from './dto/tipo-habitacion.dto';
+import { CreateProveedorDto, UpdateProveedorDto } from './dto/proveedor.dto';
+import { SincronizarAlojamientosDto } from './dto/sincronizar.dto';
+import { AdminAuditService, actorDesdeRequest } from '../admin/admin-audit.service';
 import { AlojamientoResponseDto } from './dto/alojamiento-response.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { SearchAlojamientosRequestDto } from './dto/search-alojamientos.dto';
@@ -93,8 +110,24 @@ function exigirIdempotencyKey(valor: string | undefined): string {
 export class AlojamientosController {
   constructor(
     private readonly alojamientosService: AlojamientosService,
+    private readonly proveedoresService: ProveedoresAlojamientoService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    @Optional() private readonly audit?: AdminAuditService,
   ) {}
+
+  /**
+   * Deja constancia en la auditoría del panel de cada cambio del catálogo, sea
+   * de un administrador o del sistema de un proveedor (API key).
+   */
+  private async auditar(req: any, accion: string, entidadId: string | null, detalle?: any, entidad = 'alojamiento') {
+    if (!this.audit) return;
+    const actor = actorDesdeRequest(req);
+    if (req?.actorCatalogo?.tipo === 'proveedor') {
+      actor.id = null;
+      actor.email = `proveedor:${req.actorCatalogo.proveedorId}`;
+    }
+    await this.audit.registrar(actor, accion, entidad, entidadId, detalle).catch(() => undefined);
+  }
 
   /**
    * El catálogo (`GET /alojamientos` y `GET /alojamientos/:id`) se cachea 60 s.
@@ -235,12 +268,15 @@ export class AlojamientosController {
   @ApiResponse({ status: 400, description: 'Petición inválida o Idempotency-Key ausente/no UUID.' })
   @ApiResponse({ status: 409, description: 'Conflicto de Idempotencia (Orden ya procesada).' })
   @ApiResponse({ status: 422, description: 'Falta referencia de pago válida o es rechazada.' })
+  @UseGuards(SesionOpcionalGuard)
+  @ApiBearerAuth()
   async createOrder(
     @Body() dto: OrderCreateRequestDto,
     @Headers('idempotency-key') idempotencyKey: string,
+    @Req() req: any,
   ): Promise<OrderDetailDto> {
     const keyValida = exigirIdempotencyKey(idempotencyKey);
-    return this.alojamientosService.createOrder(dto, keyValida);
+    return this.alojamientosService.createOrder(dto, keyValida, req.user);
   }
 
   @Get('orders/:orderId')
@@ -347,8 +383,12 @@ export class AlojamientosController {
   @Get('reservations')
   @ApiOperation({ summary: 'Consultar el historial de reservas de alojamientos (Frontend MisReservas)' })
   @ApiResponse({ status: 200, description: 'Listado de reservas.' })
-  async getReservas() {
-    return this.alojamientosService.getReservas();
+  @UseGuards(ClienteAutenticadoGuard)
+  @ApiBearerAuth()
+  @ApiResponse({ status: 401, description: 'Sin sesión iniciada.' })
+  async getReservas(@Req() req: any) {
+    // Cada cliente ve solo sus reservas; un administrador ve todas.
+    return this.alojamientosService.getReservas(req.user);
   }
 
   @Get('reservations/:reservationId')
@@ -380,6 +420,99 @@ export class AlojamientosController {
     return this.alojamientosService.cancelarReserva(reservationId, dto, keyValida);
   }
 
+  // =========================================================================
+  // GESTIÓN E INTEGRACIÓN CON PROVEEDORES
+  // =========================================================================
+
+  @Post('sincronizar')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sincronizar el inventario de un proveedor (lote idempotente)',
+    description:
+      'Crea o actualiza por (proveedorId, idExterno). Reenviar el mismo lote no duplica. ' +
+      'Para retirar un alojamiento, envíalo con estado INACTIVO. Cada elemento devuelve su resultado (CREADO, ACTUALIZADO o ERROR con el campo exacto).',
+  })
+  @ApiResponse({ status: 200, description: 'Resultado por elemento y resumen del lote.' })
+  async sincronizar(@Body() dto: SincronizarAlojamientosDto, @Req() req: any) {
+    const resultado = await this.alojamientosService.sincronizar(dto.alojamientos, req.actorCatalogo, dto.proveedorId);
+    if (resultado.resumen.creados || resultado.resumen.actualizados) await this.invalidarCatalogo();
+    await this.auditar(req, 'Sincronizó catálogo de alojamientos', resultado.proveedor_id, resultado.resumen);
+    return resultado;
+  }
+
+  @Get('gestion/proveedores')
+  @UseGuards(SoloAdministradorGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Proveedores de alojamientos registrados (sin sus claves)' })
+  async listarProveedores() {
+    return this.proveedoresService.listar();
+  }
+
+  @Post('gestion/proveedores')
+  @UseGuards(SoloAdministradorGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Registrar un proveedor y generar su API key (se muestra UNA sola vez)' })
+  @ApiResponse({ status: 201, description: 'Proveedor creado; `api_key` solo aparece en esta respuesta.' })
+  @ApiResponse({ status: 409, description: 'Ya existe un proveedor con ese id.' })
+  async crearProveedor(@Body() dto: CreateProveedorDto, @Req() req: any) {
+    const creado = await this.proveedoresService.crear(dto);
+    await this.auditar(req, 'Registró proveedor de alojamientos', creado.id, { nombre: creado.nombre }, 'proveedor');
+    return creado;
+  }
+
+  @Patch('gestion/proveedores/:proveedorId')
+  @UseGuards(SoloAdministradorGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Editar un proveedor o activarlo/desactivarlo (desactivado, su API key deja de funcionar)' })
+  async actualizarProveedor(@Param('proveedorId') proveedorId: string, @Body() dto: UpdateProveedorDto, @Req() req: any) {
+    const actualizado = await this.proveedoresService.actualizar(proveedorId, dto);
+    const accion = dto.activo === false ? 'Desactivó proveedor' : dto.activo === true ? 'Activó proveedor' : 'Editó proveedor';
+    await this.auditar(req, accion, proveedorId, { campos: Object.keys(dto) }, 'proveedor');
+    return actualizado;
+  }
+
+  @Post('gestion/proveedores/:proveedorId/rotar-clave')
+  @UseGuards(SoloAdministradorGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generar una API key nueva (la anterior deja de funcionar al instante)' })
+  async rotarClaveProveedor(@Param('proveedorId') proveedorId: string, @Req() req: any) {
+    const resultado = await this.proveedoresService.rotarClave(proveedorId);
+    await this.auditar(req, 'Rotó la API key de un proveedor', proveedorId, undefined, 'proveedor');
+    return resultado;
+  }
+
+  @Delete('gestion/proveedores/:proveedorId')
+  @UseGuards(SoloAdministradorGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Eliminar un proveedor sin alojamientos' })
+  @ApiResponse({ status: 409, description: 'Tiene alojamientos: desactivarlo en su lugar.' })
+  async eliminarProveedor(@Param('proveedorId') proveedorId: string, @Req() req: any) {
+    await this.proveedoresService.eliminar(proveedorId);
+    await this.auditar(req, 'Eliminó proveedor', proveedorId, undefined, 'proveedor');
+  }
+
+  @Get('gestion/catalogo')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Catálogo completo para el panel de gestión (incluye inactivos, origen y reservas pendientes)' })
+  @ApiQuery({ name: 'estado', required: false, enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiQuery({ name: 'proveedor', required: false, description: 'Id de proveedor, o "manual" para altas del panel' })
+  @ApiQuery({ name: 'q', required: false, description: 'Texto en nombre, destino, id o idExterno' })
+  async catalogoGestion(
+    @Req() req: any,
+    @Query('estado') estado?: string,
+    @Query('proveedor') proveedor?: string,
+    @Query('q') q?: string,
+  ) {
+    return this.alojamientosService.catalogoGestion({ estado, proveedor, q }, req.actorCatalogo);
+  }
+
   @Get()
   @UseInterceptors(CacheInterceptor)
   @Header('X-API-Deprecation-Date', '2027-12-31')
@@ -401,10 +534,17 @@ export class AlojamientosController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Registrar un nuevo alojamiento (Admin)' })
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Registrar un nuevo alojamiento (Admin o proveedor con API key)' })
   @ApiResponse({ status: 201, description: 'El alojamiento ha sido creado exitosamente.', type: AlojamientoResponseDto })
-  async create(@Body() dto: CreateAlojamientoDto) {
-    const creado = await this.alojamientosService.create(dto);
+  @ApiResponse({ status: 401, description: 'Sin token de admin ni API key de proveedor.' })
+  @ApiResponse({ status: 403, description: 'El usuario no es administrador.' })
+  @ApiResponse({ status: 409, description: 'El proveedor ya tiene un alojamiento con ese idExterno.' })
+  async create(@Body() dto: CreateAlojamientoDto, @Req() req: any) {
+    const creado = await this.alojamientosService.create(dto, req.actorCatalogo);
+    await this.auditar(req, 'Creó alojamiento', creado.id, { nombre: creado.nombre, proveedor: creado.proveedorId ?? null });
     await this.invalidarCatalogo();
     return creado;
   }
@@ -430,26 +570,39 @@ export class AlojamientosController {
   }
 
   @Put(':id')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Reemplazar datos de un alojamiento (Admin)' })
-  async replace(@Param('id') id: string, @Body() dto: CreateAlojamientoDto) {
-    await this.alojamientosService.replace(id, dto);
+  @ApiOperation({ summary: 'Reemplazar datos de un alojamiento (Admin o su proveedor)' })
+  async replace(@Param('id') id: string, @Body() dto: CreateAlojamientoDto, @Req() req: any) {
+    await this.alojamientosService.replace(id, dto, req.actorCatalogo);
+    await this.auditar(req, 'Reemplazó alojamiento', id);
     await this.invalidarCatalogo();
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Actualizar parcialmente un alojamiento (Admin)' })
-  async update(@Param('id') id: string, @Body() dto: UpdateAlojamientoDto) {
-    const actualizado = await this.alojamientosService.update(id, dto);
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Actualizar parcialmente un alojamiento, p. ej. precio o estado (Admin o su proveedor)' })
+  async update(@Param('id') id: string, @Body() dto: UpdateAlojamientoDto, @Req() req: any) {
+    const actualizado = await this.alojamientosService.update(id, dto, req.actorCatalogo);
+    await this.auditar(req, dto.estado ? `Cambió estado de alojamiento a ${dto.estado}` : 'Editó alojamiento', id, { campos: Object.keys(dto) });
     await this.invalidarCatalogo();
     return actualizado;
   }
 
   @Delete(':id')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Eliminar un alojamiento (Admin)' })
-  async delete(@Param('id') id: string) {
-    await this.alojamientosService.delete(id);
+  @ApiOperation({ summary: 'Eliminar un alojamiento (Admin o su proveedor)' })
+  @ApiResponse({ status: 409, description: 'Tiene reservas confirmadas pendientes: desactivarlo en su lugar.' })
+  async delete(@Param('id') id: string, @Req() req: any) {
+    await this.alojamientosService.delete(id, req.actorCatalogo);
+    await this.auditar(req, 'Eliminó alojamiento', id);
     await this.invalidarCatalogo();
   }
 
@@ -481,12 +634,68 @@ export class AlojamientosController {
   @ApiBody({ type: ReservationRequestDto })
   @ApiResponse({ status: 201, description: 'Reserva confirmada', type: ReservationResponseDto })
   @ApiResponse({ status: 409, description: 'Conflicto de Idempotencia (Reserva ya procesada).' })
+  @UseGuards(SesionOpcionalGuard)
+  @ApiBearerAuth()
+  @ApiResponse({ status: 401, description: 'Se envió un token, pero no es válido (sin token se reserva como invitado).' })
   async reservar(
     @Param('id') id: string,
     @Headers('idempotency-key') idempotencyKey: string,
     @Body() dto: ReservationRequestDto,
+    @Req() req: any,
   ) {
     const keyValida = exigirIdempotencyKey(idempotencyKey);
-    return this.alojamientosService.reservar(id, dto, keyValida);
+    return this.alojamientosService.reservar(id, dto, keyValida, req.user);
+  }
+
+  // =========================================================================
+  // TIPOS DE HABITACIÓN
+  // =========================================================================
+
+  @Get(':id/tipos-habitacion')
+  @ApiOperation({ summary: 'Tipos de habitación a la venta de un alojamiento (precio, capacidad, régimen, cancelación)' })
+  @ApiParam({ name: 'id', description: 'ID del alojamiento' })
+  async tiposHabitacion(@Param('id') id: string) {
+    return this.alojamientosService.tiposPublicos(id);
+  }
+
+  @Post(':id/tipos-habitacion')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Crear un tipo de habitación (Admin o el proveedor del alojamiento)' })
+  @ApiResponse({ status: 201, description: 'Tipo creado. El precio "desde" y las habitaciones del alojamiento se recalculan.' })
+  @ApiResponse({ status: 409, description: 'Ya existe un tipo con ese código.' })
+  async crearTipo(@Param('id') id: string, @Body() dto: CreateTipoHabitacionDto, @Req() req: any) {
+    const tipo = await this.alojamientosService.crearTipo(id, dto, req.actorCatalogo);
+    await this.auditar(req, 'Creó tipo de habitación', id, { tipo: tipo.codigo, precio: tipo.precio_noche });
+    await this.invalidarCatalogo();
+    return tipo;
+  }
+
+  @Patch(':id/tipos-habitacion/:tipoId')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Editar un tipo de habitación: precio, cupo, capacidad, régimen, activo… (id o código)' })
+  @ApiResponse({ status: 409, description: 'Es el único tipo a la venta y se intenta desactivar.' })
+  async actualizarTipo(@Param('id') id: string, @Param('tipoId') tipoId: string, @Body() dto: UpdateTipoHabitacionDto, @Req() req: any) {
+    const tipo = await this.alojamientosService.actualizarTipo(id, tipoId, dto, req.actorCatalogo);
+    await this.auditar(req, 'Editó tipo de habitación', id, { tipo: tipo.codigo, campos: Object.keys(dto) });
+    await this.invalidarCatalogo();
+    return tipo;
+  }
+
+  @Delete(':id/tipos-habitacion/:tipoId')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Eliminar un tipo de habitación (con reservas se desactiva para conservar el historial)' })
+  @ApiResponse({ status: 200, description: '{ desactivado: true } si tenía reservas; { desactivado: false } si se borró.' })
+  @ApiResponse({ status: 409, description: 'Es el único tipo a la venta.' })
+  async eliminarTipo(@Param('id') id: string, @Param('tipoId') tipoId: string, @Req() req: any) {
+    const resultado = await this.alojamientosService.eliminarTipo(id, tipoId, req.actorCatalogo);
+    await this.auditar(req, resultado.desactivado ? 'Desactivó tipo de habitación' : 'Eliminó tipo de habitación', id, { tipo: tipoId });
+    await this.invalidarCatalogo();
+    return resultado;
   }
 }

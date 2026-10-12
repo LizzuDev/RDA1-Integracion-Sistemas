@@ -45,6 +45,9 @@ export function AlojamientoCheckoutModal({
   adults = 2,
   children = 0,
   rooms = 1,
+  edadesNinos = [],
+  // Tipo de habitación elegido en la ficha (producto de /availability).
+  tipoHabitacion = null,
   nightsCount = 6,
   originalPrice = 257.40,
   totalPrice = 205.92,
@@ -79,6 +82,16 @@ export function AlojamientoCheckoutModal({
   const [deseaTaxi, setDeseaTaxi] = useState(false);
   const [peticionesEspeciales, setPeticionesEspeciales] = useState('');
   const [horaLlegada, setHoraLlegada] = useState('15:00 - 16:00');
+  // Acompañantes del titular (opcional, como en Booking): un hueco por cada adulto
+  // extra y por cada niño (con la edad que se indicó en la búsqueda).
+  const [acompanantes, setAcompanantes] = useState(() => [
+    ...Array.from({ length: Math.max(0, (parseInt(adults, 10) || 1) - 1) }, () => ({ tipo: 'ADULTO', nombre: '', apellido: '' })),
+    ...Array.from({ length: Math.max(0, parseInt(children, 10) || 0) }, (_, i) => ({
+      tipo: 'NINO', nombre: '', apellido: '', edad: Number.isInteger(edadesNinos[i]) ? edadesNinos[i] : '',
+    })),
+  ]);
+  const cambiarAcompanante = (i, campo, valor) =>
+    setAcompanantes((lista) => lista.map((a, j) => (j === i ? { ...a, [campo]: valor } : a)));
 
   // Step 2 Form state (Payment) - Tarjeta por defecto pre-cargada
   const [titularTarjeta, setTitularTarjeta] = useState(defaultCardHolder);
@@ -227,6 +240,15 @@ export function AlojamientoCheckoutModal({
     setPendingOfflinePay(false);
 
     const idempotencyKey = uuidv4();
+    // Solo se envían los acompañantes con nombre; un niño siempre lleva su edad.
+    const acompanantesValidos = acompanantes
+      .filter((a) => a.nombre.trim())
+      .map((a) => ({
+        nombre: a.nombre.trim(),
+        ...(a.apellido.trim() ? { apellido: a.apellido.trim() } : {}),
+        tipo: a.tipo,
+        ...(a.tipo === 'NINO' && a.edad !== '' ? { edad: Number(a.edad) } : {}),
+      }));
     const payload = {
       checkin: checkin || new Date().toISOString().split('T')[0],
       checkout: checkout || new Date(Date.now() + 86400000 * (nightsCount || 1)).toISOString().split('T')[0],
@@ -236,6 +258,12 @@ export function AlojamientoCheckoutModal({
       customer_email: email.trim() || 'cliente@example.com',
       adultos: Math.max(1, parseInt(adults, 10) || 2),
       ninos: Math.max(0, parseInt(children, 10) || 0),
+      ...(tipoHabitacion?.product_id ? { tipo_habitacion_id: tipoHabitacion.product_id } : {}),
+      ...(telefono.trim() ? { phone: `${telefonoPrefijo} ${telefono.trim()}`.slice(0, 30) } : {}),
+      ...(peticionesEspeciales.trim() ? { special_requests: peticionesEspeciales.trim().slice(0, 1000) } : {}),
+      ...(horaLlegada && horaLlegada !== 'No lo sé' ? { arrival_time: horaLlegada } : {}),
+      ...(nombreHuesped.trim() && nombreHuesped.trim() !== `${nombre} ${apellidos}`.trim() ? { guest_name: nombreHuesped.trim() } : {}),
+      ...(acompanantesValidos.length ? { acompanantes: acompanantesValidos } : {}),
       ...(confirmadoDuplicadoRef.current ? { confirmar_duplicado: true } : {}),
     };
 
@@ -998,15 +1026,29 @@ export function AlojamientoCheckoutModal({
 
                 {/* CARD 2: ROOM SUMMARY */}
                 <div className="bkg-card">
-                  <h4 className="bkg-card-title">{alojamiento.tipo_alojamiento || 'Departamento de 2 dormitorios'}</h4>
+                  <h4 className="bkg-card-title">
+                    {rooms > 1 ? `${rooms} × ` : ''}{tipoHabitacion?.room_name || alojamiento.tipo_alojamiento || 'Habitación'}
+                  </h4>
                   <div className="bkg-room-summary-box">
                     <div style={{ fontSize: '13px', color: '#1a1a1a', fontWeight: 600 }}>
-                      Apartamento entero · 95 m² · {adults} adultos
+                      {tipoHabitacion
+                        ? [
+                            tipoHabitacion.descripcion_camas || `${tipoHabitacion.camas} ${tipoHabitacion.camas === 1 ? 'cama' : 'camas'}`,
+                            tipoHabitacion.tamano_m2 ? `${tipoHabitacion.tamano_m2} m²` : null,
+                            `${adults} ${Number(adults) === 1 ? 'adulto' : 'adultos'}${Number(children) > 0 ? ` y ${children} ${Number(children) === 1 ? 'niño' : 'niños'}` : ''}`,
+                          ].filter(Boolean).join(' · ')
+                        : `${adults} adultos`}
                     </div>
                     <div className="bkg-room-badge-row">
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <CheckmarkIcon size={14} color="#008009" /> Cancelación gratis
+                        {(tipoHabitacion?.reembolsable ?? true) && <CheckmarkIcon size={14} color="#008009" />}{' '}
+                        {tipoHabitacion?.cancellation_type || 'Cancelación gratis'}
                       </span>
+                      {tipoHabitacion?.meal_plan && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckmarkIcon size={14} color="#008009" /> {tipoHabitacion.meal_plan}
+                        </span>
+                      )}
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                         <CheckmarkIcon size={14} color="#008009" /> WiFi gratis
                       </span>
@@ -1025,6 +1067,45 @@ export function AlojamientoCheckoutModal({
                       onChange={(e) => setNombreHuesped(e.target.value)}
                     />
                   </div>
+                  {acompanantes.length > 0 && (
+                    <fieldset style={{ border: 'none', padding: 0, margin: '14px 0 0' }}>
+                      <legend style={{ fontSize: '13px', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
+                        Otros huéspedes <span style={{ fontWeight: 400, color: '#595959' }}>(opcional)</span>
+                      </legend>
+                      {acompanantes.map((a, i) => (
+                        <div key={i} className="bkg-input-group" style={{ display: 'grid', gridTemplateColumns: a.tipo === 'NINO' ? 'minmax(0, 1fr) minmax(0, 1fr) 110px' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px', marginBottom: '8px' }}>
+                          <input
+                            type="text"
+                            aria-label={`Nombre del ${a.tipo === 'NINO' ? 'niño' : 'acompañante'} ${i + 1}`}
+                            placeholder={a.tipo === 'NINO' ? 'Nombre del niño' : 'Nombre'}
+                            value={a.nombre}
+                            maxLength={100}
+                            onChange={(e) => cambiarAcompanante(i, 'nombre', e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            aria-label={`Apellido del ${a.tipo === 'NINO' ? 'niño' : 'acompañante'} ${i + 1}`}
+                            placeholder="Apellido"
+                            value={a.apellido}
+                            maxLength={100}
+                            onChange={(e) => cambiarAcompanante(i, 'apellido', e.target.value)}
+                          />
+                          {a.tipo === 'NINO' && (
+                            <select
+                              aria-label={`Edad del niño ${i + 1}`}
+                              value={a.edad}
+                              onChange={(e) => cambiarAcompanante(i, 'edad', e.target.value === '' ? '' : Number(e.target.value))}
+                            >
+                              <option value="">Edad</option>
+                              {Array.from({ length: 18 }, (_, edad) => (
+                                <option key={edad} value={edad}>{edad} {edad === 1 ? 'año' : 'años'}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      ))}
+                    </fieldset>
+                  )}
                 </div>
 
                 {/* CARD 3: ADDONS */}

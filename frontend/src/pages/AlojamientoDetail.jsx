@@ -190,20 +190,31 @@ export function AlojamientoDetail() {
   // Cotización REAL del backend para las fechas y ocupación elegidas
   // (POST /alojamientos/availability): precio, noches y habitaciones libres.
   const [cotizacion, setCotizacion] = useState(null);
+  // Tipo de habitación elegido en la tabla (product_id del backend). Se recuerda
+  // en la URL (?tipo=codigo) para poder compartir o recargar la página.
+  const [tipoElegidoId, setTipoElegidoId] = useState(null);
+  const tipoDeUrl = searchParams.get('tipo');
   const [consultando, setConsultando] = useState(false);
   const [errorCotizacion, setErrorCotizacion] = useState('');
 
   const consultar = async (valores) => {
     setConsultando(true);
     try {
-      const data = await consultarDisponibilidad({ id, ...valores });
-      const producto = data.products?.[0] || null;
+      const { tipoId, ...ocupacion } = valores;
+      const data = await consultarDisponibilidad({ id, ...ocupacion });
+      // Cada producto es un tipo de habitación con su precio, régimen y cupo.
+      const productos = data.products || [];
+      const preferido = tipoId !== undefined ? tipoId : (tipoElegidoId || tipoDeUrl);
+      const producto = productos.find((p) => p.product_id === preferido || p.codigo === preferido) || productos[0] || null;
+      setTipoElegidoId(producto ? producto.product_id : null);
       setCotizacion({
-        precio: producto ? Number(producto.price) : null, // estancia completa, 1 habitación
+        precio: producto ? Number(producto.price) : null, // estancia completa, 1 habitación del tipo elegido
         moneda: data.currency,
         noches: data.nights,
-        libres: data.available_rooms,
+        libres: producto ? producto.available_rooms : data.available_rooms,
+        libresHotel: data.available_rooms,
         producto,
+        productos,
       });
       setErrorCotizacion('');
       setCheckin(valores.checkin);
@@ -218,6 +229,7 @@ export function AlojamientoDetail() {
       params.set('group_adults', String(valores.adultos));
       params.set('no_rooms', String(valores.habitaciones));
       params.set('group_children', String(valores.edadesNinos.length));
+      if (producto?.codigo) params.set('tipo', producto.codigo);
       params.delete('age');
       valores.edadesNinos.forEach((e) => params.append('age', String(e)));
       setSearchParams(params, { replace: true });
@@ -241,6 +253,16 @@ export function AlojamientoDetail() {
     } finally {
       setConsultando(false);
     }
+  };
+
+  /** Elegir otro tipo de habitación de la tabla (sin volver a consultar). */
+  const elegirProducto = (p) => {
+    setTipoElegidoId(p.product_id);
+    setCotizacion((prev) => prev && { ...prev, producto: p, precio: Number(p.price), libres: p.available_rooms });
+    if (rooms > p.available_rooms) consultar({ checkin, checkout, adultos: adults, edadesNinos, habitaciones: Math.max(1, p.available_rooms), tipoId: p.product_id });
+    const params = new URLSearchParams(searchParams);
+    if (p.codigo) params.set('tipo', p.codigo);
+    setSearchParams(params, { replace: true });
   };
 
   // Disponibilidad de habitaciones en tiempo real
@@ -457,6 +479,7 @@ export function AlojamientoDetail() {
       customer_email: customerEmail,
       adultos: adults,
       ninos: edadesNinos.length,
+      ...(cotizacion?.producto?.product_id ? { tipo_habitacion_id: cotizacion.producto.product_id } : {}),
       ...(confirmadoDuplicadoRef.current ? { confirmar_duplicado: true } : {}),
     };
 
@@ -1296,7 +1319,8 @@ export function AlojamientoDetail() {
           )}
 
           {/* Room Type and Rates Table */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: '16px', alignItems: 'start' }}>
+          <div className="dt-rooms-layout">
+            <div className="dt-rooms-scroll">
             <table className="dt-rooms-table" style={{ margin: 0 }}>
               <thead>
                 <tr>
@@ -1308,6 +1332,92 @@ export function AlojamientoDetail() {
                 </tr>
               </thead>
               <tbody>
+                {(cotizacion?.productos?.length ? cotizacion.productos : []).map((p) => {
+                  const elegido = p.product_id === cotizacion?.producto?.product_id;
+                  const libres = Number(p.available_rooms) || 0;
+                  return (
+                    <tr key={p.product_id} className={elegido ? 'dt-room-row-elegida' : undefined} style={elegido ? { background: '#f0f6ff' } : undefined}>
+                      <td>
+                        <span className="dt-room-title-link">{p.room_name}</span>
+                        <div className="dt-room-features-list">
+                          <span>
+                            {p.descripcion_camas || `${p.camas} ${p.camas === 1 ? 'cama' : 'camas'}`}
+                            {p.tamano_m2 ? ` · ${p.tamano_m2} m²` : ''}
+                          </span>
+                          {p.descripcion && <span>{p.descripcion}</span>}
+                          {(p.amenidades || []).slice(0, 3).map((a) => (
+                            <span key={a} style={{ color: '#008009', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckmarkIcon size={14} /> {a}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '2px' }} aria-label={`Capacidad: ${p.capacidad?.adultos} adultos`}>
+                          {Array.from({ length: Math.min(p.capacidad?.adultos || 1, 4) }, (_, i) => (
+                            <UserIcon key={i} size={18} color="#1a1a1a" />
+                          ))}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#595959', marginTop: 2 }}>
+                          Máx. {p.capacidad?.adultos} {p.capacidad?.adultos === 1 ? 'adulto' : 'adultos'}
+                          {p.capacidad?.ninos ? ` y ${p.capacidad.ninos} ${p.capacidad.ninos === 1 ? 'niño' : 'niños'}` : ''} por habitación
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '0.85rem', color: '#d4111e', textDecoration: 'line-through' }}>
+                          {currency} {convertPrice(Math.round(p.price * 1.14))}
+                        </div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1a1a1a' }}>
+                          {currency} {convertPrice(p.price)}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#595959' }}>
+                          {nightsCount} {nightsCount === 1 ? 'noche' : 'noches'}, 1 habitación · +{currency} {convertPrice(Math.round(p.price * 0.15))} de impuestos
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckmarkIcon size={14} /> {p.meal_plan}
+                        </div>
+                        <div style={{ color: p.reembolsable ? '#008009' : '#595959', fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {p.reembolsable && <CheckmarkIcon size={14} />} {p.cancellation_type}
+                        </div>
+                        {libres <= 3 ? (
+                          <div style={{ color: '#d4111e', fontWeight: 700, fontSize: '0.75rem' }}>
+                            ¡Solo {libres === 1 ? 'queda 1' : `quedan ${libres}`} a este precio en nuestra web!
+                          </div>
+                        ) : (
+                          <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.75rem' }}>{libres} disponibles</div>
+                        )}
+                      </td>
+                      <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
+                        {elegido ? (
+                          <select
+                            value={rooms}
+                            onChange={(e) => consultar({ ...valoresBusqueda, habitaciones: Number(e.target.value), tipoId: p.product_id })}
+                            disabled={consultando}
+                            aria-label={`Habitaciones de tipo ${p.room_name}`}
+                            style={{ padding: '8px 10px', border: '1px solid #003580', borderRadius: '4px', fontWeight: 700, fontSize: '14px', width: '100%', background: '#ffffff', cursor: 'pointer' }}
+                          >
+                            {Array.from({ length: Math.min(libres, 10) }, (_, i) => i + 1).map((num) => (
+                              <option key={num} value={num}>{num}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => elegirProducto(p)}
+                            disabled={consultando}
+                            aria-label={`Elegir ${p.room_name}`}
+                            style={{ width: '100%', padding: '8px 10px', border: '1px solid #006ce4', borderRadius: '4px', background: '#ffffff', color: '#006ce4', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Elegir
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!cotizacion?.productos?.length && (
                 <tr>
                   <td>
                     <span className="dt-room-title-link">
@@ -1395,8 +1505,10 @@ export function AlojamientoDetail() {
                     </select>
                   </td>
                 </tr>
+                )}
               </tbody>
             </table>
+            </div>
 
             {/* Sticky/Floating Booking.com Confirmation CTA Box */}
             <div
@@ -1412,7 +1524,7 @@ export function AlojamientoDetail() {
               }}
             >
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#003580' }}>
-                {rooms} {rooms === 1 ? 'apartamento' : 'apartamentos'} para {adults} {adults === 1 ? 'adulto' : 'adultos'}{edadesNinos.length > 0 ? ` y ${edadesNinos.length} ${edadesNinos.length === 1 ? 'niño' : 'niños'}` : ''} · {nightsCount} {nightsCount === 1 ? 'noche' : 'noches'}
+                {rooms} × {cotizacion?.producto?.room_name || (rooms === 1 ? 'habitación' : 'habitaciones')} para {adults} {adults === 1 ? 'adulto' : 'adultos'}{edadesNinos.length > 0 ? ` y ${edadesNinos.length} ${edadesNinos.length === 1 ? 'niño' : 'niños'}` : ''} · {nightsCount} {nightsCount === 1 ? 'noche' : 'noches'}
               </div>
               <div style={{ fontSize: '22px', fontWeight: 800, color: '#1a1a1a', lineHeight: 1.1 }}>
                 {currency} {convertPrice(totalPrice)}
@@ -2136,6 +2248,8 @@ export function AlojamientoDetail() {
           checkout={checkout}
           adults={adults}
           children={edadesNinos.length}
+          edadesNinos={edadesNinos}
+          tipoHabitacion={cotizacion?.producto || null}
           rooms={rooms}
           nightsCount={nightsCount}
           originalPrice={originalPrice}

@@ -7,6 +7,11 @@ import { AlojamientosService } from './alojamientos.service';
 import { Alojamiento } from './entities/alojamiento.entity';
 import { ReservaAlojamiento } from './entities/reserva.entity';
 import { ResenaAlojamiento } from './entities/resena.entity';
+import { TipoHabitacion } from './entities/tipo-habitacion.entity';
+import { HuespedReserva } from './entities/huesped-reserva.entity';
+import { TiposHabitacionService } from './tipos-habitacion.service';
+import { ProveedoresAlojamientoService } from './proveedores.service';
+import { RepositorioMemoria } from './pruebas-http/repositorio-memoria';
 import { ReservationStatus } from './dto/reservation.dto';
 import { TelemetryService } from '../telemetry/telemetry.service';
 import { CodigoProblema, ProblemaApi } from '../../core/errors/codigo-error';
@@ -104,6 +109,11 @@ describe('AlojamientosService', () => {
         { provide: getRepositoryToken(Alojamiento), useValue: alojamientoRepo },
         { provide: getRepositoryToken(ReservaAlojamiento), useValue: reservaRepo },
         { provide: getRepositoryToken(ResenaAlojamiento), useValue: resenaRepo },
+        // Tipos de habitación y huéspedes en memoria: cada alojamiento recibe su tipo "estándar".
+        { provide: getRepositoryToken(TipoHabitacion), useValue: new RepositorioMemoria<any>({ generarId: true }) },
+        { provide: getRepositoryToken(HuespedReserva), useValue: new RepositorioMemoria<any>({ generarId: true }) },
+        TiposHabitacionService,
+        { provide: ProveedoresAlojamientoService, useValue: { existe: jest.fn().mockResolvedValue(true) } },
         { provide: TelemetryService, useValue: telemetryService },
       ],
     }).compile();
@@ -167,9 +177,9 @@ describe('AlojamientosService', () => {
         adultos: 2,
       };
 
-      // El mock de `find` ignora el `where`: la primera llamada es la búsqueda de
-      // una reserva previa del mismo cliente, que aquí no existe.
-      reservaRepo.find.mockResolvedValueOnce([]);
+      // El mock de `find` ignora el `where`: aquí no hay reservas previas (ni del
+      // cliente ni ocupando habitaciones).
+      reservaRepo.find.mockResolvedValue([]);
       const result = await service.reservar('test-uuid-1', dto as any, 'idemp-key-123');
 
       expect(result.status).toBe(ReservationStatus.CONFIRMED);
@@ -222,9 +232,10 @@ describe('AlojamientosService', () => {
         checkout: D(12),
       });
 
+      // Sin tipos propios, el alojamiento ofrece su tipo "estándar" automático.
       expect(res.request_id).toBeDefined();
-      expect(res.data.products).toHaveLength(3);
-      expect(res.data.products[0].room_name).toContain('Estándar');
+      expect(res.data.products).toHaveLength(1);
+      expect(res.data.products[0].room_name).toContain('estándar');
       expect(res.data.products[0].price).toBe(400); // 200 * 2 noches
     });
 

@@ -25,31 +25,71 @@ DROP TABLE IF EXISTS disponibilidad_calendario CASCADE;
 -- ============================================================================
 CREATE TABLE alojamientos (
     id VARCHAR(50) PRIMARY KEY,
-    nombre VARCHAR(255) NOT NULL,
+    nombre VARCHAR(255) NOT NULL CONSTRAINT chk_alojamientos_nombre CHECK (btrim(nombre) <> ''),
     descripcion TEXT,
-    tipo_propiedad VARCHAR(100) DEFAULT 'Hotel / Resort',
-    tipo_alojamiento VARCHAR(100) DEFAULT 'Habitación privada',
-    destino VARCHAR(100) NOT NULL,
-    precio_noche NUMERIC(10, 2) NOT NULL,
-    moneda VARCHAR(10) DEFAULT 'USD',
-    capacidad_adultos INT DEFAULT 2,
-    capacidad_ninos INT DEFAULT 0,
-    habitaciones INT DEFAULT 1,
-    camas INT DEFAULT 1,
-    banos NUMERIC(3, 1) DEFAULT 1.0,
-    tiene_piscina BOOLEAN DEFAULT false,
-    photos JSONB DEFAULT '[]'::jsonb,
-    amenidades JSONB DEFAULT '[]'::jsonb,
-    host JSONB DEFAULT '{}'::jsonb,
-    ratings JSONB DEFAULT '{"score": 9.0, "number_of_reviews": 0}'::jsonb,
-    ubicacion JSONB DEFAULT '{}'::jsonb,
-    creado_en TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
-    actualizado_en TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
-    deleted_at TIMESTAMP WITHOUT TIME ZONE
+    tipo_propiedad VARCHAR(100) NOT NULL DEFAULT 'Hotel / Resort',
+    tipo_alojamiento VARCHAR(100) NOT NULL DEFAULT 'Habitación privada',
+    destino VARCHAR(100) NOT NULL CONSTRAINT chk_alojamientos_destino CHECK (btrim(destino) <> ''),
+    precio_noche NUMERIC(10, 2) NOT NULL CONSTRAINT chk_alojamientos_precio CHECK (precio_noche > 0),
+    moneda VARCHAR(10) NOT NULL DEFAULT 'USD' CONSTRAINT chk_alojamientos_moneda CHECK (moneda ~ '^[A-Z]{3}$'),
+    capacidad_adultos INT NOT NULL DEFAULT 2,
+    capacidad_ninos INT NOT NULL DEFAULT 0,
+    habitaciones INT NOT NULL DEFAULT 1,
+    camas INT NOT NULL DEFAULT 1,
+    banos NUMERIC(3, 1) NOT NULL DEFAULT 1.0,
+    tiene_piscina BOOLEAN NOT NULL DEFAULT false,
+    photos JSONB NOT NULL DEFAULT '[]'::jsonb CONSTRAINT chk_alojamientos_photos CHECK (jsonb_typeof(photos) = 'array'),
+    amenidades JSONB NOT NULL DEFAULT '[]'::jsonb CONSTRAINT chk_alojamientos_amenidades CHECK (jsonb_typeof(amenidades) = 'array'),
+    host JSONB DEFAULT '{}'::jsonb CONSTRAINT chk_alojamientos_host CHECK (host IS NULL OR jsonb_typeof(host) = 'object'),
+    ratings JSONB NOT NULL DEFAULT '{"score": 9.0, "number_of_reviews": 0}'::jsonb,
+    ubicacion JSONB NOT NULL DEFAULT '{}'::jsonb,
+    -- Integración con proveedores (ver docs/Integracion_Alojamientos.md)
+    proveedor_id VARCHAR(60) CONSTRAINT chk_alojamientos_proveedor CHECK (proveedor_id IS NULL OR proveedor_id ~ '^[a-z0-9-]{2,60}$'),
+    id_externo VARCHAR(100) CONSTRAINT chk_alojamientos_id_externo CHECK (id_externo IS NULL OR id_externo ~ '^[A-Za-z0-9._-]{1,100}$'),
+    estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO' CONSTRAINT chk_alojamientos_estado CHECK (estado IN ('ACTIVO', 'INACTIVO')),
+    politicas JSONB,
+    ultima_sincronizacion TIMESTAMP WITHOUT TIME ZONE,
+    creado_en TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+    actualizado_en TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMP WITHOUT TIME ZONE,
+    CONSTRAINT chk_alojamientos_capacidad CHECK (capacidad_adultos >= 1 AND capacidad_ninos >= 0),
+    CONSTRAINT chk_alojamientos_inventario CHECK (habitaciones >= 1 AND camas >= 1 AND banos >= 0),
+    CONSTRAINT chk_alojamientos_ratings CHECK (
+        jsonb_typeof(ratings) = 'object'
+        AND CASE WHEN jsonb_typeof(ratings->'score') = 'number' THEN (ratings->>'score')::numeric BETWEEN 0 AND 10 ELSE true END
+    ),
+    CONSTRAINT chk_alojamientos_ubicacion CHECK (
+        jsonb_typeof(ubicacion) = 'object'
+        AND (ubicacion->>'country' IS NULL OR ubicacion->>'country' ~ '^[A-Z]{2}$')
+    ),
+    CONSTRAINT chk_alojamientos_politicas CHECK (
+        politicas IS NULL OR (
+            jsonb_typeof(politicas) = 'object'
+            AND (politicas->>'checkin_desde'  IS NULL OR politicas->>'checkin_desde'  ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            AND (politicas->>'checkin_hasta'  IS NULL OR politicas->>'checkin_hasta'  ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            AND (politicas->>'checkout_hasta' IS NULL OR politicas->>'checkout_hasta' ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$')
+        )
+    )
 );
 
 CREATE INDEX idx_alojamientos_destino ON alojamientos(destino);
 CREATE INDEX idx_alojamientos_precio ON alojamientos(precio_noche);
+CREATE INDEX idx_alojamientos_estado ON alojamientos(estado);
+CREATE INDEX idx_alojamientos_proveedor ON alojamientos(proveedor_id) WHERE proveedor_id IS NOT NULL;
+CREATE INDEX idx_alojamientos_publicos ON alojamientos(destino, precio_noche) WHERE estado = 'ACTIVO' AND deleted_at IS NULL;
+CREATE UNIQUE INDEX ux_alojamientos_proveedor_externo ON alojamientos(proveedor_id, id_externo)
+    WHERE proveedor_id IS NOT NULL AND id_externo IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION alojamientos_tocar_actualizado_en()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.actualizado_en := now();
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_alojamientos_actualizado_en
+  BEFORE UPDATE ON alojamientos
+  FOR EACH ROW EXECUTE FUNCTION alojamientos_tocar_actualizado_en();
 
 -- ============================================================================
 -- 2. TABLA: RESERVAS_ALOJAMIENTO
@@ -251,3 +291,11 @@ INSERT INTO resenas_alojamiento (alojamiento_id, usuario_id, usuario_nombre, usu
 ('hotel-cartagena-02', 'user-02', 'Camila Restrepo', 'Colombia', 'La ubicación en el centro amurallado es mágica. Ver el atardecer desde la piscina de la azotea con una copa de vino no tiene precio.', 9.9, 10.0, 10.0, 9.8),
 ('hotel-quito-03', 'user-03', 'Jean-Luc Dupont', 'Francia', 'Hotel magnifique avec une histoire riche. Le personnel est aux petits soins et la vue sur la place San Francisco est sublime.', 9.7, 9.8, 9.8, 9.5),
 ('hotel-medellin-04', 'user-04', 'David Silva', 'Ecuador', 'Muy buen ambiente, diseño moderno e innovador. La ubicación en el Poblado te permite ir caminando a los mejores restaurantes y cafés.', 9.3, 9.5, 9.0, 9.4);
+
+-- ============================================================================
+-- DESPUÉS DE ESTE SCRIPT, aplicar en orden (también en una base nueva):
+--   1. database/migraciones/2026-10-12_alojamientos_integracion.sql
+--   2. database/migraciones/2026-10-13_alojamientos_modelo_relacional.sql
+--      (proveedores, tipos de habitación, huéspedes y la reserva ↔ usuario)
+-- Ambas son idempotentes.
+-- ============================================================================

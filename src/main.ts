@@ -75,6 +75,9 @@ async function bootstrap() {
       'Idempotency-Key',
       'x-device-fingerprint',
       'X-Device-Fingerprint',
+      // API key de los sistemas de proveedores (sincronización de alojamientos).
+      'x-api-key',
+      'X-Api-Key',
     ],
     credentials: true,
   });
@@ -101,6 +104,7 @@ async function bootstrap() {
     )
     .setVersion('1.0')
     .addBearerAuth()
+    .addApiKey({ type: 'apiKey', name: 'X-Api-Key', in: 'header', description: 'API key de proveedor (ALOJAMIENTOS_API_KEYS)' }, 'X-Api-Key')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
