@@ -98,6 +98,36 @@ export class Alojamiento {
     };
   };
 
+  // ── Integración con proveedores ────────────────────────────────────────────
+  // Origen del dato: NULL = alta manual en el panel; si no, el id del proveedor
+  // (p. ej. el sistema de Alojamientos de otro grupo) que lo sincroniza.
+  @Column({ name: 'proveedor_id', type: 'varchar', length: 60, nullable: true })
+  proveedorId?: string | null;
+
+  // Id del alojamiento EN el sistema del proveedor. (proveedor_id, id_externo) es
+  // único: reenviar el mismo alojamiento actualiza en vez de duplicar.
+  @Column({ name: 'id_externo', type: 'varchar', length: 100, nullable: true })
+  idExterno?: string | null;
+
+  // ACTIVO = se muestra y se puede reservar; INACTIVO = oculto en el catálogo
+  // público (pausado por el admin o retirado por el proveedor), sin borrar su historial.
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVO' })
+  estado: 'ACTIVO' | 'INACTIVO';
+
+  // Políticas de la casa: horarios de entrada/salida, cancelación, mascotas, etc.
+  @Column('jsonb', { nullable: true })
+  politicas?: {
+    checkin_desde?: string;
+    checkin_hasta?: string;
+    checkout_hasta?: string;
+    cancelacion?: string;
+    mascotas?: boolean;
+    fumar?: boolean;
+  } | null;
+
+  @Column({ name: 'ultima_sincronizacion', type: 'timestamp', nullable: true })
+  ultimaSincronizacion?: Date | null;
+
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   createdAt: Date;
 

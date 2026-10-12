@@ -7,11 +7,13 @@ import { AdminFinanzasService } from './admin-finanzas.service';
 import { AdminAuditService, actorDesdeRequest } from './admin-audit.service';
 import { AdminProveedoresService } from './admin-proveedores.service';
 import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
+import { AdminRoleGuard } from '../../core/guards/admin-role.guard';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
 @Controller('admin')
-@UseGuards(SupabaseAuthGuard)
+// Autenticado Y administrador. Antes bastaba con estar logueado.
+@UseGuards(SupabaseAuthGuard, AdminRoleGuard)
 @UseInterceptors(AdminErrorsInterceptor)
 export class AdminController {
   constructor(
@@ -37,6 +39,16 @@ export class AdminController {
   @ApiResponse({ status: 503, description: 'No se pudo leer auth.users ni la Admin API de Supabase.' })
   async getUsers() {
     return this.adminService.getUsers();
+  }
+
+  @Post('users')
+  @ApiOperation({ summary: 'Crear un usuario (cliente o administrador) desde el panel' })
+  @ApiResponse({ status: 201, description: 'Usuario creado.' })
+  @ApiResponse({ status: 409, description: 'Ya existe un usuario con ese correo.' })
+  async crearUsuario(@Body() body: { email?: string; password?: string; rol?: string }, @Req() req: any) {
+    const res = await this.adminService.crearUsuario(body);
+    await this.auditService.registrar(actorDesdeRequest(req), 'Creó usuario', 'usuario', res.email, { rol: res.rol });
+    return res;
   }
 
   @Put('users/:id/action')

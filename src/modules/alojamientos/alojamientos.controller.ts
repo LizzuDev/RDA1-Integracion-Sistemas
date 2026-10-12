@@ -16,6 +16,9 @@ import {
   BadRequestException,
   ParseUUIDPipe,
   Inject,
+  Req,
+  UseGuards,
+  Optional,
 } from '@nestjs/common';
 import { CacheInterceptor, CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
@@ -27,7 +30,13 @@ import {
   ApiParam,
   ApiHeader,
   ApiBody,
+  ApiBearerAuth,
+  ApiSecurity,
+  ApiQuery,
 } from '@nestjs/swagger';
+import { GestionAlojamientosGuard, ClienteAutenticadoGuard } from './guards/gestion-alojamientos.guard';
+import { SincronizarAlojamientosDto } from './dto/sincronizar.dto';
+import { AdminAuditService, actorDesdeRequest } from '../admin/admin-audit.service';
 import { AlojamientoResponseDto } from './dto/alojamiento-response.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { SearchAlojamientosRequestDto } from './dto/search-alojamientos.dto';
@@ -94,7 +103,22 @@ export class AlojamientosController {
   constructor(
     private readonly alojamientosService: AlojamientosService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    @Optional() private readonly audit?: AdminAuditService,
   ) {}
+
+  /**
+   * Deja constancia en la auditoría del panel de cada cambio del catálogo, sea
+   * de un administrador o del sistema de un proveedor (API key).
+   */
+  private async auditar(req: any, accion: string, entidadId: string | null, detalle?: any) {
+    if (!this.audit) return;
+    const actor = actorDesdeRequest(req);
+    if (req?.actorCatalogo?.tipo === 'proveedor') {
+      actor.id = null;
+      actor.email = `proveedor:${req.actorCatalogo.proveedorId}`;
+    }
+    await this.audit.registrar(actor, accion, 'alojamiento', entidadId, detalle).catch(() => undefined);
+  }
 
   /**
    * El catálogo (`GET /alojamientos` y `GET /alojamientos/:id`) se cachea 60 s.
@@ -347,8 +371,12 @@ export class AlojamientosController {
   @Get('reservations')
   @ApiOperation({ summary: 'Consultar el historial de reservas de alojamientos (Frontend MisReservas)' })
   @ApiResponse({ status: 200, description: 'Listado de reservas.' })
-  async getReservas() {
-    return this.alojamientosService.getReservas();
+  @UseGuards(ClienteAutenticadoGuard)
+  @ApiBearerAuth()
+  @ApiResponse({ status: 401, description: 'Sin sesión iniciada.' })
+  async getReservas(@Req() req: any) {
+    // Cada cliente ve solo sus reservas; un administrador ve todas.
+    return this.alojamientosService.getReservas(req.user);
   }
 
   @Get('reservations/:reservationId')
@@ -380,6 +408,46 @@ export class AlojamientosController {
     return this.alojamientosService.cancelarReserva(reservationId, dto, keyValida);
   }
 
+  // =========================================================================
+  // GESTIÓN E INTEGRACIÓN CON PROVEEDORES
+  // =========================================================================
+
+  @Post('sincronizar')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sincronizar el inventario de un proveedor (lote idempotente)',
+    description:
+      'Crea o actualiza por (proveedorId, idExterno). Reenviar el mismo lote no duplica. ' +
+      'Para retirar un alojamiento, envíalo con estado INACTIVO. Cada elemento devuelve su resultado (CREADO, ACTUALIZADO o ERROR con el campo exacto).',
+  })
+  @ApiResponse({ status: 200, description: 'Resultado por elemento y resumen del lote.' })
+  async sincronizar(@Body() dto: SincronizarAlojamientosDto, @Req() req: any) {
+    const resultado = await this.alojamientosService.sincronizar(dto.alojamientos, req.actorCatalogo, dto.proveedorId);
+    if (resultado.resumen.creados || resultado.resumen.actualizados) await this.invalidarCatalogo();
+    await this.auditar(req, 'Sincronizó catálogo de alojamientos', resultado.proveedor_id, resultado.resumen);
+    return resultado;
+  }
+
+  @Get('gestion/catalogo')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Catálogo completo para el panel de gestión (incluye inactivos, origen y reservas pendientes)' })
+  @ApiQuery({ name: 'estado', required: false, enum: ['ACTIVO', 'INACTIVO'] })
+  @ApiQuery({ name: 'proveedor', required: false, description: 'Id de proveedor, o "manual" para altas del panel' })
+  @ApiQuery({ name: 'q', required: false, description: 'Texto en nombre, destino, id o idExterno' })
+  async catalogoGestion(
+    @Req() req: any,
+    @Query('estado') estado?: string,
+    @Query('proveedor') proveedor?: string,
+    @Query('q') q?: string,
+  ) {
+    return this.alojamientosService.catalogoGestion({ estado, proveedor, q }, req.actorCatalogo);
+  }
+
   @Get()
   @UseInterceptors(CacheInterceptor)
   @Header('X-API-Deprecation-Date', '2027-12-31')
@@ -401,10 +469,17 @@ export class AlojamientosController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Registrar un nuevo alojamiento (Admin)' })
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Registrar un nuevo alojamiento (Admin o proveedor con API key)' })
   @ApiResponse({ status: 201, description: 'El alojamiento ha sido creado exitosamente.', type: AlojamientoResponseDto })
-  async create(@Body() dto: CreateAlojamientoDto) {
-    const creado = await this.alojamientosService.create(dto);
+  @ApiResponse({ status: 401, description: 'Sin token de admin ni API key de proveedor.' })
+  @ApiResponse({ status: 403, description: 'El usuario no es administrador.' })
+  @ApiResponse({ status: 409, description: 'El proveedor ya tiene un alojamiento con ese idExterno.' })
+  async create(@Body() dto: CreateAlojamientoDto, @Req() req: any) {
+    const creado = await this.alojamientosService.create(dto, req.actorCatalogo);
+    await this.auditar(req, 'Creó alojamiento', creado.id, { nombre: creado.nombre, proveedor: creado.proveedorId ?? null });
     await this.invalidarCatalogo();
     return creado;
   }
@@ -430,26 +505,39 @@ export class AlojamientosController {
   }
 
   @Put(':id')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Reemplazar datos de un alojamiento (Admin)' })
-  async replace(@Param('id') id: string, @Body() dto: CreateAlojamientoDto) {
-    await this.alojamientosService.replace(id, dto);
+  @ApiOperation({ summary: 'Reemplazar datos de un alojamiento (Admin o su proveedor)' })
+  async replace(@Param('id') id: string, @Body() dto: CreateAlojamientoDto, @Req() req: any) {
+    await this.alojamientosService.replace(id, dto, req.actorCatalogo);
+    await this.auditar(req, 'Reemplazó alojamiento', id);
     await this.invalidarCatalogo();
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Actualizar parcialmente un alojamiento (Admin)' })
-  async update(@Param('id') id: string, @Body() dto: UpdateAlojamientoDto) {
-    const actualizado = await this.alojamientosService.update(id, dto);
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
+  @ApiOperation({ summary: 'Actualizar parcialmente un alojamiento, p. ej. precio o estado (Admin o su proveedor)' })
+  async update(@Param('id') id: string, @Body() dto: UpdateAlojamientoDto, @Req() req: any) {
+    const actualizado = await this.alojamientosService.update(id, dto, req.actorCatalogo);
+    await this.auditar(req, dto.estado ? `Cambió estado de alojamiento a ${dto.estado}` : 'Editó alojamiento', id, { campos: Object.keys(dto) });
     await this.invalidarCatalogo();
     return actualizado;
   }
 
   @Delete(':id')
+  @UseGuards(GestionAlojamientosGuard)
+  @ApiBearerAuth()
+  @ApiSecurity('X-Api-Key')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Eliminar un alojamiento (Admin)' })
-  async delete(@Param('id') id: string) {
-    await this.alojamientosService.delete(id);
+  @ApiOperation({ summary: 'Eliminar un alojamiento (Admin o su proveedor)' })
+  @ApiResponse({ status: 409, description: 'Tiene reservas confirmadas pendientes: desactivarlo en su lugar.' })
+  async delete(@Param('id') id: string, @Req() req: any) {
+    await this.alojamientosService.delete(id, req.actorCatalogo);
+    await this.auditar(req, 'Eliminó alojamiento', id);
     await this.invalidarCatalogo();
   }
 

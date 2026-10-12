@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { useLanguage, languages } from '../hooks/LanguageContext';
 import { supabase } from '../services/supabase';
+import { isAdminUser } from './AdminGuard';
 import {
   BedIcon,
   FlightIcon,
@@ -144,7 +145,7 @@ export function Navbar() {
   };
 
 
-  const isAdmin = user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin';
+  const isAdmin = isAdminUser(user);
 
   return (
     <nav className="navbar">
@@ -208,7 +209,7 @@ export function Navbar() {
                   >
                     <span>👤</span> {t('nav.edit_account')}
                   </div>
-                  {(user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin') && (
+                  {isAdminUser(user) && (
                     <Link 
                       to="/admin"
                       onClick={() => setShowDropdown(false)}

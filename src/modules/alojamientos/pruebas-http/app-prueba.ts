@@ -18,6 +18,48 @@ import { HateoasInterceptor } from '../../../core/interceptors/hateoas.intercept
 import { crearValidationPipeGlobal } from '../../../core/validation/validation-pipe';
 import { fechaRelativa } from '../reglas-estancia';
 import { RepositorioMemoria } from './repositorio-memoria';
+import { SesionSupabaseService } from '../../../core/auth/sesion-supabase.service';
+import { GestionAlojamientosGuard, ClienteAutenticadoGuard } from '../guards/gestion-alojamientos.guard';
+
+/**
+ * Identidades de prueba. La sesión de Supabase se sustituye por un mapa
+ * token → usuario; las API keys de proveedores van en ALOJAMIENTOS_API_KEYS.
+ */
+export const USUARIOS = {
+  admin: { id: 'u-admin', email: 'admin@booking.com', app_metadata: {} },
+  adminPromovido: { id: 'u-admin2', email: 'gestor@booking.com', app_metadata: { role: 'admin' } },
+  cliente: { id: 'u-cli', email: 'cliente@example.com', app_metadata: {}, user_metadata: {} },
+  // Intento de escalada: se pone role=admin en user_metadata (editable por el usuario).
+  tramposo: { id: 'u-tramp', email: 'tramposo@example.com', app_metadata: {}, user_metadata: { role: 'admin' } },
+};
+export const TOKENS: Record<string, keyof typeof USUARIOS> = {
+  'token-admin': 'admin',
+  'token-admin-promovido': 'adminPromovido',
+  'token-cliente': 'cliente',
+  'token-tramposo': 'tramposo',
+};
+export const API_KEYS = {
+  'proveedor-a': 'clave-proveedor-a-0123456789abcdef',
+  'proveedor-b': 'clave-proveedor-b-0123456789abcdef',
+};
+process.env.ALOJAMIENTOS_API_KEYS = Object.entries(API_KEYS).map(([id, k]) => `${id}:${k}`).join(',');
+
+/** Con qué identidad se hace una petición. Por defecto, como administrador. */
+export type Como = 'admin' | 'admin-promovido' | 'cliente' | 'tramposo' | 'anonimo' | 'token-invalido' | 'proveedor-a' | 'proveedor-b' | 'clave-falsa';
+
+function cabecerasDe(como: Como): Record<string, string> {
+  switch (como) {
+    case 'admin': return { Authorization: 'Bearer token-admin' };
+    case 'admin-promovido': return { Authorization: 'Bearer token-admin-promovido' };
+    case 'cliente': return { Authorization: 'Bearer token-cliente' };
+    case 'tramposo': return { Authorization: 'Bearer token-tramposo' };
+    case 'token-invalido': return { Authorization: 'Bearer token-que-no-existe' };
+    case 'proveedor-a': return { 'X-Api-Key': API_KEYS['proveedor-a'] };
+    case 'proveedor-b': return { 'X-Api-Key': API_KEYS['proveedor-b'] };
+    case 'clave-falsa': return { 'X-Api-Key': 'clave-inventada-0123456789abcdef' };
+    default: return {};
+  }
+}
 
 /** `YYYY-MM-DD` a `n` días de hoy. */
 export const dia = (n: number) => fechaRelativa(n);
@@ -87,6 +129,8 @@ export interface OpcionesPeticion {
   headers?: Record<string, string>;
   /** Atajo: añade `Idempotency-Key` con un UUID nuevo. */
   idem?: boolean | string;
+  /** Identidad de la petición (por defecto `admin`). */
+  como?: Como;
 }
 
 export interface AppPrueba {
@@ -124,6 +168,12 @@ export async function crearAppPrueba(): Promise<AppPrueba> {
       { provide: getRepositoryToken(ResenaAlojamiento), useValue: repos.resenas },
       { provide: HttpService, useValue: http },
       { provide: TelemetryService, useValue: telemetria },
+      {
+        provide: SesionSupabaseService,
+        useValue: { obtenerUsuario: async (token: string) => (TOKENS[token] ? structuredClone(USUARIOS[TOKENS[token]]) : null) },
+      },
+      GestionAlojamientosGuard,
+      ClienteAutenticadoGuard,
     ],
   })
     .setLogger({ log() {}, error() {}, warn() {}, debug() {}, verbose() {} })
@@ -141,7 +191,7 @@ export async function crearAppPrueba(): Promise<AppPrueba> {
   const base = `http://127.0.0.1:${port}/api/v1`;
 
   const pedir = async (metodo: string, ruta: string, opciones: OpcionesPeticion = {}): Promise<RespuestaHttp> => {
-    const headers: Record<string, string> = { ...(opciones.headers ?? {}) };
+    const headers: Record<string, string> = { ...cabecerasDe(opciones.como ?? 'admin'), ...(opciones.headers ?? {}) };
     if (opciones.idem) headers['Idempotency-Key'] = typeof opciones.idem === 'string' ? opciones.idem : randomUUID();
     let cuerpo: string | undefined;
     if (opciones.raw !== undefined) {

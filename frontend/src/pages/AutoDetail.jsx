@@ -9,6 +9,7 @@ import { savePendingReservation } from '../services/offlineSync';
 import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { OfflineReservaModal } from '../components/OfflineReservaModal';
 import { useCurrency } from '../hooks/CurrencyContext';
+import { isAdminUser } from '../components/AdminGuard';
 
 export function AutoDetail() {
   const { id } = useParams();
@@ -16,7 +17,7 @@ export function AutoDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { convertPrice } = useCurrency();
-  const isAdmin = user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin';
+  const isAdmin = isAdminUser(user);
   const auto = location.state?.auto || {};
 
   const precioDiario = auto.price || 35.50;

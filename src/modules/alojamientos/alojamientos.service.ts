@@ -12,8 +12,10 @@ import {
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { randomUUID } from 'crypto';
+import { Not, Repository } from 'typeorm';
+import { plainToInstance } from 'class-transformer';
+import { validate, ValidationError } from 'class-validator';
+import { createHash, randomUUID } from 'crypto';
 
 import { Alojamiento } from './entities/alojamiento.entity';
 import { ReservaAlojamiento } from './entities/reserva.entity';
@@ -68,7 +70,16 @@ import {
   ProblemaApi,
   validacion,
 } from '../../core/errors/codigo-error';
-import { validarCapacidad, validarEstancia, calcularNoches } from './reglas-estancia';
+import { validarCapacidad, validarEstancia, calcularNoches, fechaRelativa } from './reglas-estancia';
+import { ActorCatalogo, exigirPropiedad } from './guards/gestion-alojamientos.guard';
+import { aplanarValidacion } from '../../core/validation/validation-pipe';
+import { esAdministrador, UsuarioSupabase } from '../../core/auth/administradores';
+
+/** Máximo de alojamientos por petición de sincronización. */
+export const MAX_SINCRONIZACION = 100;
+
+/** Solo los alojamientos ACTIVOS se muestran y se pueden reservar. */
+const SOLO_ACTIVOS = { estado: Not('INACTIVO') } as const;
 
 /** Una cotización (preview) caduca a los 30 minutos, como el carrito de Booking. */
 export const PREVIEW_TTL_MS = 30 * 60 * 1000;
@@ -147,11 +158,40 @@ export class AlojamientosService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.asegurarEsquemaIntegracion();
     try {
       const count = await this.alojamientoRepo.count();
       this.logger.log(`Conexión a base de datos de Alojamientos activa. Total de registros: ${count}`);
     } catch (err: any) {
       this.logger.warn('Error al verificar base de datos de alojamientos:', err.message);
+    }
+  }
+
+  /**
+   * Columnas de integración con proveedores. Como TypeORM corre con
+   * `synchronize: false`, se crean aquí si no existen (mismo patrón que el panel
+   * de administración). Idempotente: se puede ejecutar en cada arranque.
+   * También están en `database/supabase_hospitality_schema.sql`.
+   */
+  private async asegurarEsquemaIntegracion() {
+    const repo: any = this.alojamientoRepo;
+    if (typeof repo.query !== 'function') return; // repositorio en memoria de las pruebas
+    const sentencias = [
+      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS proveedor_id VARCHAR(60)`,
+      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS id_externo VARCHAR(100)`,
+      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO'`,
+      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS politicas JSONB`,
+      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS ultima_sincronizacion TIMESTAMP`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS ux_alojamientos_proveedor_externo
+         ON alojamientos (proveedor_id, id_externo)
+         WHERE proveedor_id IS NOT NULL AND id_externo IS NOT NULL`,
+    ];
+    for (const sql of sentencias) {
+      try {
+        await repo.query(sql);
+      } catch (e: any) {
+        this.logger.error(`No se pudo preparar el esquema de integración de alojamientos (${e.message}). SQL: ${sql}`);
+      }
     }
   }
 
@@ -196,6 +236,11 @@ export class AlojamientosService implements OnModuleInit {
         country: countryCode,
         coordinates: { latitude: 0, longitude: 0 },
       },
+      politicas: l.politicas || null,
+      estado: l.estado || 'ACTIVO',
+      proveedor_id: l.proveedorId ?? null,
+      id_externo: l.idExterno ?? null,
+      ultima_sincronizacion: l.ultimaSincronizacion ?? null,
       url: { web: `/alojamientos/${l.id}` },
       _links: {
         self: { href: `/api/v1/alojamientos/${l.id}`, type: 'GET' },
@@ -262,7 +307,7 @@ export class AlojamientosService implements OnModuleInit {
     });
 
     const rowsCount = dto.rows || 25;
-    const catalogo = await this.alojamientoRepo.find({ order: { createdAt: 'ASC' } });
+    const catalogo = await this.alojamientoRepo.find({ where: SOLO_ACTIVOS as any, order: { createdAt: 'ASC' } });
     // Los filtros se aplican ANTES de paginar: si no, una página podía quedar
     // corta (o vacía) aunque existieran más resultados que cumplían el filtro.
     let coincidentes = coincideDestino ? catalogo.filter(coincideDestino) : catalogo;
@@ -561,7 +606,7 @@ export class AlojamientosService implements OnModuleInit {
     const accId = String(dto.accommodation);
     const nights = validarEstancia(dto.checkin, dto.checkout);
     // Nunca se cotiza otro hotel en lugar del pedido: un ID inexistente es un 404.
-    const local = await this.alojamientoRepo.findOne({ where: { id: accId } });
+    const local = await this.alojamientoRepo.findOne({ where: { id: accId, ...SOLO_ACTIVOS } as any });
     if (!local) {
       throw new NotFoundException(`El alojamiento '${accId}' no existe.`);
     }
@@ -660,7 +705,7 @@ export class AlojamientosService implements OnModuleInit {
     this.logger.log('Previsualizando orden de alojamiento', dto);
     const accId = String(dto.accommodation_id);
     const nights = validarEstancia(dto.checkin, dto.checkout);
-    const local = await this.alojamientoRepo.findOne({ where: { id: accId } });
+    const local = await this.alojamientoRepo.findOne({ where: { id: accId, ...SOLO_ACTIVOS } as any });
     if (!local) {
       throw new NotFoundException(`El alojamiento '${dto.accommodation_id}' no existe.`);
     }
@@ -763,7 +808,7 @@ export class AlojamientosService implements OnModuleInit {
       );
     }
 
-    const local = await this.alojamientoRepo.findOne({ where: { id: preview.alojamientoId } });
+    const local = await this.alojamientoRepo.findOne({ where: { id: preview.alojamientoId, ...SOLO_ACTIVOS } as any });
     if (!local) {
       throw conflicto(
         CodigoProblema.ROOM_NO_LONGER_AVAILABLE,
@@ -1053,12 +1098,13 @@ export class AlojamientosService implements OnModuleInit {
     const page = query.page || 1;
 
     const locales = await this.alojamientoRepo.find({
+      where: SOLO_ACTIVOS as any,
       take: limit,
       skip: (page - 1) * limit,
     });
 
     if (locales.length > 0) {
-      const total = await this.alojamientoRepo.count();
+      const total = await this.alojamientoRepo.count({ where: SOLO_ACTIVOS as any });
       const data = locales.map((l) => this.transformAlojamiento(l));
       return {
         data,
@@ -1079,8 +1125,10 @@ export class AlojamientosService implements OnModuleInit {
   async findOne(id: string): Promise<any> {
     this.logger.log(`Consultando detalle de Alojamiento ID ${id}`);
 
+    // Un alojamiento INACTIVO no existe para el público (como una propiedad
+    // retirada de Booking); el panel de gestión lo ve por su propio endpoint.
     const local = await this.alojamientoRepo.findOne({
-      where: { id },
+      where: { id, ...SOLO_ACTIVOS } as any,
     });
 
     if (local) {
@@ -1092,7 +1140,7 @@ export class AlojamientosService implements OnModuleInit {
 
   async getAvailability(id: string, date?: string, checkoutDate?: string, excluirReservaId?: string): Promise<any> {
     this.logger.log(`Consultando disponibilidad para alojamiento ${id} en ${date} - ${checkoutDate}`);
-    const local = await this.alojamientoRepo.findOne({ where: { id } });
+    const local = await this.alojamientoRepo.findOne({ where: { id, ...SOLO_ACTIVOS } as any });
     if (!local) {
       throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
     }
@@ -1267,9 +1315,20 @@ export class AlojamientosService implements OnModuleInit {
     return this.buildReservaResponse(reserva);
   }
 
-  async getReservas(): Promise<any> {
+  /**
+   * "Mis reservas": un cliente solo ve SUS reservas (por el correo de su sesión);
+   * un administrador ve todas. Antes devolvía todas las reservas de todos los
+   * clientes, con nombre y correo, a cualquiera.
+   */
+  async getReservas(usuario?: UsuarioSupabase | null): Promise<any> {
     this.logger.log('Consultando historial de reservas de alojamientos');
-    const reservas = await this.reservaRepo.find({ order: { createdAt: 'DESC' } });
+    const email = (usuario?.email || '').trim().toLowerCase();
+    const verTodas = esAdministrador(usuario);
+    if (!verTodas && !email) return [];
+    const reservas = await this.reservaRepo.find({
+      ...(verTodas ? {} : { where: { customerEmail: email } }),
+      order: { createdAt: 'DESC' },
+    });
     const ids = [...new Set(reservas.map((r) => r.alojamientoId))];
     const alojamientos = ids.length > 0 ? await this.alojamientoRepo.find({ where: ids.map((id) => ({ id })) }) : [];
     const alojMap = new Map(alojamientos.map((a) => [a.id, a]));
@@ -1284,37 +1343,209 @@ export class AlojamientosService implements OnModuleInit {
     return this.buildReservaResponse(reserva, alojamiento);
   }
 
-  async create(dto: CreateAlojamientoDto): Promise<any> {
-    const id = (dto as any).id || `aloj-${Date.now()}`;
+  /** Id interno estable para un alojamiento que llega de un proveedor. */
+  private idParaProveedor(proveedorId: string, idExterno: string): string {
+    const legible = `${proveedorId}-${idExterno}`;
+    if (legible.length <= 50) return legible;
+    return `${proveedorId.slice(0, 30)}-${createHash('sha1').update(legible).digest('hex').slice(0, 16)}`;
+  }
+
+  /** Normaliza el DTO a columnas de la entidad (sin campos ajenos ni el proveedor). */
+  private camposDesdeDto(dto: Partial<CreateAlojamientoDto>) {
+    const { proveedorId: _p, ...resto } = dto as any;
+    const campos: Record<string, any> = {};
+    for (const [k, v] of Object.entries(resto)) {
+      if (v !== undefined) campos[k] = v;
+    }
+    return campos;
+  }
+
+  async create(dto: CreateAlojamientoDto, actor?: ActorCatalogo): Promise<any> {
+    // Con API key el proveedor es SIEMPRE el de la clave; un admin puede indicarlo.
+    const proveedorId = actor?.tipo === 'proveedor' ? actor.proveedorId : dto.proveedorId ?? null;
+    if (dto.idExterno && proveedorId) {
+      const existente = await this.alojamientoRepo.findOne({ where: { proveedorId, idExterno: dto.idExterno } as any });
+      if (existente) {
+        throw new ConflictException(
+          `El proveedor '${proveedorId}' ya tiene un alojamiento con idExterno '${dto.idExterno}' (id ${existente.id}). Usa PATCH /alojamientos/${existente.id} o POST /alojamientos/sincronizar.`,
+        );
+      }
+    }
+    const id = proveedorId && dto.idExterno ? this.idParaProveedor(proveedorId, dto.idExterno) : `aloj-${randomUUID().slice(0, 13)}`;
     const entity = this.alojamientoRepo.create({
       id,
-      ...dto,
-      photos: (dto as any).photos || [{ url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800' }],
-      amenidades: (dto as any).amenidades || [],
-      ratings: (dto as any).ratings || { score: 9.0, number_of_reviews: 0 },
-      host: (dto as any).host || null,
-      ubicacion: (dto as any).ubicacion || { city: dto.destino },
+      ...this.camposDesdeDto(dto),
+      proveedorId,
+      estado: dto.estado || 'ACTIVO',
+      moneda: dto.moneda || 'USD',
+      photos: dto.photos?.length ? dto.photos : [{ url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800' }],
+      amenidades: dto.amenidades || [],
+      ratings: { score: 9.0, number_of_reviews: 0 },
+      host: null,
+      ubicacion: dto.ubicacion || { city: dto.destino },
+      ultimaSincronizacion: actor?.tipo === 'proveedor' ? new Date() : null,
     } as any);
     return this.alojamientoRepo.save(entity);
   }
 
-  async replace(id: string, dto: CreateAlojamientoDto): Promise<void> {
+  async replace(id: string, dto: CreateAlojamientoDto, actor?: ActorCatalogo): Promise<void> {
     const alojamiento = await this.alojamientoRepo.findOneBy({ id });
     if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
-    await this.alojamientoRepo.save({ ...alojamiento, ...(dto as any) });
+    exigirPropiedad(actor, alojamiento.proveedorId);
+    await this.alojamientoRepo.save({
+      ...alojamiento,
+      ...this.camposDesdeDto(dto),
+      ...(actor?.tipo === 'admin' && dto.proveedorId !== undefined ? { proveedorId: dto.proveedorId } : {}),
+      ...(actor?.tipo === 'proveedor' ? { ultimaSincronizacion: new Date() } : {}),
+    } as any);
   }
 
-  async update(id: string, dto: UpdateAlojamientoDto): Promise<any> {
+  async update(id: string, dto: UpdateAlojamientoDto, actor?: ActorCatalogo): Promise<any> {
     const alojamiento = await this.alojamientoRepo.findOneBy({ id });
     if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
-    Object.assign(alojamiento, dto);
+    exigirPropiedad(actor, alojamiento.proveedorId);
+    Object.assign(alojamiento, this.camposDesdeDto(dto));
+    if (actor?.tipo === 'admin' && (dto as any).proveedorId !== undefined) alojamiento.proveedorId = (dto as any).proveedorId;
+    if (actor?.tipo === 'proveedor') alojamiento.ultimaSincronizacion = new Date();
     return this.alojamientoRepo.save(alojamiento);
   }
 
-  async delete(id: string): Promise<void> {
+  /**
+   * Baja definitiva. Se rechaza (409) si hay reservas confirmadas que aún no han
+   * terminado: borrar el hotel dejaría a esos clientes sin alojamiento ni datos.
+   * En ese caso hay que desactivarlo (estado INACTIVO), que lo oculta sin perder nada.
+   */
+  async delete(id: string, actor?: ActorCatalogo): Promise<void> {
     const alojamiento = await this.alojamientoRepo.findOneBy({ id });
     if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
+    exigirPropiedad(actor, alojamiento.proveedorId);
+    const hoy = fechaRelativa(0);
+    const pendientes = (await this.reservaRepo.find({ where: { alojamientoId: id, status: ReservationStatus.CONFIRMED } }))
+      .filter((r) => String(r.checkout) >= hoy);
+    if (pendientes.length > 0) {
+      throw new ConflictException(
+        `No se puede eliminar: tiene ${pendientes.length} reserva(s) confirmada(s) pendientes. Desactívalo (estado INACTIVO) para ocultarlo sin afectar a esos clientes.`,
+      );
+    }
     await this.alojamientoRepo.remove(alojamiento);
+  }
+
+  /**
+   * Catálogo para el panel de gestión: TODOS los alojamientos (también los
+   * inactivos), con su origen y sus reservas pendientes. Un proveedor solo ve los suyos.
+   */
+  async catalogoGestion(
+    filtros: { estado?: string; proveedor?: string; q?: string },
+    actor?: ActorCatalogo,
+  ): Promise<any> {
+    let lista = await this.alojamientoRepo.find({ order: { createdAt: 'DESC' } });
+    if (actor?.tipo === 'proveedor') lista = lista.filter((a) => a.proveedorId === actor.proveedorId);
+    const estado = (filtros.estado || '').toUpperCase();
+    if (estado === 'ACTIVO' || estado === 'INACTIVO') lista = lista.filter((a) => (a.estado || 'ACTIVO') === estado);
+    if (filtros.proveedor === 'manual') lista = lista.filter((a) => !a.proveedorId);
+    else if (filtros.proveedor) lista = lista.filter((a) => a.proveedorId === filtros.proveedor);
+    if (filtros.q?.trim()) {
+      const q = normalizarBusqueda(filtros.q);
+      lista = lista.filter((a) => [a.nombre, a.destino, a.id, a.idExterno].some((c) => normalizarBusqueda(c).includes(q)));
+    }
+
+    const hoy = fechaRelativa(0);
+    const confirmadas = await this.reservaRepo.find({ where: { status: ReservationStatus.CONFIRMED } });
+    const pendientesPor = new Map<string, number>();
+    for (const r of confirmadas) {
+      if (String(r.checkout) >= hoy) pendientesPor.set(r.alojamientoId, (pendientesPor.get(r.alojamientoId) || 0) + 1);
+    }
+
+    const todos = await this.alojamientoRepo.find();
+    const visibles = actor?.tipo === 'proveedor' ? todos.filter((a) => a.proveedorId === actor.proveedorId) : todos;
+    const proveedores = [...new Set(visibles.map((a) => a.proveedorId).filter(Boolean))].sort();
+
+    return {
+      data: lista.map((a) => ({
+        ...this.transformAlojamiento(a),
+        reservas_pendientes: pendientesPor.get(a.id) || 0,
+        creado_en: a.createdAt,
+        actualizado_en: a.updatedAt,
+      })),
+      resumen: {
+        total: visibles.length,
+        activos: visibles.filter((a) => (a.estado || 'ACTIVO') === 'ACTIVO').length,
+        inactivos: visibles.filter((a) => a.estado === 'INACTIVO').length,
+        manuales: visibles.filter((a) => !a.proveedorId).length,
+        de_proveedores: visibles.filter((a) => a.proveedorId).length,
+        proveedores,
+      },
+    };
+  }
+
+  /**
+   * Sincronización por lotes desde el sistema de un proveedor.
+   *
+   * Idempotente: la clave es (proveedorId, idExterno). Si ya existe se ACTUALIZA,
+   * si no se CREA; reenviar el mismo lote no duplica nada. Para retirar un
+   * alojamiento se envía con `estado: 'INACTIVO'`.
+   *
+   * Cada elemento se valida por separado con el MISMO contrato que el alta
+   * (CreateAlojamientoDto): un elemento inválido no impide guardar los demás, y
+   * su error se devuelve con el campo exacto, como en las APIs de contenido de Booking.
+   */
+  async sincronizar(items: unknown[], actor: ActorCatalogo, proveedorDelLote?: string): Promise<any> {
+    const proveedorId = actor.tipo === 'proveedor' ? actor.proveedorId : proveedorDelLote;
+    if (!proveedorId || !/^[a-z0-9-]{2,60}$/.test(proveedorId)) {
+      throw validacion('Indica el proveedor del lote.', [
+        { name: 'proveedorId', reason: 'Obligatorio para un administrador (con API key se toma de la clave). Minúsculas, números y "-".' },
+      ]);
+    }
+
+    const resultados: any[] = [];
+    const vistos = new Set<string>();
+    for (let i = 0; i < items.length; i++) {
+      const crudo = items[i] as any;
+      const idExterno = typeof crudo?.idExterno === 'string' ? crudo.idExterno : null;
+      if (!crudo || typeof crudo !== 'object' || Array.isArray(crudo)) {
+        resultados.push({ indice: i, idExterno: null, resultado: 'ERROR', errores: [{ name: `alojamientos.${i}`, reason: 'Debe ser un objeto.' }] });
+        continue;
+      }
+      if (!idExterno) {
+        resultados.push({ indice: i, idExterno: null, resultado: 'ERROR', errores: [{ name: 'idExterno', reason: 'Es obligatorio al sincronizar.' }] });
+        continue;
+      }
+      if (vistos.has(idExterno)) {
+        resultados.push({ indice: i, idExterno, resultado: 'ERROR', errores: [{ name: 'idExterno', reason: 'Está repetido en el mismo lote.' }] });
+        continue;
+      }
+      vistos.add(idExterno);
+
+      const { proveedorId: _ignorado, ...datos } = crudo;
+      const dto = plainToInstance(CreateAlojamientoDto, datos);
+      const errores: ValidationError[] = await validate(dto as object, { whitelist: true, forbidNonWhitelisted: true });
+      if (errores.length) {
+        resultados.push({ indice: i, idExterno, resultado: 'ERROR', errores: aplanarValidacion(errores) });
+        continue;
+      }
+
+      const existente = await this.alojamientoRepo.findOne({ where: { proveedorId, idExterno } as any });
+      if (existente) {
+        Object.assign(existente, this.camposDesdeDto(dto), { ultimaSincronizacion: new Date() });
+        const guardado = await this.alojamientoRepo.save(existente);
+        resultados.push({ indice: i, idExterno, resultado: 'ACTUALIZADO', id: guardado.id, estado: guardado.estado || 'ACTIVO' });
+      } else {
+        const creado = await this.create(dto, { tipo: 'proveedor', proveedorId });
+        resultados.push({ indice: i, idExterno, resultado: 'CREADO', id: creado.id, estado: creado.estado });
+      }
+    }
+
+    const cuenta = (r: string) => resultados.filter((x) => x.resultado === r).length;
+    this.telemetryService?.trackEvent({
+      event_name: 'catalog_synced',
+      vertical: 'alojamientos',
+      properties: { proveedor_id: proveedorId, creados: cuenta('CREADO'), actualizados: cuenta('ACTUALIZADO'), errores: cuenta('ERROR') },
+    });
+    return {
+      proveedor_id: proveedorId,
+      resumen: { recibidos: items.length, creados: cuenta('CREADO'), actualizados: cuenta('ACTUALIZADO'), errores: cuenta('ERROR') },
+      resultados,
+    };
   }
 
   async getResenas(alojamientoId: string): Promise<any> {

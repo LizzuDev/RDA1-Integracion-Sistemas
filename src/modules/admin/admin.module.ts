@@ -14,6 +14,7 @@ import { ReservaAtraccion } from '../atracciones/entities/reserva.entity';
 import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
 import { Alojamiento } from '../alojamientos/entities/alojamiento.entity';
 import { CoreModule } from '../../core/core.module';
+import { AlojamientosModule } from '../alojamientos/alojamientos.module';
 
 /**
  * Global para que otros módulos (p. ej. Facturas) puedan leer la configuración
@@ -24,6 +25,8 @@ import { CoreModule } from '../../core/core.module';
   imports: [
     TypeOrmModule.forFeature([Reserva, OrderAuto, ReservaAtraccion, ReservaAlojamiento, Alojamiento]),
     CoreModule,
+    // Las acciones del panel sobre hospedaje pasan por las reglas del propio módulo.
+    AlojamientosModule,
   ],
   controllers: [AdminController, PublicConfigController, ProveedoresPublicController],
   providers: [AdminService, AdminConfigService, AdminFinanzasService, AdminAuditService, AdminProveedoresService],

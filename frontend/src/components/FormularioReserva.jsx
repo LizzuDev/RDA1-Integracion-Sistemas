@@ -9,6 +9,7 @@ import { savePendingReservation } from '../services/offlineSync';
 import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { useTelemetry } from '../hooks/useTelemetry';
 import { OfflineReservaModal } from './OfflineReservaModal';
+import { isAdminUser } from './AdminGuard';
 
 const COUNTRIES = [
   { code: 'ECU', name: 'Ecuador' },
@@ -153,7 +154,7 @@ const REGLAS = {
 
 export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfirmada }) {
   const { user } = useAuth();
-  const isAdmin = user?.email === 'admin@booking.com' || user?.email === 'alejandroflores@booking.com' || user?.user_metadata?.role === 'admin';
+  const isAdmin = isAdminUser(user);
   const navigate = useNavigate();
   const refDialogo = useRef(null);
   const idBase = useId();

@@ -8,6 +8,8 @@ import { Alojamiento } from './entities/alojamiento.entity';
 import { ReservaAlojamiento } from './entities/reserva.entity';
 import { ResenaAlojamiento } from './entities/resena.entity';
 import { TelemetryModule } from '../telemetry/telemetry.module';
+import { SesionSupabaseService } from '../../core/auth/sesion-supabase.service';
+import { GestionAlojamientosGuard, ClienteAutenticadoGuard } from './guards/gestion-alojamientos.guard';
 
 @Module({
   imports: [
@@ -21,7 +23,7 @@ import { TelemetryModule } from '../telemetry/telemetry.module';
     TelemetryModule,
   ],
   controllers: [AlojamientosController],
-  providers: [AlojamientosService],
+  providers: [AlojamientosService, SesionSupabaseService, GestionAlojamientosGuard, ClienteAutenticadoGuard],
   exports: [AlojamientosService],
 })
 export class AlojamientosModule {}

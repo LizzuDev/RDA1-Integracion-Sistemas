@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { obtenerAccessToken, api as apiAuth } from './api';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
@@ -70,23 +71,47 @@ export async function reservarAlojamiento(id, reservationData, idempotencyKey) {
   return data;
 }
 
+/**
+ * "Mis reservas": requiere sesión. El backend devuelve solo las reservas del
+ * cliente de la sesión (un administrador ve todas).
+ */
 export async function getReservasAlojamientos() {
-  const { data } = await api.get('/alojamientos/reservations');
+  const token = await obtenerAccessToken();
+  if (!token) return [];
+  const { data } = await api.get('/alojamientos/reservations', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+}
+
+// ── Gestión del catálogo (panel de administración) ───────────────────────────
+// Van por el cliente AUTENTICADO (`apiAuth`), que añade el token del admin:
+// el backend rechaza estas operaciones sin sesión de administrador.
+
+/** Catálogo completo para el panel: incluye inactivos, origen y reservas pendientes. */
+export async function getCatalogoGestion(filtros = {}) {
+  const { data } = await apiAuth.get('/alojamientos/gestion/catalogo', { params: filtros });
   return data;
 }
 
 export async function crearAlojamiento(alojamientoData) {
-  const { data } = await api.post('/alojamientos', alojamientoData);
+  const { data } = await apiAuth.post('/alojamientos', alojamientoData);
   return data;
 }
 
 export async function actualizarAlojamiento(id, partialData) {
-  const { data } = await api.patch(`/alojamientos/${id}`, partialData);
+  const { data } = await apiAuth.patch(`/alojamientos/${encodeURIComponent(id)}`, partialData);
   return data;
 }
 
 export async function eliminarAlojamiento(id) {
-  const { data } = await api.delete(`/alojamientos/${id}`);
+  const { data } = await apiAuth.delete(`/alojamientos/${encodeURIComponent(id)}`);
+  return data;
+}
+
+/** Sincroniza un lote de alojamientos de un proveedor (el admin indica el proveedor). */
+export async function sincronizarAlojamientos(proveedorId, alojamientos) {
+  const { data } = await apiAuth.post('/alojamientos/sincronizar', { proveedorId, alojamientos });
   return data;
 }
 

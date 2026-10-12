@@ -5,11 +5,15 @@ const ADMIN_EMAILS = ['admin@booking.com', 'alejandroflores@booking.com'];
 
 /**
  * Es administrador si su email está en la lista fija o si fue promovido desde
- * el panel (Gestión → 👑), que guarda `user_metadata.role = 'admin'`.
+ * el panel (Gestión → 👑), que guarda `app_metadata.role = 'admin'`.
+ *
+ * NO se mira `user_metadata.role`: ese campo lo puede escribir el propio usuario
+ * desde el navegador, así que cualquiera podría declararse admin. El backend
+ * aplica la misma regla (src/core/auth/administradores.ts).
  */
 export function isAdminUser(user) {
   if (!user) return false;
-  return ADMIN_EMAILS.includes((user.email || '').toLowerCase()) || user.user_metadata?.role === 'admin' || user.app_metadata?.role === 'admin';
+  return ADMIN_EMAILS.includes((user.email || '').toLowerCase()) || user.app_metadata?.role === 'admin';
 }
 
 /**

@@ -251,3 +251,17 @@ INSERT INTO resenas_alojamiento (alojamiento_id, usuario_id, usuario_nombre, usu
 ('hotel-cartagena-02', 'user-02', 'Camila Restrepo', 'Colombia', 'La ubicación en el centro amurallado es mágica. Ver el atardecer desde la piscina de la azotea con una copa de vino no tiene precio.', 9.9, 10.0, 10.0, 9.8),
 ('hotel-quito-03', 'user-03', 'Jean-Luc Dupont', 'Francia', 'Hotel magnifique avec une histoire riche. Le personnel est aux petits soins et la vue sur la place San Francisco est sublime.', 9.7, 9.8, 9.8, 9.5),
 ('hotel-medellin-04', 'user-04', 'David Silva', 'Ecuador', 'Muy buen ambiente, diseño moderno e innovador. La ubicación en el Poblado te permite ir caminando a los mejores restaurantes y cafés.', 9.3, 9.5, 9.0, 9.4);
+
+-- ============================================================================
+-- Integración con proveedores de alojamientos
+-- El backend también las crea al arrancar (AlojamientosService, idempotente),
+-- porque TypeORM corre con synchronize: false.
+-- ============================================================================
+ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS proveedor_id VARCHAR(60);          -- NULL = alta manual en el panel
+ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS id_externo VARCHAR(100);           -- id en el sistema del proveedor
+ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO'; -- ACTIVO | INACTIVO
+ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS politicas JSONB;                   -- horarios, cancelación, mascotas…
+ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS ultima_sincronizacion TIMESTAMP;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_alojamientos_proveedor_externo
+  ON alojamientos (proveedor_id, id_externo)
+  WHERE proveedor_id IS NOT NULL AND id_externo IS NOT NULL;

@@ -22,6 +22,10 @@ interface OpcionesFind<T> {
 function coincideValor(valor: unknown, criterio: unknown): boolean {
   if (criterio instanceof FindOperator) {
     const tipo = (criterio as any).type ?? (criterio as any)._type;
+    if (tipo === 'not') {
+      const interno = (criterio as any).value ?? (criterio as any)._value;
+      return !coincideValor(valor, interno);
+    }
     const patron = String((criterio as any).value ?? (criterio as any)._value);
     if (tipo === 'ilike' || tipo === 'like') {
       const regex = new RegExp(
