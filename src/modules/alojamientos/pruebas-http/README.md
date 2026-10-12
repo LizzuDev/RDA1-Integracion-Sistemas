@@ -27,7 +27,7 @@ npx jest src/modules/alojamientos/pruebas-http/06   # una suite concreta
 | `07-ordenes` | Preview → create → get → modify → cancel, caducidad de 30 min, doble cobro, carreras entre preview y pago |
 | `08-webhooks` | Alta/listado/baja, aislamiento entre socios, secreto enmascarado, entrega de eventos |
 | `09-flujos-completos` | Recorridos de cliente y administrador de principio a fin |
-| `10-gestion-integracion` | Autenticación del catálogo (admin real / API key de proveedor), contrato completo, propiedad por proveedor, sincronización por lotes, inactivos, baja protegida, catálogo de gestión y "Mis reservas" por cliente |
+| `10-gestion-integracion` | Autenticación del catálogo (admin real / API key de proveedor), contrato completo, propiedad por proveedor, sincronización por lotes, inactivos, baja protegida, `null` en campos NOT NULL → 400, catálogo de gestión y "Mis reservas" por cliente |
 
 Además, `../reglas-estancia.spec.ts` prueba las reglas de fechas y capacidad
 (años bisiestos, cambio de año, límites de 30 noches y 500 días).

@@ -158,7 +158,7 @@ export class AlojamientosService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.asegurarEsquemaIntegracion();
+    await this.verificarEsquema();
     try {
       const count = await this.alojamientoRepo.count();
       this.logger.log(`Conexión a base de datos de Alojamientos activa. Total de registros: ${count}`);
@@ -168,30 +168,30 @@ export class AlojamientosService implements OnModuleInit {
   }
 
   /**
-   * Columnas de integración con proveedores. Como TypeORM corre con
-   * `synchronize: false`, se crean aquí si no existen (mismo patrón que el panel
-   * de administración). Idempotente: se puede ejecutar en cada arranque.
-   * También están en `database/supabase_hospitality_schema.sql`.
+   * Comprueba al arrancar que la base de datos tiene las columnas que usa la
+   * entidad. NO modifica el esquema (TypeORM corre con `synchronize: false` y los
+   * cambios de BD se aplican a mano con `database/migraciones/`): solo deja un
+   * error claro en el log en vez de fallar después con un 500 en cada consulta.
    */
-  private async asegurarEsquemaIntegracion() {
+  private async verificarEsquema() {
     const repo: any = this.alojamientoRepo;
     if (typeof repo.query !== 'function') return; // repositorio en memoria de las pruebas
-    const sentencias = [
-      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS proveedor_id VARCHAR(60)`,
-      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS id_externo VARCHAR(100)`,
-      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO'`,
-      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS politicas JSONB`,
-      `ALTER TABLE alojamientos ADD COLUMN IF NOT EXISTS ultima_sincronizacion TIMESTAMP`,
-      `CREATE UNIQUE INDEX IF NOT EXISTS ux_alojamientos_proveedor_externo
-         ON alojamientos (proveedor_id, id_externo)
-         WHERE proveedor_id IS NOT NULL AND id_externo IS NOT NULL`,
-    ];
-    for (const sql of sentencias) {
-      try {
-        await repo.query(sql);
-      } catch (e: any) {
-        this.logger.error(`No se pudo preparar el esquema de integración de alojamientos (${e.message}). SQL: ${sql}`);
+    const necesarias = ['proveedor_id', 'id_externo', 'estado', 'politicas', 'ultima_sincronizacion'];
+    try {
+      const filas: { column_name: string }[] = await repo.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'alojamientos' AND column_name = ANY($1)`,
+        [necesarias],
+      );
+      const presentes = new Set(filas.map((f) => f.column_name));
+      const faltan = necesarias.filter((c) => !presentes.has(c));
+      if (faltan.length) {
+        this.logger.error(
+          `Faltan columnas en "alojamientos": ${faltan.join(', ')}. ` +
+            'Ejecuta database/migraciones/2026-10-12_alojamientos_integracion.sql en Supabase.',
+        );
       }
+    } catch (e: any) {
+      this.logger.warn(`No se pudo verificar el esquema de alojamientos: ${e.message}`);
     }
   }
 

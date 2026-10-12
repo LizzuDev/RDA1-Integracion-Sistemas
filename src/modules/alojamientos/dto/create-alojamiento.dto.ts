@@ -16,8 +16,17 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
+
+/**
+ * Opcional pero NO anulable: si el campo no viene se conserva el valor actual,
+ * pero `null` se valida (y falla) en lugar de guardarse. La columna en la base
+ * de datos es NOT NULL; con @IsOptional un `null` llegaba hasta Postgres (500)
+ * o dejaba la ficha con datos vacíos.
+ */
+const SiSeEnvia = () => ValidateIf((_obj, valor) => valor !== undefined);
 
 /**
  * Contrato de alta/actualización de un alojamiento.
@@ -167,32 +176,32 @@ export class CreateAlojamientoDto {
   @ApiProperty({ required: false, example: 'Hoteles' })
   @IsString()
   @MaxLength(100)
-  @IsOptional()
+  @SiSeEnvia()
   tipoPropiedad?: string;
 
   @ApiProperty({ required: false, example: 'Habitación doble' })
   @IsString()
   @MaxLength(100)
-  @IsOptional()
+  @SiSeEnvia()
   tipoAlojamiento?: string;
 
   @ApiProperty({ required: false, example: 'USD', description: 'Código ISO 4217' })
   @Matches(/^[A-Z]{3}$/, { message: 'moneda debe ser un código ISO 4217 de 3 letras (ej. USD).' })
-  @IsOptional()
+  @SiSeEnvia()
   moneda?: string;
 
   @ApiProperty({ required: false, example: 1 })
   @IsInt()
   @Min(1)
   @Max(50)
-  @IsOptional()
+  @SiSeEnvia()
   camas?: number;
 
   @ApiProperty({ required: false, example: 1.5 })
   @IsNumber({ maxDecimalPlaces: 1 })
   @Min(0)
   @Max(20)
-  @IsOptional()
+  @SiSeEnvia()
   banos?: number;
 
   @ApiProperty({ required: false, type: [FotoAlojamientoDto] })
@@ -200,7 +209,7 @@ export class CreateAlojamientoDto {
   @ArrayMaxSize(30, { message: 'Se admiten como máximo 30 fotos.' })
   @ValidateNested({ each: true })
   @Type(() => FotoAlojamientoDto)
-  @IsOptional()
+  @SiSeEnvia()
   photos?: FotoAlojamientoDto[];
 
   @ApiProperty({ required: false, example: ['WiFi gratis', 'Piscina', 'Pet friendly'] })
@@ -208,13 +217,13 @@ export class CreateAlojamientoDto {
   @ArrayMaxSize(60)
   @IsString({ each: true })
   @MaxLength(60, { each: true })
-  @IsOptional()
+  @SiSeEnvia()
   amenidades?: string[];
 
   @ApiProperty({ required: false, type: UbicacionAlojamientoDto })
   @ValidateNested()
   @Type(() => UbicacionAlojamientoDto)
-  @IsOptional()
+  @SiSeEnvia()
   ubicacion?: UbicacionAlojamientoDto;
 
   @ApiProperty({ required: false, type: PoliticasAlojamientoDto })
@@ -244,6 +253,6 @@ export class CreateAlojamientoDto {
 
   @ApiProperty({ required: false, enum: ['ACTIVO', 'INACTIVO'], default: 'ACTIVO' })
   @IsIn(['ACTIVO', 'INACTIVO'])
-  @IsOptional()
+  @SiSeEnvia()
   estado?: 'ACTIVO' | 'INACTIVO';
 }

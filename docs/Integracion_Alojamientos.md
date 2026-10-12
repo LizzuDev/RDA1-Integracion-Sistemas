@@ -16,6 +16,12 @@ está en Swagger (`/api/docs`, sección *Alojamientos*).
 
 4. Entregar la clave al proveedor por un canal privado y reiniciar el backend.
 
+> **Base de datos:** antes del primer despliegue hay que ejecutar en Supabase
+> `database/migraciones/2026-10-12_alojamientos_integracion.sql`. Crea las columnas
+> de proveedor (`proveedor_id`, `id_externo`, `estado`, `politicas`,
+> `ultima_sincronizacion`) junto con sus restricciones e índices. El backend no
+> cambia el esquema por su cuenta: si faltan columnas, solo lo avisa en el log al arrancar.
+
 ## 2. Sincronizar el inventario (lo hace el sistema del proveedor)
 
 ```
@@ -54,6 +60,8 @@ Content-Type: application/json
 - **Retirar** un alojamiento: enviarlo con `"estado": "INACTIVO"`. Desaparece del
   catálogo público y no se puede reservar, pero sus reservas existentes se conservan.
 - **Hasta 100** alojamientos por lote.
+- **`null` no borra un campo obligatorio** (`moneda`, `photos`, `ubicacion`, `estado`, capacidades…):
+  responde 400. Para no cambiar un campo, basta con no enviarlo. Solo `descripcion` y `politicas` se pueden vaciar con `null`.
 - **Formatos:** fotos solo `https://`; `moneda` en ISO 4217 (`USD`);
   `country` en ISO 3166-1 alfa-2 (`EC`); horas `HH:MM`.
 

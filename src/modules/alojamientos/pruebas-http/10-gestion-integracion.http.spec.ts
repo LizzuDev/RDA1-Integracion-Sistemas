@@ -148,6 +148,36 @@ describe('10 · Gestión del catálogo e integración con proveedores', () => {
     });
   });
 
+  describe('null en campos NOT NULL (la BD los rechaza: antes daba 500 o guardaba basura)', () => {
+    it.each([
+      'nombre', 'destino', 'precioPorNoche', 'capacidadAdultos', 'capacidadNinos', 'habitaciones', 'tienePiscina',
+      'tipoPropiedad', 'tipoAlojamiento', 'moneda', 'camas', 'banos', 'photos', 'amenidades', 'ubicacion', 'estado',
+    ])('PATCH { %s: null } → 400 y no se modifica', async (campo) => {
+      const res = await t.pedir('PATCH', '/alojamientos/quito-gangotena', { body: { [campo]: null } });
+      esperarProblema(res, 400, 'VALIDATION_FAILED');
+      expect(camposInvalidos(res)).toContain(campo);
+      expect(t.repos.alojamientos.todas().find((a: any) => a.id === 'quito-gangotena')[campo]).not.toBeNull();
+    });
+
+    it.each(['tipoPropiedad', 'moneda', 'photos', 'ubicacion', 'estado'])('alta con { %s: null } → 400', async (campo) => {
+      const res = await alta({ ...ALTA, [campo]: null });
+      esperarProblema(res, 400, 'VALIDATION_FAILED');
+      expect(camposInvalidos(res)).toContain(campo);
+    });
+
+    it('sincronizar con un null lo marca como ERROR sin tumbar el lote', async () => {
+      const res = await sincronizar({ alojamientos: [item('N-1', { moneda: null }), item('N-2')] });
+      expect(res.status).toBe(200);
+      expect(res.body.resumen).toMatchObject({ creados: 1, errores: 1 });
+      expect(res.body.resultados[0].errores.map((e: any) => e.name)).toContain('moneda');
+    });
+
+    it('descripcion y politicas sí se pueden vaciar con null', async () => {
+      const res = await t.pedir('PATCH', '/alojamientos/quito-gangotena', { body: { descripcion: null, politicas: null } });
+      expect(res.status).toBe(200);
+    });
+  });
+
   describe('Propiedad por proveedor', () => {
     it('el proveedor queda fijado por su API key, aunque el cuerpo diga otro', async () => {
       const res = await alta({ ...ALTA, idExterno: 'P-1', proveedorId: 'proveedor-b' }, 'proveedor-a');
