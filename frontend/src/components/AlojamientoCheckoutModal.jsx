@@ -96,11 +96,13 @@ export function AlojamientoCheckoutModal({
   const cambiarAcompanante = (i, campo, valor) =>
     setAcompanantes((lista) => lista.map((a, j) => (j === i ? { ...a, [campo]: valor } : a)));
 
-  // Step 2 Form state (Payment) - Tarjeta por defecto pre-cargada
+  // Step 2 Form state (Payment)
   const [titularTarjeta, setTitularTarjeta] = useState(defaultCardHolder);
-  const [numeroTarjeta, setNumeroTarjeta] = useState('4532 8765 4321 4242');
-  const [fechaCaducidad, setFechaCaducidad] = useState('12/28');
-  const [cvc, setCvc] = useState('842');
+  // La tarjeta nunca se precarga: no hay tarjetas guardadas en la cuenta, y
+  // rellenar una inventada hacía "pagar" sin que la persona escribiera nada.
+  const [numeroTarjeta, setNumeroTarjeta] = useState('');
+  const [fechaCaducidad, setFechaCaducidad] = useState('');
+  const [cvc, setCvc] = useState('');
   const [aceptaMarketing, setAceptaMarketing] = useState(true);
   const [codigoPromo, setCodigoPromo] = useState('');
   const [promoAplicada, setPromoAplicada] = useState(false);
@@ -143,7 +145,7 @@ export function AlojamientoCheckoutModal({
     return 'Quito, Ecuador';
   }, [alojamiento?.ubicacion]);
 
-  // Auto pre-fill titular tarjeta when moving to Step 2
+  // Paso 1 → paso 2 (pago)
   const handleAvanzarPaso2 = (e) => {
     e.preventDefault();
     if (!nombre.trim() || !apellidos.trim()) {
@@ -164,10 +166,8 @@ export function AlojamientoCheckoutModal({
     }
 
     setErrorMsg('');
-    setTitularTarjeta(`${nombre} ${apellidos}`.trim() || defaultCardHolder);
-    if (!numeroTarjeta) setNumeroTarjeta('4532 8765 4321 4242');
-    if (!fechaCaducidad) setFechaCaducidad('12/28');
-    if (!cvc) setCvc('842');
+    // El titular se propone con el nombre del paso 1 (editable), como en Booking.
+    if (!titularTarjeta.trim()) setTitularTarjeta(`${nombre} ${apellidos}`.trim());
 
     setStep(2);
     window.scrollTo({ top: 0, behavior: 'smooth' });

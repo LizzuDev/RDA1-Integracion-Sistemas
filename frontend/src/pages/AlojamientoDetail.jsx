@@ -1,31 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { getAlojamiento, reservarAlojamiento, getDisponibilidadAlojamiento, consultarDisponibilidad } from '../services/alojamientosApi';
+import { getAlojamiento, getDisponibilidadAlojamiento, consultarDisponibilidad } from '../services/alojamientosApi';
 import { BarraDisponibilidad, resumenOcupacion } from '../components/BarraDisponibilidad';
 import { API_BASE } from '../services/api';
 import { getAtracciones } from '../services/atraccionesApi';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
-import { savePendingReservation } from '../services/offlineSync';
-import { formatearFecha } from '../services/formato';
-import { enviarFacturaTrasCompra } from '../services/envioFactura';
-import { jsPDF } from 'jspdf';
-import { v4 as uuidv4 } from 'uuid';
 import { AlojamientoCheckoutModal } from '../components/AlojamientoCheckoutModal';
 import { ReportModal } from '../components/ReportModal';
-import { ModalReservaExistente, reservasQueSeSolapan, esAvisoDuplicado } from '../components/ModalReservaExistente';
 
-const ESTADOS_ES = {
-  PENDING: 'Pendiente',
-  PENDING_PAYMENT: 'Pendiente de pago',
-  TICKET_ISSUING: 'Emitiendo billetes',
-  CONFIRMED: 'Confirmada',
-  FAILED: 'Fallida',
-  CHANGE_PENDING: 'Cambio en curso',
-  CANCELLATION_PENDING: 'Cancelación en curso',
-  CANCELLED: 'Cancelada',
-  PENDING_OFFLINE: 'Pendiente (Offline)',
-};
 import {
   BedIcon,
   CalendarIcon,
@@ -174,17 +157,6 @@ export function AlojamientoDetail() {
 
   // Booking Form State
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [bookingLoading, setBookingLoading] = useState(false);
-  // Aviso de reserva existente (como Booking): no bloquea, pide confirmación.
-  const [showModalExistente, setShowModalExistente] = useState(false);
-  const [reservasSolapadas, setReservasSolapadas] = useState([]);
-  const [mensajeDuplicado, setMensajeDuplicado] = useState('');
-  const confirmadoDuplicadoRef = useRef(false);
-  const [bookingSuccess, setBookingSuccess] = useState(null);
-  const [bookingError, setBookingError] = useState(null);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
 
   // Cotización REAL del backend para las fechas y ocupación elegidas
@@ -338,17 +310,6 @@ export function AlojamientoDetail() {
   const [resenasScores, setResenasScores] = useState(null);
   const [resenasLoading, setResenasLoading] = useState(false);
 
-  // Pre-fill user profile if logged in
-  useEffect(() => {
-    if (user) {
-      if (!customerName) {
-        setCustomerName(user.user_metadata?.nombre || user.email?.split('@')[0] || '');
-      }
-      if (!customerEmail) {
-        setCustomerEmail(user.email || '');
-      }
-    }
-  }, [user]);
 
   // Load Resenas
   useEffect(() => {
@@ -439,247 +400,6 @@ export function AlojamientoDetail() {
     }
   };
 
-  // Reservation handler
-  const handleBookingSubmit = async (e) => {
-    if (e) e.preventDefault();
-    if (bookingLoading) return; // Prevenir doble clic
-
-    if (!customerName.trim()) {
-      setBookingError('Por favor ingresa tu nombre completo.');
-      return;
-    }
-    if (!customerEmail.trim()) {
-      setBookingError('Por favor ingresa tu correo electrónico.');
-      return;
-    }
-
-    // Validar disponibilidad de habitaciones
-    if (disponibilidad && typeof disponibilidad.available_rooms === 'number' && disponibilidad.available_rooms < parseInt(rooms, 10)) {
-      setBookingError(`Lo sentimos, solo quedan ${disponibilidad.available_rooms} habitaciones disponibles para estas fechas.`);
-      return;
-    }
-
-    // ¿Ya tiene una reserva que coincide con estas fechas (en cualquier alojamiento)?
-    if (!confirmadoDuplicadoRef.current) {
-      const solapadas = reservasQueSeSolapan(checkin, checkout, customerEmail);
-      if (solapadas.length > 0) {
-        setReservasSolapadas(solapadas);
-        setMensajeDuplicado('');
-        setShowModalExistente(true);
-        return;
-      }
-    }
-
-    setBookingLoading(true);
-    setBookingError(null);
-    setBookingSuccess(null);
-
-    const idempotencyKey = uuidv4();
-    const payload = {
-      checkin,
-      checkout,
-      habitaciones_count: parseInt(rooms, 10),
-      nights: nightsCount,
-      customer_name: customerName,
-      customer_email: customerEmail,
-      adultos: adults,
-      ninos: edadesNinos.length,
-      ...(cotizacion?.producto?.product_id ? { tipo_habitacion_id: cotizacion.producto.product_id } : {}),
-      ...(confirmadoDuplicadoRef.current ? { confirmar_duplicado: true } : {}),
-    };
-
-    const codigoReservaPnr = `BKG-${uuidv4().substring(0, 6).toUpperCase()}`;
-    const datosFactura = {
-      tipo: 'alojamiento',
-      pnr: codigoReservaPnr,
-      titulo: `${alojamiento?.nombre || 'Alojamiento'} (${nightsCount} noches)`,
-      total: totalPrice,
-      pasajeros: [
-        {
-          firstName: customerName || user?.user_metadata?.nombre || 'Huésped',
-          lastName: user?.user_metadata?.apellido || '',
-          documentNumber: user?.user_metadata?.cedula || '',
-          email: customerEmail || user?.email || '',
-        },
-      ],
-    };
-
-    // Offline flow
-    if (!navigator.onLine) {
-      await savePendingReservation(
-        'alojamiento',
-        { alojamientoId: id, data: payload },
-        idempotencyKey,
-        datosFactura
-      );
-
-      const localBooking = {
-        id: codigoReservaPnr,
-        reservationId: codigoReservaPnr,
-        alojamientoId: id,
-        titulo: `${alojamiento?.nombre} (${nightsCount} noches)`,
-        checkin,
-        checkout,
-        fecha: checkin,
-        habitaciones: rooms,
-        huesped: customerName,
-        email: customerEmail,
-        status: 'PENDING_OFFLINE',
-        totalPrice,
-      };
-
-      const existing = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
-      const existingIdx = existing.findIndex((r) =>
-        (r.id && (r.id === localBooking.id || r.id === localBooking.reservationId || r.id === localBooking.codigoReserva)) ||
-        (r.reservationId && (r.reservationId === localBooking.reservationId || r.reservationId === localBooking.id)) ||
-        (r.alojamientoId === localBooking.alojamientoId && r.checkin === localBooking.checkin && r.checkout === localBooking.checkout)
-      );
-      if (existingIdx >= 0) {
-        existing[existingIdx] = localBooking;
-      } else {
-        existing.unshift(localBooking);
-      }
-      localStorage.setItem('reservas_alojamientos', JSON.stringify(existing));
-
-      setBookingSuccess({ ...localBooking, offline: true });
-      setBookingLoading(false);
-      return;
-    }
-
-    try {
-      const res = await reservarAlojamiento(id, payload, idempotencyKey);
-      const reservationCode = res.codigo_reserva || res.codigoReserva || res.reservation_id || codigoReservaPnr;
-
-      if (navigator.onLine) {
-        enviarFacturaTrasCompra({
-          ...datosFactura,
-          pnr: String(reservationCode).substring(0, 8).toUpperCase(),
-        });
-      }
-
-      const confirmedBooking = {
-        id: res.reservation_id || res.id || reservationCode,
-        reservationId: reservationCode,
-        codigoReserva: reservationCode,
-        alojamientoId: id,
-        titulo: `${alojamiento?.nombre} (${nightsCount} noches)`,
-        checkin,
-        checkout,
-        fecha: checkin,
-        habitaciones: rooms,
-        huesped: customerName,
-        email: customerEmail,
-        status: res.status || 'CONFIRMED',
-        totalPrice,
-      };
-
-      const existing = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
-      const existingIdx = existing.findIndex((r) =>
-        (r.id && (r.id === confirmedBooking.id || r.id === confirmedBooking.reservationId || r.id === confirmedBooking.codigoReserva)) ||
-        (r.reservationId && (r.reservationId === confirmedBooking.reservationId || r.reservationId === confirmedBooking.id)) ||
-        (r.codigoReserva && (r.codigoReserva === confirmedBooking.codigoReserva || r.codigoReserva === confirmedBooking.id)) ||
-        (r.alojamientoId === confirmedBooking.alojamientoId && r.checkin === confirmedBooking.checkin && r.checkout === confirmedBooking.checkout && r.status === confirmedBooking.status)
-      );
-      if (existingIdx >= 0) {
-        existing[existingIdx] = confirmedBooking;
-      } else {
-        existing.unshift(confirmedBooking);
-      }
-      localStorage.setItem('reservas_alojamientos', JSON.stringify(existing));
-
-      confirmadoDuplicadoRef.current = false;
-      setBookingSuccess(confirmedBooking);
-    } catch (err) {
-      if (esAvisoDuplicado(err) && !confirmadoDuplicadoRef.current) {
-        // La reserva previa existe en el servidor (p. ej. hecha desde otro dispositivo).
-        setReservasSolapadas([]);
-        setMensajeDuplicado(err.response.data.detail);
-        setShowModalExistente(true);
-      } else if (err.response?.status === 409) {
-        const errorDetail = err.response?.data?.detail || err.response?.data?.message;
-        setBookingError(errorDetail || 'Esta reserva ya fue registrada anteriormente.');
-      } else {
-        const errorDetail = err.response?.data?.detail || err.response?.data?.message;
-        setBookingError(errorDetail || 'Error al procesar la reserva. Intenta de nuevo.');
-      }
-    } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  // PDF confirmation export (idéntica a la generada por Vuelos en Mis Reservas)
-  const handleDescargarComprobante = () => {
-    if (!bookingSuccess || !alojamiento) return;
-    setIsDownloadingPdf(true);
-
-    setTimeout(() => {
-      try {
-        const doc = new jsPDF();
-
-        // Colores y Fuentes
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(22);
-        doc.setTextColor(0, 108, 228); // Azul Booking
-        doc.text('Confirmacion de Reserva', 20, 30);
-
-        // Función para limpiar emojis y caracteres especiales no soportados por jsPDF base
-        const cleanText = (str) => (str || '').replace(/[^\x00-\xFF]/g, '').trim();
-
-        doc.setFontSize(14);
-        doc.setTextColor(51, 51, 51);
-        doc.text('Servicio: Alojamiento', 20, 50);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        const tituloReserva = `${alojamiento.nombre || 'Alojamiento'} (${nightsCount} noches)`;
-        doc.text(`Nombre de reserva: ${cleanText(tituloReserva)}`, 20, 60);
-
-        // Bloque de datos
-        doc.setDrawColor(200, 200, 200);
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(20, 70, 170, 60, 3, 3, 'FD');
-
-        doc.setFont('helvetica', 'bold');
-        doc.text('Detalles del Pago y Fechas', 25, 80);
-
-        const pnr = bookingSuccess.reservationId || bookingSuccess.id || 'BKG-ALJ';
-
-        doc.setFont('helvetica', 'normal');
-        doc.text('Código (PNR):', 25, 95);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${pnr}`, 70, 95);
-
-        doc.setFont('helvetica', 'normal');
-        doc.text('Fecha del servicio:', 25, 105);
-        doc.setFont('helvetica', 'bold');
-        const fechaTexto = `${formatearFecha(checkin)} al ${formatearFecha(checkout)}`;
-        doc.text(`${cleanText(fechaTexto)}`, 70, 105);
-
-        doc.setFont('helvetica', 'normal');
-        doc.text('Estado actual:', 25, 115);
-        doc.setFont('helvetica', 'bold');
-        const estadoTexto = ESTADOS_ES[bookingSuccess.status] ?? (bookingSuccess.status || 'Confirmada');
-        doc.text(`${estadoTexto}`, 70, 115);
-
-        doc.setFont('helvetica', 'normal');
-        doc.text('Total pagado:', 25, 125);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 128, 9); // Verde Booking
-        doc.text(`${convertPrice(totalPrice)}`, 70, 125);
-
-        doc.setTextColor(150, 150, 150);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'italic');
-        doc.text(`Generado automáticamente el ${new Date().toLocaleDateString()}`, 20, 280);
-
-        doc.save(`Reserva_${pnr}.pdf`);
-      } catch (err) {
-        console.error('Error al generar PDF:', err);
-      } finally {
-        setIsDownloadingPdf(false);
-      }
-    }, 800);
-  };
 
   if (loading) {
     return (
@@ -1576,126 +1296,6 @@ export function AlojamientoDetail() {
             </div>
           </div>
 
-          {/* Interactive Reservation Form */}
-          <div className="dt-reservation-box">
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '6px' }}>
-              Confirma tu reserva en {alojamiento.nombre}
-            </h3>
-            <p style={{ color: '#595959', fontSize: '0.85rem', marginBottom: '16px' }}>
-              Sin pago por adelantado: paga durante tu estancia. Cancelación gratuita incluida.
-            </p>
-
-            {bookingSuccess ? (
-              <div style={{ background: '#ecfdf5', border: '1px solid #10b981', padding: '20px', borderRadius: '8px' }}>
-                <h3 style={{ color: '#065f46', fontSize: '1.1rem', margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CheckmarkIcon size={20} color="#059669" />
-                  <span>Reserva confirmada con éxito</span>
-                </h3>
-                <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: '#047857' }}>
-                  Código de reserva (PNR): <strong>{bookingSuccess.reservationId || bookingSuccess.id}</strong>
-                </p>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="dt-btn-blue"
-                    onClick={handleDescargarComprobante}
-                    disabled={isDownloadingPdf}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                  >
-                    {isDownloadingPdf ? (
-                      <>
-                        <span className="spinner" style={{ width: '16px', height: '16px', border: '2px solid white', borderTop: '2px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></span>
-                        Generando PDF...
-                      </>
-                    ) : (
-                      <>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                        Descargar PDF
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    style={{ background: '#f3f4f6', border: '1px solid #ccc', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
-                    onClick={() => navigate('/mis-reservas')}
-                  >
-                    Ver mis reservas
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleBookingSubmit}>
-                {bookingError && (
-                  <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px 14px', borderRadius: '4px', marginBottom: '14px', fontSize: '0.85rem' }}>
-                    {bookingError}
-                  </div>
-                )}
-
-                <div className="dt-res-grid">
-                  <div className="dt-res-input-group">
-                    <label htmlFor="dt-res-nombre">Nombre y Apellidos</label>
-                    <input
-                      id="dt-res-nombre"
-                      type="text"
-                      placeholder="Ej. Juan Pérez"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="dt-res-input-group">
-                    <label htmlFor="dt-res-email">Correo Electrónico (para confirmación)</label>
-                    <input
-                      id="dt-res-email"
-                      type="email"
-                      placeholder="nombre@ejemplo.com"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="dt-res-grid">
-                  <div className="dt-res-input-group">
-                    <label htmlFor="dt-res-habitaciones">Habitaciones solicitadas</label>
-                    <select
-                      id="dt-res-habitaciones"
-                      value={rooms}
-                      onChange={(e) => consultar({ ...valoresBusqueda, habitaciones: Number(e.target.value) })}
-                      disabled={isSoldOut || consultando}
-                    >
-                      {isSoldOut ? (
-                        <option value="0">0 (Agotado)</option>
-                      ) : (
-                        Array.from({ length: Math.min(availableRoomsCount, 10) }, (_, i) => i + 1).map((num) => (
-                          <option key={num} value={num}>
-                            {num} {num === 1 ? 'habitación' : 'habitaciones'} ({currency} {convertPrice(cotizacion?.precio != null ? Math.round(cotizacion.precio * num * 100) / 100 : Math.round(pricePerNight * nightsCount * num))})
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-                  <div className="dt-res-input-group">
-                    <label htmlFor="dt-res-garantia">Método de garantía</label>
-                    <input id="dt-res-garantia" type="text" value="Tarjeta de crédito (Pagar en destino)" disabled style={{ background: '#f9fafb' }} />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
-                  <div>
-                    <span style={{ fontSize: '0.85rem', color: '#595959' }}>Total estimado ({nightsCount} noches): </span>
-                    <strong style={{ fontSize: '1.25rem', color: '#008009' }}>
-                      {currency} {convertPrice(totalPrice)}
-                    </strong>
-                  </div>
-                  <button type="submit" className="dt-reserve-btn-primary" disabled={bookingLoading || isSoldOut}>
-                    {bookingLoading ? 'Procesando reserva...' : isSoldOut ? 'Agotado' : 'Reservaré'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
         </section>
 
         {/* ======================================================================
@@ -2264,33 +1864,8 @@ export function AlojamientoDetail() {
           convertPrice={convertPrice}
           user={user}
           onClose={() => setShowCheckoutModal(false)}
-          onSuccess={(booking) => {
-            // El modal se queda abierto en su paso 3 (confirmación con código y
-            // PDF), como la página de confirmación de Booking; lo cierra el usuario.
-            setBookingSuccess(booking);
-          }}
         />
       )}
-
-      <ModalReservaExistente
-        abierto={showModalExistente}
-        reservas={reservasSolapadas}
-        alojamientoActualId={id}
-        nombreAlojamientoActual={alojamiento?.nombre}
-        checkin={checkin}
-        checkout={checkout}
-        mensajeServidor={mensajeDuplicado}
-        onContinuar={() => {
-          confirmadoDuplicadoRef.current = true;
-          setShowModalExistente(false);
-          handleBookingSubmit();
-        }}
-        onCancelar={() => {
-          confirmadoDuplicadoRef.current = false;
-          setShowModalExistente(false);
-        }}
-        onVerReservas={() => navigate('/mis-reservas')}
-      />
 
       <ReportModal 
         isOpen={showReportModal} 
