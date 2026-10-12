@@ -419,7 +419,7 @@ export function AlojamientosPage() {
   };
 
   return (
-    <div className="bk-page-wrapper">
+    <main id="contenido-principal" className="bk-page-wrapper">
       {/* ======================================================================
           1. HERO BANNER DESKTOP
           ====================================================================== */}
@@ -802,7 +802,7 @@ export function AlojamientosPage() {
       {/* ======================================================================
           MAIN CONTAINER
           ====================================================================== */}
-      <main className="bk-main-container">
+      <div className="bk-main-container">
         {/* ======================================================================
             3. OFERTAS DE FIN DE AÑO
             ====================================================================== */}
@@ -888,7 +888,7 @@ export function AlojamientosPage() {
             <ChevronLeftIcon size={20} color="#1a1a1a" />
           </button>
 
-          <div className="bk-carousel-track" ref={beachTrackRef}>
+          <div className="bk-carousel-track" ref={beachTrackRef} tabIndex={0} role="region" aria-label="Escapadas a la playa">
             {BEACH_TRIPS.map((item) => (
               <div
                 key={item.id}
@@ -932,7 +932,7 @@ export function AlojamientosPage() {
             <ChevronLeftIcon size={20} color="#1a1a1a" />
           </button>
 
-          <div className="bk-carousel-track" ref={dealsTrackRef}>
+          <div className="bk-carousel-track" ref={dealsTrackRef} tabIndex={0} role="region" aria-label="Ofertas para el fin de semana">
             {alojamientos.slice(0, 10).map((alojamiento) => (
               <div key={alojamiento.id} className="bk-deal-card-slide">
                 <AlojamientoCard
@@ -973,7 +973,7 @@ export function AlojamientosPage() {
             <ChevronLeftIcon size={20} color="#1a1a1a" />
           </button>
 
-          <div className="bk-carousel-track" ref={uniqueQuitoTrackRef}>
+          <div className="bk-carousel-track" ref={uniqueQuitoTrackRef} tabIndex={0} role="region" aria-label="Tipos de alojamiento únicos en Quito">
             {UNIQUE_QUITO_THEMES.map((theme) => (
               <div
                 key={theme.id}
@@ -1015,7 +1015,7 @@ export function AlojamientosPage() {
             <ChevronLeftIcon size={20} color="#1a1a1a" />
           </button>
 
-          <div className="bk-carousel-track" ref={browseTypesTrackRef}>
+          <div className="bk-carousel-track" ref={browseTypesTrackRef} tabIndex={0} role="region" aria-label="Tipos de alojamiento">
             {BROWSE_PROPERTY_TYPES.map((pt, idx) => (
               <div
                 key={idx}
@@ -1104,7 +1104,7 @@ export function AlojamientosPage() {
             <ChevronLeftIcon size={20} color="#1a1a1a" />
           </button>
 
-          <div className="bk-carousel-track" ref={exploreTrackRef}>
+          <div className="bk-carousel-track" ref={exploreTrackRef} tabIndex={0} role="region" aria-label="Descubre Ecuador">
             {EXPLORE_ECUADOR.map((item, idx) => (
               <div
                 key={idx}
@@ -1163,7 +1163,7 @@ export function AlojamientosPage() {
             <ChevronLeftIcon size={20} color="#1a1a1a" />
           </button>
 
-          <div className="bk-carousel-track" ref={plannerTrackRef}>
+          <div className="bk-carousel-track" ref={plannerTrackRef} tabIndex={0} role="region" aria-label="Planificador de viajes">
             {(TRIP_PLANNER_DATA[activePlannerTab] || TRIP_PLANNER_DATA.tranquil).map((item, idx) => (
               <div
                 key={idx}
@@ -1208,9 +1208,9 @@ export function AlojamientosPage() {
               <div style={{ marginBottom: '12px' }}>
                 <DocumentIcon size={28} color="#003580" />
               </div>
-              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
                 Reserva ahora, paga en el alojamiento
-              </h4>
+              </h3>
               <p style={{ fontSize: '0.85rem', color: '#474747', lineHeight: 1.4 }}>
                 Cancelación GRATIS en la mayoría de las habitaciones con política flexible.
               </p>
@@ -1220,9 +1220,9 @@ export function AlojamientosPage() {
               <div style={{ marginBottom: '12px' }}>
                 <ThumbsUpIcon size={28} color="#003580" />
               </div>
-              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
                 Más de 300M de comentarios reales
-              </h4>
+              </h3>
               <p style={{ fontSize: '0.85rem', color: '#474747', lineHeight: 1.4 }}>
                 Opiniones auténticas de huéspedes verificados en todo el mundo.
               </p>
@@ -1232,9 +1232,9 @@ export function AlojamientosPage() {
               <div style={{ marginBottom: '12px' }}>
                 <GlobeIcon size={28} color="#003580" />
               </div>
-              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
                 Más de 2 millones de alojamientos
-              </h4>
+              </h3>
               <p style={{ fontSize: '0.85rem', color: '#474747', lineHeight: 1.4 }}>
                 Hoteles, departamentos, villas, cabañas y mucho más.
               </p>
@@ -1244,9 +1244,9 @@ export function AlojamientosPage() {
               <div style={{ marginBottom: '12px' }}>
                 <HeadsetIcon size={28} color="#003580" />
               </div>
-              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1a1a1a', marginBottom: '6px' }}>
                 Atención al cliente 24/7 de confianza
-              </h4>
+              </h3>
               <p style={{ fontSize: '0.85rem', color: '#474747', lineHeight: 1.4 }}>
                 Nuestro equipo internacional está a tu disposición en cualquier momento.
               </p>
@@ -1333,7 +1333,7 @@ export function AlojamientosPage() {
             </div>
           )}
         </section>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }

@@ -27,6 +27,8 @@ const HISTOGRAM_BARS = [
   77, 22, 16, 61, 22, 61, 38, 5, 16, 27, 44, 11, 38, 11, 44, 16, 27, 11
 ];
 
+const PRESUPUESTO_SIN_LIMITE = 250;
+
 export function AlojamientosSearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -81,7 +83,10 @@ export function AlojamientosSearchPage() {
   const [wishlist, setWishlist] = useState(new Set());
 
   // Filter States
-  const [maxBudget, setMaxBudget] = useState(250);
+  // El extremo derecho del control ("US$250+") significa SIN LÍMITE, como en Booking.
+  // Antes filtraba ≤ 250 desde el inicio y escondía los hoteles más caros sin que el
+  // usuario hubiera tocado nada.
+  const [maxBudget, setMaxBudget] = useState(PRESUPUESTO_SIN_LIMITE);
   const [selectedTypes, setSelectedTypes] = useState(initialType ? [initialType] : []);
   const [selectedPopular, setSelectedPopular] = useState([]);
   const [selectedFacilities, setSelectedFacilities] = useState([]);
@@ -248,6 +253,7 @@ export function AlojamientosSearchPage() {
 
     // Budget Filter
     result = result.filter((p) => {
+      if (maxBudget >= PRESUPUESTO_SIN_LIMITE) return true;
       const pricePerNight = Number(p.precioPorNoche || p.precio_noche || 50);
       return pricePerNight <= maxBudget;
     });
@@ -329,7 +335,7 @@ export function AlojamientosSearchPage() {
   ]);
 
   return (
-    <div className="sr-page-wrapper">
+    <main id="contenido-principal" className="sr-page-wrapper">
       {/* ======================================================================
           TOP HORIZONTAL SEARCH BAR
           ====================================================================== */}
@@ -610,7 +616,7 @@ export function AlojamientosSearchPage() {
               </div>
               <div className="sr-price-inputs">
                 <span>US$5</span>
-                <span>US${maxBudget}+</span>
+                <span>US${maxBudget}{maxBudget >= PRESUPUESTO_SIN_LIMITE ? '+' : ''}</span>
               </div>
 
               {/* Histogram bars */}
@@ -631,8 +637,10 @@ export function AlojamientosSearchPage() {
               <input
                 type="range"
                 className="sr-range-slider"
+                aria-label="Presupuesto máximo por noche"
+                aria-valuetext={maxBudget >= PRESUPUESTO_SIN_LIMITE ? 'Sin límite' : `US$${maxBudget}`}
                 min="10"
-                max="250"
+                max={PRESUPUESTO_SIN_LIMITE}
                 step="5"
                 value={maxBudget}
                 onChange={(e) => setMaxBudget(Number(e.target.value))}
@@ -897,11 +905,11 @@ export function AlojamientosSearchPage() {
         </aside>
 
         {/* ================= RIGHT SEARCH RESULTS CONTENT ================= */}
-        <main className="sr-results-content">
+        <div className="sr-results-content">
           {/* Header Bar */}
           <div className="sr-results-header">
             <h1 className="sr-results-title">
-              {destination}: {filteredProperties.length > 0 ? filteredProperties.length : properties.length} alojamientos encontrados
+              {destination}: {filteredProperties.length} {filteredProperties.length === 1 ? 'alojamiento encontrado' : 'alojamientos encontrados'}
             </h1>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -1044,7 +1052,7 @@ export function AlojamientosSearchPage() {
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
                 <NoResultsIllustration size={80} />
               </div>
-              <h3>No se encontraron alojamientos que coincidan con tus filtros</h3>
+              <h2 style={{ fontSize: '1.17em' }}>No se encontraron alojamientos que coincidan con tus filtros</h2>
               <p style={{ color: '#595959', fontSize: '0.9rem' }}>
                 Prueba a ampliar el presupuesto o quitar algunos filtros seleccionados.
               </p>
@@ -1053,7 +1061,7 @@ export function AlojamientosSearchPage() {
                 className="sr-smart-btn"
                 style={{ width: 'auto', padding: '8px 20px', margin: '10px auto 0 auto' }}
                 onClick={() => {
-                  setMaxBudget(250);
+                  setMaxBudget(PRESUPUESTO_SIN_LIMITE);
                   setSelectedTypes([]);
                   setSelectedFacilities([]);
                   setMinReviewScore(null);
@@ -1072,8 +1080,15 @@ export function AlojamientosSearchPage() {
               const photoUrl = (rawPhoto && !rawPhoto.includes('example.com'))
                 ? rawPhoto
                 : 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500';
+              // Precio y disponibilidad REALES del backend para estas fechas (por
+              // habitación); se multiplica por las habitaciones pedidas.
+              const disp = prop.disponibilidad;
+              const noches = disp?.nights || nightsCount;
               const pricePerNight = Number(prop.precioPorNoche || prop.precio_noche || 45);
-              const totalPrice = Math.round(pricePerNight * nightsCount);
+              const totalPrice = disp
+                ? Math.round(disp.total_price * rooms * 100) / 100
+                : Math.round(pricePerNight * noches * rooms);
+              const libres = typeof disp?.available_rooms === 'number' ? disp.available_rooms : prop.habitacionesDisponibles;
               const originalPrice = Math.round(totalPrice * 1.15);
               const taxes = Math.round(totalPrice * 0.15);
               const score = Number(prop.ratings?.score || 8.9).toFixed(1);
@@ -1108,7 +1123,7 @@ export function AlojamientosSearchPage() {
                         <Link to={`/alojamientos/${prop.id}?${detailQuery}`} className="sr-card-title">
                           {prop.nombre}
                         </Link>
-                        <div className="sr-rating-squares" aria-label="Categoría de 4 estrellas">
+                        <div className="sr-rating-squares" role="img" aria-label="Categoría de 4 estrellas">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="#ffb700"><rect width="24" height="24" rx="3" /></svg>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="#ffb700"><rect width="24" height="24" rx="3" /></svg>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="#ffb700"><rect width="24" height="24" rx="3" /></svg>
@@ -1160,16 +1175,14 @@ export function AlojamientosSearchPage() {
                         </div>
 
                         <div className="sr-urgency-note">
-                          {prop.habitacionesDisponibles !== undefined ? (
-                            prop.habitacionesDisponibles <= 0 ? (
-                              <span style={{ color: '#d9534f', fontWeight: 600 }}>¡Agotado para tus fechas!</span>
-                            ) : prop.habitacionesDisponibles <= 3 ? (
-                              <span style={{ color: '#d9534f', fontWeight: 600 }}>¡Solo quedan {prop.habitacionesDisponibles} habitaciones disponibles para tus fechas!</span>
+                          {libres !== undefined && (
+                            libres <= 0 ? (
+                              <span style={{ color: '#b3121b', fontWeight: 600 }}>¡Agotado para tus fechas!</span>
+                            ) : libres <= 3 ? (
+                              <span style={{ color: '#b3121b', fontWeight: 600 }}>¡Solo {libres === 1 ? 'queda 1 habitación' : `quedan ${libres} habitaciones`} para tus fechas!</span>
                             ) : (
-                              <span>{prop.habitacionesDisponibles} habitaciones disponibles</span>
+                              <span>{libres} habitaciones disponibles</span>
                             )
-                          ) : (
-                            <span>¡Solo quedan {((index * 3) % 5) + 1} a este precio en nuestra web!</span>
                           )}
                         </div>
                       </div>
@@ -1193,7 +1206,7 @@ export function AlojamientosSearchPage() {
 
                     <div className="sr-pricing-block">
                       <span className="sr-stay-duration">
-                        {nightsCount} noches, {adults} adultos
+                        {noches} {noches === 1 ? 'noche' : 'noches'}, {adults} {adults === 1 ? 'adulto' : 'adultos'}{children > 0 ? `, ${children} ${children === 1 ? 'niño' : 'niños'}` : ''}{rooms > 1 ? `, ${rooms} habitaciones` : ''}
                       </span>
                       <span className="sr-original-price">
                         {currency} {convertPrice(originalPrice)}
@@ -1220,7 +1233,7 @@ export function AlojamientosSearchPage() {
           {/* Genius Banner */}
           <div className="sr-genius-banner">
             <div>
-              <h3>Inicia sesión y ahorra dinero</h3>
+              <h2>Inicia sesión y ahorra dinero</h2>
               <p>Accede a descuentos exclusivos para miembros en {destination}</p>
               <div style={{ marginTop: '14px', display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <Link to="/login" className="sr-genius-signin-btn">
@@ -1235,8 +1248,8 @@ export function AlojamientosSearchPage() {
               <GeniusGiftIcon size={44} />
             </div>
           </div>
-        </main>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

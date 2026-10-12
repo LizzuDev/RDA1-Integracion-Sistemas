@@ -567,6 +567,10 @@
   top: 16px;
   left: 16px;
   color: #ffffff;
+  /* Fondo propio: el texto blanco no puede depender de que la foto sea oscura. */
+  background: rgba(0, 0, 0, 0.6);
+  padding: 4px 10px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
