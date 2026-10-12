@@ -700,7 +700,7 @@ export function AlojamientoDetail() {
   const isSoldOut = availableRoomsCount <= 0;
 
   return (
-    <div className="dt-page-wrapper">
+    <main id="contenido-principal" className="dt-page-wrapper">
       {/* ======================================================================
           1. TOP SEARCH SUB-BAR
           ====================================================================== */}
@@ -930,7 +930,7 @@ export function AlojamientoDetail() {
         </ol>
 
         {/* Secondary Navigation Tabs */}
-        <nav className="dt-nav-tabs">
+        <nav className="dt-nav-tabs" aria-label="Secciones del alojamiento">
           <button
             type="button"
             className={`dt-nav-tab ${activeTab === 'overview' ? 'active' : ''}`}
@@ -984,7 +984,7 @@ export function AlojamientoDetail() {
         <div className="dt-header-section">
           <div className="dt-header-left">
             <div className="dt-badge-row">
-              <div className="dt-rating-squares" aria-label="Categoría de 4 estrellas">
+              <div className="dt-rating-squares" role="img" aria-label="Categoría de 4 estrellas">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="#ffb700"><rect width="24" height="24" rx="3" /></svg>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="#ffb700"><rect width="24" height="24" rx="3" /></svg>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="#ffb700"><rect width="24" height="24" rx="3" /></svg>
@@ -1470,10 +1470,10 @@ export function AlojamientoDetail() {
 
             {bookingSuccess ? (
               <div style={{ background: '#ecfdf5', border: '1px solid #10b981', padding: '20px', borderRadius: '8px' }}>
-                <h4 style={{ color: '#065f46', fontSize: '1.1rem', margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ color: '#065f46', fontSize: '1.1rem', margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <CheckmarkIcon size={20} color="#059669" />
                   <span>Reserva confirmada con éxito</span>
-                </h4>
+                </h3>
                 <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: '#047857' }}>
                   Código de reserva (PNR): <strong>{bookingSuccess.reservationId || bookingSuccess.id}</strong>
                 </p>
@@ -1516,8 +1516,9 @@ export function AlojamientoDetail() {
 
                 <div className="dt-res-grid">
                   <div className="dt-res-input-group">
-                    <label>Nombre y Apellidos</label>
+                    <label htmlFor="dt-res-nombre">Nombre y Apellidos</label>
                     <input
+                      id="dt-res-nombre"
                       type="text"
                       placeholder="Ej. Juan Pérez"
                       value={customerName}
@@ -1526,8 +1527,9 @@ export function AlojamientoDetail() {
                     />
                   </div>
                   <div className="dt-res-input-group">
-                    <label>Correo Electrónico (para confirmación)</label>
+                    <label htmlFor="dt-res-email">Correo Electrónico (para confirmación)</label>
                     <input
+                      id="dt-res-email"
                       type="email"
                       placeholder="nombre@ejemplo.com"
                       value={customerEmail}
@@ -1539,26 +1541,27 @@ export function AlojamientoDetail() {
 
                 <div className="dt-res-grid">
                   <div className="dt-res-input-group">
-                    <label>Habitaciones solicitadas</label>
+                    <label htmlFor="dt-res-habitaciones">Habitaciones solicitadas</label>
                     <select
+                      id="dt-res-habitaciones"
                       value={rooms}
-                      onChange={(e) => setRooms(Number(e.target.value))}
-                      disabled={isSoldOut}
+                      onChange={(e) => consultar({ ...valoresBusqueda, habitaciones: Number(e.target.value) })}
+                      disabled={isSoldOut || consultando}
                     >
                       {isSoldOut ? (
                         <option value="0">0 (Agotado)</option>
                       ) : (
                         Array.from({ length: Math.min(availableRoomsCount, 10) }, (_, i) => i + 1).map((num) => (
                           <option key={num} value={num}>
-                            {num} habitación ({currency} {convertPrice(Math.round(pricePerNight * nightsCount * num))})
+                            {num} {num === 1 ? 'habitación' : 'habitaciones'} ({currency} {convertPrice(cotizacion?.precio != null ? Math.round(cotizacion.precio * num * 100) / 100 : Math.round(pricePerNight * nightsCount * num))})
                           </option>
                         ))
                       )}
                     </select>
                   </div>
                   <div className="dt-res-input-group">
-                    <label>Método de garantía</label>
-                    <input type="text" value="Tarjeta de crédito (Pagar en destino)" disabled style={{ background: '#f9fafb' }} />
+                    <label htmlFor="dt-res-garantia">Método de garantía</label>
+                    <input id="dt-res-garantia" type="text" value="Tarjeta de crédito (Pagar en destino)" disabled style={{ background: '#f9fafb' }} />
                   </div>
                 </div>
 
@@ -1723,9 +1726,9 @@ export function AlojamientoDetail() {
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', border: '1px solid #e7e7e7', borderRadius: '8px', padding: '20px', background: '#fff' }}>
             <div>
-              <h4 style={{ fontWeight: 700, margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ fontWeight: 700, margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <LandmarkIcon size={18} color="#003580" /> Monumentos y cultura
-              </h4>
+              </h3>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.82rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <li style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Museo Capilla del Hombre</span>
@@ -1747,9 +1750,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div>
-              <h4 style={{ fontWeight: 700, margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ fontWeight: 700, margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CoffeeIcon size={18} color="#003580" /> Restaurantes y cafeterías
-              </h4>
+              </h3>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.82rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <li style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Coffee Factory</span>
@@ -1767,9 +1770,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div>
-              <h4 style={{ fontWeight: 700, margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ fontWeight: 700, margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <TrainIcon size={18} color="#003580" /> Transporte público
-              </h4>
+              </h3>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.82rem', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <li style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Terminal de Ferrocarriles</span>
@@ -1857,9 +1860,9 @@ export function AlojamientoDetail() {
 
           <div className="dt-facilities-full-grid">
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <ApartmentIcon size={18} color="#003580" /> Lo más destacado
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li><CheckmarkIcon size={14} /> WiFi gratis</li>
                 <li><CheckmarkIcon size={14} /> Cocina</li>
@@ -1875,27 +1878,27 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <ParkingIcon size={18} color="#003580" /> Estacionamiento
-              </h4>
+              </h3>
               <p style={{ fontSize: '0.82rem', color: '#4b5563', lineHeight: 1.4 }}>
                 Hay estacionamiento privado en el establecimiento (es necesario reservar) y cuesta US$12 por día.
               </p>
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <WifiIcon size={18} color="#003580" /> Internet
-              </h4>
+              </h3>
               <p style={{ fontSize: '0.82rem', color: '#4b5563', lineHeight: 1.4 }}>
                 Hay conexión a internet Wi-Fi disponible en todo el establecimiento. Gratis.
               </p>
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <KitchenIcon size={18} color="#003580" /> Cocina
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>Cafetera</li>
                 <li>Horno</li>
@@ -1908,9 +1911,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <BedIcon size={18} color="#003580" /> Habitación
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>Ropa de cama</li>
                 <li>Armario o closet</li>
@@ -1918,9 +1921,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <ShowerIcon size={18} color="#003580" /> Baño
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>Papel higiénico</li>
                 <li>Toallas</li>
@@ -1932,9 +1935,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <ApartmentIcon size={18} color="#003580" /> Zona de estar
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>Zona de estar</li>
                 <li>Zona de comedor</li>
@@ -1942,9 +1945,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <TvIcon size={18} color="#003580" /> Equipamiento audiovisual y tecnológico
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>TV de pantalla plana</li>
                 <li>Canales por cable</li>
@@ -1952,9 +1955,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <PoolIcon size={18} color="#003580" /> Piscina al aire libre (¡Gratis!)
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>Abierta todo el año</li>
                 <li>Para todas las edades</li>
@@ -1963,9 +1966,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <GymIcon size={18} color="#003580" /> Bienestar y fitness
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>Gimnasio / Sala de fitness</li>
                 <li>Espacio para yoga</li>
@@ -1973,9 +1976,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <UserIcon size={18} color="#003580" /> Servicios de recepción
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>Registro de entrada y salida privado</li>
                 <li>Servicio de conserjería</li>
@@ -1985,9 +1988,9 @@ export function AlojamientoDetail() {
             </div>
 
             <div className="dt-facility-category-block">
-              <h4>
+              <h3>
                 <ShieldCheckIcon size={18} color="#003580" /> Seguridad
-              </h4>
+              </h3>
               <ul className="dt-facility-items-list">
                 <li>Extintores</li>
                 <li>Cámaras de seguridad en zonas comunes</li>
@@ -2071,7 +2074,7 @@ export function AlojamientoDetail() {
                     <div className="dt-review-score-pill">{Number(r.puntuacion).toFixed(1)}</div>
                   </div>
                   <p className="dt-review-comment">{r.comentario}</p>
-                  <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#595959' }}>
                     {r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long' }) : ''}
                   </div>
                 </div>
@@ -2143,8 +2146,9 @@ export function AlojamientoDetail() {
           user={user}
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={(booking) => {
+            // El modal se queda abierto en su paso 3 (confirmación con código y
+            // PDF), como la página de confirmación de Booking; lo cierra el usuario.
             setBookingSuccess(booking);
-            setShowCheckoutModal(false);
           }}
         />
       )}
@@ -2176,6 +2180,6 @@ export function AlojamientoDetail() {
         pnrOrId={alojamiento?.id || 'HOTEL'} 
         type="Hospedaje" 
       />
-    </div>
+    </main>
   );
 }
