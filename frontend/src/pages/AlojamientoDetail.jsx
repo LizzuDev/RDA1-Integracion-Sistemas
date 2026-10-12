@@ -272,8 +272,13 @@ export function AlojamientoDetail() {
   // Detectar si el usuario ya tiene una reserva confirmada para este alojamiento en estas fechas
   const existingActiveBooking = useMemo(() => {
     try {
+      // Solo las reservas hechas con este correo: el navegador puede tener
+      // reservas de otra persona o de pruebas (y un invitado no tiene correo aún).
+      const correo = (user?.email || '').trim().toLowerCase();
+      if (!correo) return null;
       const reservas = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
       return reservas.find((r) =>
+        (r.email || '').trim().toLowerCase() === correo &&
         (r.alojamientoId === id || r.alojamiento_id === id) &&
         !['CANCELLED', 'Cancelada', 'FALLIDA'].includes(r.status) &&
         (r.checkin === checkin || (r.checkin < checkout && r.checkout > checkin))
@@ -281,7 +286,7 @@ export function AlojamientoDetail() {
     } catch {
       return null;
     }
-  }, [id, checkin, checkout]);
+  }, [id, checkin, checkout, user?.email]);
 
   // Al abrir la página se cotiza con las fechas y ocupación de la URL.
   useEffect(() => {
@@ -456,7 +461,7 @@ export function AlojamientoDetail() {
 
     // ¿Ya tiene una reserva que coincide con estas fechas (en cualquier alojamiento)?
     if (!confirmadoDuplicadoRef.current) {
-      const solapadas = reservasQueSeSolapan(checkin, checkout);
+      const solapadas = reservasQueSeSolapan(checkin, checkout, customerEmail);
       if (solapadas.length > 0) {
         setReservasSolapadas(solapadas);
         setMensajeDuplicado('');
