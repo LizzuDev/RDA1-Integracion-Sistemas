@@ -19,6 +19,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { CreateTipoHabitacionDto } from './tipo-habitacion.dto';
 
 /**
  * Opcional pero NO anulable: si el campo no viene se conserva el valor actual,
@@ -231,6 +232,20 @@ export class CreateAlojamientoDto {
   @Type(() => PoliticasAlojamientoDto)
   @IsOptional()
   politicas?: PoliticasAlojamientoDto;
+
+  @ApiProperty({
+    required: false,
+    type: [CreateTipoHabitacionDto],
+    description:
+      'Tipos de habitación. Si se envían, REEMPLAZAN a los actuales (se emparejan por `codigo`; los que falten se desactivan). ' +
+      'Si no se envían, el alojamiento tiene un único tipo "estándar" con su precio, capacidad y habitaciones.',
+  })
+  @IsArray()
+  @ArrayMaxSize(50, { message: 'Se admiten como máximo 50 tipos de habitación.' })
+  @ValidateNested({ each: true })
+  @Type(() => CreateTipoHabitacionDto)
+  @SiSeEnvia()
+  tiposHabitacion?: CreateTipoHabitacionDto[];
 
   // ── Opcionales: integración y estado ──────────────────────────────────────
   @ApiProperty({

@@ -62,10 +62,17 @@ export async function getDisponibilidadAlojamiento(id, params = {}) {
   return data;
 }
 
+/**
+ * Reserva directa. Con sesión iniciada se envía el token: la reserva queda
+ * vinculada a la cuenta (aparece en "Mis reservas" aunque se use otro correo).
+ * Sin sesión se reserva como invitado, como en Booking.
+ */
 export async function reservarAlojamiento(id, reservationData, idempotencyKey) {
+  const token = await obtenerAccessToken().catch(() => null);
   const { data } = await api.post(`/alojamientos/${id}/reservations`, reservationData, {
     headers: {
       'idempotency-key': idempotencyKey,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
   return data;
@@ -115,3 +122,52 @@ export async function sincronizarAlojamientos(proveedorId, alojamientos) {
   return data;
 }
 
+// ── Tipos de habitación (panel) ──────────────────────────────────────────────
+
+export async function crearTipoHabitacion(alojamientoId, tipo) {
+  const { data } = await apiAuth.post(`/alojamientos/${encodeURIComponent(alojamientoId)}/tipos-habitacion`, tipo);
+  return data;
+}
+
+export async function actualizarTipoHabitacion(alojamientoId, tipoId, cambios) {
+  const { data } = await apiAuth.patch(
+    `/alojamientos/${encodeURIComponent(alojamientoId)}/tipos-habitacion/${encodeURIComponent(tipoId)}`,
+    cambios,
+  );
+  return data;
+}
+
+/** Con reservas el backend lo desactiva (conserva el historial): responde { desactivado }. */
+export async function eliminarTipoHabitacion(alojamientoId, tipoId) {
+  const { data } = await apiAuth.delete(
+    `/alojamientos/${encodeURIComponent(alojamientoId)}/tipos-habitacion/${encodeURIComponent(tipoId)}`,
+  );
+  return data;
+}
+
+// ── Proveedores (panel, solo administradores) ───────────────────────────────
+
+export async function getProveedores() {
+  const { data } = await apiAuth.get('/alojamientos/gestion/proveedores');
+  return data;
+}
+
+/** Devuelve `api_key` UNA sola vez: hay que mostrársela al admin para que la copie. */
+export async function crearProveedor(proveedor) {
+  const { data } = await apiAuth.post('/alojamientos/gestion/proveedores', proveedor);
+  return data;
+}
+
+export async function actualizarProveedor(id, cambios) {
+  const { data } = await apiAuth.patch(`/alojamientos/gestion/proveedores/${encodeURIComponent(id)}`, cambios);
+  return data;
+}
+
+export async function rotarClaveProveedor(id) {
+  const { data } = await apiAuth.post(`/alojamientos/gestion/proveedores/${encodeURIComponent(id)}/rotar-clave`);
+  return data;
+}
+
+export async function eliminarProveedor(id) {
+  await apiAuth.delete(`/alojamientos/gestion/proveedores/${encodeURIComponent(id)}`);
+}

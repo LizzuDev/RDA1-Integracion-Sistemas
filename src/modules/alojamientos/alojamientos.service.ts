@@ -20,11 +20,16 @@ import { createHash, randomUUID } from 'crypto';
 import { Alojamiento } from './entities/alojamiento.entity';
 import { ReservaAlojamiento } from './entities/reserva.entity';
 import { ResenaAlojamiento } from './entities/resena.entity';
+import { TipoHabitacion } from './entities/tipo-habitacion.entity';
+import { HuespedReserva } from './entities/huesped-reserva.entity';
+import { TiposHabitacionService, OcupacionTipo, NOMBRE_REGIMEN, textoCancelacion } from './tipos-habitacion.service';
+import { ProveedoresAlojamientoService } from './proveedores.service';
 
 import { SearchAlojamientosRequestDto } from './dto/search-alojamientos.dto';
 import { DetailsRequestDto } from './dto/details-request.dto';
-import { ReservationRequestDto, CancelReservationRequestDto, ReservationStatus } from './dto/reservation.dto';
+import { ReservationRequestDto, CancelReservationRequestDto, ReservationStatus, AcompananteDto } from './dto/reservation.dto';
 import { CreateAlojamientoDto } from './dto/create-alojamiento.dto';
+import { CreateTipoHabitacionDto, UpdateTipoHabitacionDto } from './dto/tipo-habitacion.dto';
 import { UpdateAlojamientoDto } from './dto/update-alojamiento.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
@@ -97,6 +102,10 @@ function normalizarBusqueda(texto?: string | null): string {
 interface OrderPreviewStoreItem {
   id: string;
   alojamientoId: string;
+  tipoId: string;
+  precioNoche: number;
+  adultos: number;
+  ninos: number;
   checkin: string;
   checkout: string;
   nights: number;
@@ -153,9 +162,232 @@ export class AlojamientosService implements OnModuleInit {
     private readonly reservaRepo: Repository<ReservaAlojamiento>,
     @InjectRepository(ResenaAlojamiento)
     private readonly resenaRepo: Repository<ResenaAlojamiento>,
+    @InjectRepository(HuespedReserva)
+    private readonly huespedRepo: Repository<HuespedReserva>,
+    private readonly tiposService: TiposHabitacionService,
+    private readonly proveedoresService: ProveedoresAlojamientoService,
     @Optional()
     private readonly telemetryService?: TelemetryService,
   ) {}
+
+  // =========================================================================
+  // TIPOS DE HABITACIÓN Y HUÉSPEDES (apoyo a disponibilidad y reservas)
+  // =========================================================================
+
+  /** ¿Caben estos huéspedes en `habitaciones` habitaciones de este tipo? */
+  private cabe(tipo: TipoHabitacion, adultos: number, ninos: number, habitaciones: number): boolean {
+    try {
+      validarCapacidad(tipo, adultos, ninos, habitaciones);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 400 con el campo exacto si ningún tipo de habitación admite esta ocupación. */
+  private exigirAlgunTipoConCapacidad(ocupacion: OcupacionTipo[], adultos: number, ninos: number, habitaciones: number) {
+    if (ocupacion.length === 0 || ocupacion.some((o) => this.cabe(o.tipo, adultos, ninos, habitaciones))) return;
+    const mayor = [...ocupacion].sort(
+      (a, b) => b.tipo.capacidadAdultos - a.tipo.capacidadAdultos || (b.tipo.capacidadNinos ?? 0) - (a.tipo.capacidadNinos ?? 0),
+    )[0];
+    validarCapacidad(mayor.tipo, adultos, ninos, habitaciones);
+  }
+
+  /**
+   * Tipo de habitación de una reserva. Con `tipoId` (id o código) se usa ese; sin
+   * él, el más barato que admite la ocupación y tiene cupo (el "Reservar" directo
+   * de Booking sobre la tarifa más económica).
+   */
+  private async elegirTipo(
+    alojamiento: Alojamiento,
+    p: {
+      tipoId?: string | null;
+      adultos: number;
+      ninos: number;
+      habitaciones: number;
+      checkin: string;
+      checkout: string;
+      excluirReservaId?: string;
+      campo?: string;
+      /** Solo comprueba existencia y capacidad (el cupo se mira después). */
+      ignorarCupo?: boolean;
+      /** Un tipo que ya no está a la venta es un 409 (p. ej. al pagar una cotización). */
+      noVendibleEsConflicto?: boolean;
+    },
+  ): Promise<OcupacionTipo> {
+    const ocupacion = await this.tiposService.ocupacion(alojamiento, p.checkin, p.checkout, p.excluirReservaId);
+
+    if (p.tipoId) {
+      const elegido = ocupacion.find((o) => o.tipo.id === p.tipoId || o.tipo.codigo === p.tipoId);
+      if (!elegido) {
+        if (p.noVendibleEsConflicto) {
+          throw conflicto(CodigoProblema.ROOM_NO_LONGER_AVAILABLE, 'Ese tipo de habitación ya no está a la venta. Vuelve a consultar la disponibilidad.');
+        }
+        throw validacion('El tipo de habitación no existe en este alojamiento o no está a la venta.', [
+          { name: p.campo ?? 'tipo_habitacion_id', reason: `'${p.tipoId}' no es un tipo de habitación a la venta de '${alojamiento.id}'.` },
+        ]);
+      }
+      validarCapacidad(elegido.tipo, p.adultos, p.ninos, p.habitaciones);
+      if (!p.ignorarCupo && elegido.libres < p.habitaciones) {
+        throw conflicto(
+          CodigoProblema.ROOM_NO_LONGER_AVAILABLE,
+          `No quedan suficientes habitaciones "${elegido.tipo.nombre}" para esas fechas. Disponibles: ${elegido.libres}, solicitadas: ${p.habitaciones}.`,
+        );
+      }
+      return elegido;
+    }
+
+    this.exigirAlgunTipoConCapacidad(ocupacion, p.adultos, p.ninos, p.habitaciones);
+    const caben = ocupacion
+      .filter((o) => this.cabe(o.tipo, p.adultos, p.ninos, p.habitaciones))
+      .sort((a, b) => Number(a.tipo.precioNoche) - Number(b.tipo.precioNoche));
+    if (p.ignorarCupo && caben.length > 0) return caben[0];
+    const conCupo = caben.filter((o) => o.libres >= p.habitaciones);
+    if (conCupo.length === 0) {
+      const libres = Math.max(0, ...caben.map((o) => o.libres));
+      throw conflicto(
+        CodigoProblema.ROOM_NO_LONGER_AVAILABLE,
+        `No hay suficientes habitaciones disponibles para las fechas seleccionadas. Habitaciones disponibles: ${libres}, solicitadas: ${p.habitaciones}.`,
+      );
+    }
+    return conCupo[0];
+  }
+
+  /** Producto de disponibilidad (contrato de Booking) a partir de un tipo de habitación. */
+  private producto(o: OcupacionTipo, noches: number, moneda: string) {
+    const t = o.tipo;
+    const precio = Number(t.precioNoche);
+    return {
+      product_id: t.id,
+      tipo_habitacion_id: t.id,
+      codigo: t.codigo,
+      room_name: t.nombre,
+      descripcion: t.descripcion ?? null,
+      meal_plan: NOMBRE_REGIMEN[t.regimen] ?? t.regimen,
+      regimen: t.regimen,
+      cancellation_type: textoCancelacion(t.cancelacionGratuitaHoras),
+      reembolsable: t.cancelacionGratuitaHoras !== null && t.cancelacionGratuitaHoras !== undefined,
+      cancelacion_gratuita_horas: t.cancelacionGratuitaHoras ?? null,
+      price: Number((precio * noches).toFixed(2)),
+      price_per_night: precio,
+      currency: moneda,
+      available_rooms: o.libres,
+      capacidad: { adultos: t.capacidadAdultos, ninos: t.capacidadNinos ?? 0 },
+      camas: t.camas,
+      descripcion_camas: t.descripcionCamas ?? null,
+      tamano_m2: t.tamanoM2 ?? null,
+      amenidades: Array.isArray(t.amenidades) ? t.amenidades : [],
+      photos: Array.isArray(t.photos) ? t.photos : [],
+    };
+  }
+
+  /** Tipo de habitación en formato público (ficha del hotel y panel). */
+  private tipoPublico(t: TipoHabitacion) {
+    return {
+      id: t.id,
+      codigo: t.codigo,
+      nombre: t.nombre,
+      descripcion: t.descripcion ?? null,
+      capacidad_adultos: t.capacidadAdultos,
+      capacidad_ninos: t.capacidadNinos ?? 0,
+      camas: t.camas,
+      descripcion_camas: t.descripcionCamas ?? null,
+      tamano_m2: t.tamanoM2 ?? null,
+      precio_noche: Number(t.precioNoche),
+      cantidad: t.cantidad,
+      regimen: t.regimen,
+      regimen_texto: NOMBRE_REGIMEN[t.regimen] ?? t.regimen,
+      cancelacion_gratuita_horas: t.cancelacionGratuitaHoras ?? null,
+      cancelacion_texto: textoCancelacion(t.cancelacionGratuitaHoras),
+      amenidades: Array.isArray(t.amenidades) ? t.amenidades : [],
+      photos: Array.isArray(t.photos) ? t.photos : [],
+      activo: t.activo,
+      orden: t.orden,
+    };
+  }
+
+  /**
+   * Acompañantes válidos para la ocupación: como máximo (adultos − 1) adultos
+   * (el titular ya es uno) y `ninos` niños, y cada niño con su edad (0–17).
+   */
+  private validarAcompanantes(acompanantes: AcompananteDto[] | undefined, adultos: number, ninos: number) {
+    if (!acompanantes?.length) return;
+    const errores: { name: string; reason: string }[] = [];
+    const adultosLista = acompanantes.filter((a) => (a.tipo ?? 'ADULTO') === 'ADULTO').length;
+    const ninosLista = acompanantes.length - adultosLista;
+    if (adultosLista > adultos - 1) {
+      errores.push({ name: 'acompanantes', reason: `Hay ${adultosLista} acompañante(s) adulto(s) y la reserva es para ${adultos} adulto(s) incluido el titular.` });
+    }
+    if (ninosLista > ninos) {
+      errores.push({ name: 'acompanantes', reason: `Hay ${ninosLista} niño(s) en la lista y la reserva es para ${ninos}.` });
+    }
+    acompanantes.forEach((a, i) => {
+      const esNino = a.tipo === 'NINO';
+      if (esNino && (a.edad === undefined || a.edad > 17)) {
+        errores.push({ name: `acompanantes.${i}.edad`, reason: 'Indica la edad del niño (0–17).' });
+      }
+      if (!esNino && a.edad !== undefined && a.edad < 18) {
+        errores.push({ name: `acompanantes.${i}.edad`, reason: 'Un adulto debe tener 18 años o más (márcalo como NINO).' });
+      }
+    });
+    if (errores.length) throw validacion('La lista de huéspedes no coincide con la ocupación de la reserva.', errores);
+  }
+
+  /** "Ana María Pérez" → { nombre: 'Ana', apellido: 'María Pérez' }. */
+  private partirNombre(completo: string): { nombre: string; apellido: string } {
+    const limpio = (completo || '').trim().replace(/\s+/g, ' ') || 'Huésped';
+    const i = limpio.indexOf(' ');
+    return i < 0 ? { nombre: limpio, apellido: '' } : { nombre: limpio.slice(0, i), apellido: limpio.slice(i + 1) };
+  }
+
+  /** Guarda al titular (orden 1) y a los acompañantes de una reserva. */
+  private async guardarHuespedes(
+    reserva: ReservaAlojamiento,
+    titular: { nombre: string; apellido?: string; email?: string | null; telefono?: string | null },
+    acompanantes: AcompananteDto[] = [],
+  ): Promise<HuespedReserva[]> {
+    const filas: Partial<HuespedReserva>[] = [
+      {
+        reservaId: reserva.id,
+        orden: 1,
+        esTitular: true,
+        tipo: 'ADULTO',
+        nombre: titular.nombre.slice(0, 100),
+        apellido: (titular.apellido ?? '').slice(0, 100),
+        email: titular.email ?? null,
+        telefono: titular.telefono ?? null,
+      },
+      ...acompanantes.map((a, i) => ({
+        reservaId: reserva.id,
+        orden: i + 2,
+        esTitular: false,
+        tipo: a.tipo ?? 'ADULTO',
+        nombre: a.nombre.trim(),
+        apellido: (a.apellido ?? '').trim(),
+        edad: a.edad ?? null,
+        documentoTipo: a.documento_tipo ?? null,
+        documentoNumero: a.documento_numero ?? null,
+        nacionalidad: a.nacionalidad ?? null,
+      })),
+    ];
+    const guardados: HuespedReserva[] = [];
+    for (const f of filas) guardados.push(await this.huespedRepo.save(this.huespedRepo.create(f)));
+    return guardados;
+  }
+
+  /** Tipos y huéspedes de un lote de reservas, para las respuestas. */
+  private async detallesDeReservas(reservas: ReservaAlojamiento[]) {
+    const tipoIds = [...new Set(reservas.map((r) => r.tipoHabitacionId).filter(Boolean))] as string[];
+    const tipos = tipoIds.length ? await this.tiposService.listarPorIds(tipoIds) : [];
+    const huespedes = reservas.length
+      ? await this.huespedRepo.find({ where: reservas.map((r) => ({ reservaId: r.id })) as any })
+      : [];
+    const tipoPor = new Map(tipos.map((t) => [t.id, t]));
+    return (r: ReservaAlojamiento) => ({
+      tipo: r.tipoHabitacionId ? tipoPor.get(r.tipoHabitacionId) ?? null : null,
+      huespedes: huespedes.filter((h) => h.reservaId === r.id).sort((a, b) => a.orden - b.orden),
+    });
+  }
 
   async onModuleInit() {
     await this.verificarEsquema();
@@ -176,18 +408,28 @@ export class AlojamientosService implements OnModuleInit {
   private async verificarEsquema() {
     const repo: any = this.alojamientoRepo;
     if (typeof repo.query !== 'function') return; // repositorio en memoria de las pruebas
-    const necesarias = ['proveedor_id', 'id_externo', 'estado', 'politicas', 'ultima_sincronizacion'];
+    const necesarias: Array<[string, string, string]> = [
+      ['alojamientos', 'estado', '2026-10-12_alojamientos_integracion.sql'],
+      ['alojamientos', 'politicas', '2026-10-12_alojamientos_integracion.sql'],
+      ['tipos_habitacion', 'precio_noche', '2026-10-13_alojamientos_modelo_relacional.sql'],
+      ['huespedes_reserva', 'reserva_id', '2026-10-13_alojamientos_modelo_relacional.sql'],
+      ['proveedores_alojamiento', 'api_key_hash', '2026-10-13_alojamientos_modelo_relacional.sql'],
+      ['reservas_alojamiento', 'tipo_habitacion_id', '2026-10-13_alojamientos_modelo_relacional.sql'],
+      ['reservas_alojamiento', 'usuario_id', '2026-10-13_alojamientos_modelo_relacional.sql'],
+    ];
     try {
-      const filas: { column_name: string }[] = await repo.query(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = 'alojamientos' AND column_name = ANY($1)`,
-        [necesarias],
+      const filas: { table_name: string; column_name: string }[] = await repo.query(
+        `SELECT table_name, column_name FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = ANY($1)`,
+        [[...new Set(necesarias.map(([t]) => t))]],
       );
-      const presentes = new Set(filas.map((f) => f.column_name));
-      const faltan = necesarias.filter((c) => !presentes.has(c));
+      const presentes = new Set(filas.map((f) => `${f.table_name}.${f.column_name}`));
+      const faltan = necesarias.filter(([t, c]) => !presentes.has(`${t}.${c}`));
       if (faltan.length) {
+        const migraciones = [...new Set(faltan.map(([, , m]) => `database/migraciones/${m}`))];
         this.logger.error(
-          `Faltan columnas en "alojamientos": ${faltan.join(', ')}. ` +
-            'Ejecuta database/migraciones/2026-10-12_alojamientos_integracion.sql en Supabase.',
+          `Faltan columnas o tablas de Alojamientos: ${faltan.map(([t, c]) => `${t}.${c}`).join(', ')}. ` +
+            `Ejecuta en Supabase, en orden: ${migraciones.join(' y ')}.`,
         );
       }
     } catch (e: any) {
@@ -195,7 +437,7 @@ export class AlojamientosService implements OnModuleInit {
     }
   }
 
-  private transformAlojamiento(l: Alojamiento) {
+  private transformAlojamiento(l: Alojamiento, tipos?: TipoHabitacion[]) {
     const defaultPhoto = [{ url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800', caption: 'Vista Principal' }];
     const photos = Array.isArray(l.photos) && l.photos.length > 0 ? l.photos : defaultPhoto;
 
@@ -241,6 +483,7 @@ export class AlojamientosService implements OnModuleInit {
       proveedor_id: l.proveedorId ?? null,
       id_externo: l.idExterno ?? null,
       ultima_sincronizacion: l.ultimaSincronizacion ?? null,
+      ...(tipos ? { tipos_habitacion: tipos.map((t) => this.tipoPublico(t)) } : {}),
       url: { web: `/alojamientos/${l.id}` },
       _links: {
         self: { href: `/api/v1/alojamientos/${l.id}`, type: 'GET' },
@@ -611,51 +854,25 @@ export class AlojamientosService implements OnModuleInit {
       throw new NotFoundException(`El alojamiento '${accId}' no existe.`);
     }
 
-    // Si el cliente indica la ocupación, se valida contra la capacidad real (400
-    // con el campo exacto), como hace Booking al cambiar adultos/niños/habitaciones.
+    // Cada tipo de habitación es un producto con su precio, régimen, política de
+    // cancelación y cupo (antes eran tres tarifas inventadas sobre un solo precio).
+    const ocupacion = await this.tiposService.ocupacion(local, dto.checkin, dto.checkout);
+    const habitacionesPedidas = dto.guests?.number_of_rooms || 1;
+    let candidatos = ocupacion;
     if (dto.guests) {
-      validarCapacidad(
-        local,
-        dto.guests.number_of_adults,
-        dto.guests.children?.length || 0,
-        dto.guests.number_of_rooms,
-      );
+      // Ocupación imposible en todos los tipos → 400 con el campo exacto, como
+      // hace Booking al cambiar adultos/niños/habitaciones.
+      const adultos = dto.guests.number_of_adults;
+      const ninos = dto.guests.children?.length || 0;
+      this.exigirAlgunTipoConCapacidad(ocupacion, adultos, ninos, habitacionesPedidas);
+      candidatos = ocupacion.filter((o) => this.cabe(o.tipo, adultos, ninos, habitacionesPedidas));
     }
 
-    const basePrice = Number(local.precioPorNoche);
     const currency = dto.currency || local.moneda || 'USD';
-
-    const products = [
-      {
-        product_id: `prod_${local?.id || accId}_std`,
-        room_name: 'Habitación Estándar',
-        meal_plan: 'Solo Alojamiento',
-        cancellation_type: 'Cancelación gratuita hasta 48 horas antes',
-        price: Number((basePrice * nights).toFixed(2)),
-        currency,
-      },
-      {
-        product_id: `prod_${local?.id || accId}_deluxe_bb`,
-        room_name: 'Habitación Deluxe con Balcón',
-        meal_plan: 'Desayuno Buffet Incluido',
-        cancellation_type: 'Cancelación gratuita hasta 24 horas antes',
-        price: Number((basePrice * 1.25 * nights).toFixed(2)),
-        currency,
-      },
-      {
-        product_id: `prod_${local?.id || accId}_suite_ai`,
-        room_name: 'Master Suite Premium',
-        meal_plan: 'Todo Incluido',
-        cancellation_type: 'No Reembolsable (Tarifa Promocional)',
-        price: Number((basePrice * 1.6 * nights).toFixed(2)),
-        currency,
-      },
-    ];
-
-    // Sin habitaciones libres para esas fechas no se ofrece ningún producto.
-    const ocupacion = await this.getAvailability(local.id, dto.checkin, dto.checkout);
-    const habitacionesPedidas = dto.guests?.number_of_rooms || 1;
-    const hayCupo = ocupacion.available_rooms >= habitacionesPedidas;
+    const products = candidatos
+      .filter((o) => o.libres >= habitacionesPedidas)
+      .sort((x, y) => Number(x.tipo.precioNoche) - Number(y.tipo.precioNoche))
+      .map((o) => this.producto(o, nights, currency));
 
     return {
       request_id: `req-avail-${Date.now()}`,
@@ -663,8 +880,8 @@ export class AlojamientosService implements OnModuleInit {
         id: local.id,
         currency,
         nights,
-        available_rooms: ocupacion.available_rooms,
-        products: hayCupo ? products : [],
+        available_rooms: ocupacion.reduce((suma, o) => suma + o.libres, 0),
+        products,
         url: `/api/v1/alojamientos/${local.id}`,
       },
     };
@@ -713,28 +930,30 @@ export class AlojamientosService implements OnModuleInit {
     const rooms = dto.guests?.number_of_rooms || 1;
     const adults = dto.guests?.number_of_adults || 1;
     const children = dto.guests?.children?.length || 0;
-    validarCapacidad(local, adults, children, rooms);
 
-    const ocupacion = await this.getAvailability(local.id, dto.checkin, dto.checkout);
-    if (ocupacion.available_rooms < rooms) {
-      throw conflicto(
-        CodigoProblema.ROOM_NO_LONGER_AVAILABLE,
-        `No hay suficientes habitaciones para esas fechas. Disponibles: ${ocupacion.available_rooms}, solicitadas: ${rooms}.`,
-      );
-    }
+    // `product_id` es el tipo de habitación (id o código) que devolvió /availability.
+    const { tipo } = await this.elegirTipo(local, {
+      tipoId: dto.product_id,
+      adultos: adults,
+      ninos: children,
+      habitaciones: rooms,
+      checkin: dto.checkin!,
+      checkout: dto.checkout!,
+      campo: 'product_id',
+    });
 
-    let multiplier = 1.0;
-    if (dto.product_id?.includes('deluxe')) multiplier = 1.25;
-    if (dto.product_id?.includes('suite')) multiplier = 1.6;
-
-    const basePrice = Number(local.precioPorNoche) || 120.0;
-    const totalPrice = Number((basePrice * multiplier * nights * rooms).toFixed(2));
+    const precioNoche = Number(tipo.precioNoche);
+    const totalPrice = Number((precioNoche * nights * rooms).toFixed(2));
     const previewId = `prev_${randomUUID().substring(0, 8)}`;
 
     // Guardar en caché temporal para validación en createOrder
     this.orderPreviews.set(previewId, {
       id: previewId,
       alojamientoId: local.id,
+      tipoId: tipo.id,
+      precioNoche,
+      adultos: adults,
+      ninos: children,
       checkin: dto.checkin!,
       checkout: dto.checkout!,
       nights,
@@ -762,6 +981,9 @@ export class AlojamientosService implements OnModuleInit {
       data: {
         order_preview_id: previewId,
         accommodation_id: local.id,
+        product_id: tipo.id,
+        tipo_habitacion: { id: tipo.id, codigo: tipo.codigo, nombre: tipo.nombre },
+        price_per_night: precioNoche,
         total_price: totalPrice,
         currency: local.moneda || 'USD',
         nights,
@@ -771,11 +993,11 @@ export class AlojamientosService implements OnModuleInit {
     };
   }
 
-  async createOrder(dto: OrderCreateRequestDto, idempotencyKey: string): Promise<OrderDetailDto> {
-    return this.enSerie(() => this.createOrderEnSerie(dto, idempotencyKey));
+  async createOrder(dto: OrderCreateRequestDto, idempotencyKey: string, usuario?: UsuarioSupabase | null): Promise<OrderDetailDto> {
+    return this.enSerie(() => this.createOrderEnSerie(dto, idempotencyKey, usuario));
   }
 
-  private async createOrderEnSerie(dto: OrderCreateRequestDto, idempotencyKey: string): Promise<OrderDetailDto> {
+  private async createOrderEnSerie(dto: OrderCreateRequestDto, idempotencyKey: string, usuario?: UsuarioSupabase | null): Promise<OrderDetailDto> {
     this.logger.log(`Creando orden de alojamiento a partir de preview ${dto.order_preview_id} con idempotency key ${idempotencyKey}`);
 
     // 1. Verificación de Idempotencia estricta
@@ -784,7 +1006,8 @@ export class AlojamientosService implements OnModuleInit {
     if (existing) {
       this.logger.warn(`Idempotencia detectada: retornando orden previa ${existing.id}`);
       const local = await this.alojamientoRepo.findOne({ where: { id: existing.alojamientoId } });
-      return this.buildOrderDetailDto(existing, local, dto.payment_reference);
+      const detalle = await this.detallesDeReservas([existing]);
+      return this.buildOrderDetailDto(existing, local, dto.payment_reference, detalle(existing).tipo);
     }
 
     // 2. Validación de referencia de pago (RFC 7807: PAYMENT_REFERENCE_INVALID)
@@ -816,9 +1039,11 @@ export class AlojamientosService implements OnModuleInit {
       );
     }
 
-    // 4. Se revalida el cupo: otra persona pudo reservar entre el preview y el pago.
-    const ocupacion = await this.getAvailability(local.id, preview.checkin, preview.checkout);
-    if (ocupacion.available_rooms < preview.rooms) {
+    // 4. Se revalida el cupo DEL TIPO cotizado: otra persona pudo reservar entre
+    //    el preview y el pago, o el tipo pudo dejar de venderse.
+    const ocupacion = await this.tiposService.ocupacion(local, preview.checkin, preview.checkout);
+    const cotizado = ocupacion.find((o) => o.tipo.id === preview.tipoId);
+    if (!cotizado || cotizado.libres < preview.rooms) {
       throw conflicto(
         CodigoProblema.ROOM_NO_LONGER_AVAILABLE,
         'Las habitaciones cotizadas ya no están disponibles para esas fechas.',
@@ -826,18 +1051,26 @@ export class AlojamientosService implements OnModuleInit {
     }
 
     const codigoReserva = `BKG-${Math.floor(100000 + Math.random() * 900000)}`;
-    const fullName = `${dto.customer_details.first_name} ${dto.customer_details.last_name}`;
+    const cliente = dto.customer_details;
+    const fullName = `${cliente.first_name} ${cliente.last_name}`;
 
     let reserva = this.reservaRepo.create({
       codigoReserva,
       alojamientoId: local.id,
+      tipoHabitacionId: preview.tipoId,
+      usuarioId: usuario?.id ?? null,
       customerName: fullName,
-      customerEmail: dto.customer_details.email,
+      customerEmail: cliente.email.trim().toLowerCase(),
+      telefono: cliente.phone ?? null,
       checkin: preview.checkin,
       checkout: preview.checkout,
       noches: preview.nights,
-      huespedes: preview.guests?.number_of_adults || 2,
+      adultos: preview.adultos,
+      ninos: preview.ninos,
+      huespedes: preview.adultos + preview.ninos,
       habitacionesCount: preview.rooms || 1,
+      precioNoche: preview.precioNoche,
+      moneda: preview.currency,
       total: preview.totalPrice,
       totalPrice: { currency: preview.currency, total: preview.totalPrice },
       status: ReservationStatus.CONFIRMED,
@@ -845,6 +1078,12 @@ export class AlojamientosService implements OnModuleInit {
     });
 
     reserva = await this.reservaRepo.save(reserva);
+    await this.guardarHuespedes(reserva, {
+      nombre: cliente.first_name,
+      apellido: cliente.last_name,
+      email: reserva.customerEmail,
+      telefono: cliente.phone ?? null,
+    });
 
     // Consumir preview
     this.orderPreviews.delete(dto.order_preview_id);
@@ -872,7 +1111,7 @@ export class AlojamientosService implements OnModuleInit {
       },
     });
 
-    return this.buildOrderDetailDto(reserva, local, dto.payment_reference);
+    return this.buildOrderDetailDto(reserva, local, dto.payment_reference, cotizado.tipo);
   }
 
   async getOrderById(orderId: string): Promise<OrderDetailDto> {
@@ -883,7 +1122,8 @@ export class AlojamientosService implements OnModuleInit {
     }
 
     const local = await this.alojamientoRepo.findOne({ where: { id: reserva.alojamientoId } });
-    return this.buildOrderDetailDto(reserva, local);
+    const detalle = await this.detallesDeReservas([reserva]);
+    return this.buildOrderDetailDto(reserva, local, undefined, detalle(reserva).tipo);
   }
 
   async modifyOrder(orderId: string, dto: OrderModifyRequestDto, idempotencyKey: string): Promise<OrderDetailDto> {
@@ -905,30 +1145,48 @@ export class AlojamientosService implements OnModuleInit {
     const nuevoCheckin = dto.checkin ?? reserva.checkin;
     const nuevoCheckout = dto.checkout ?? reserva.checkout;
     const nuevasHabitaciones = dto.guests?.number_of_rooms ?? reserva.habitacionesCount ?? 1;
-    const nuevosAdultos = dto.guests?.number_of_adults ?? reserva.huespedes ?? 1;
+    const nuevosAdultos = dto.guests?.number_of_adults ?? reserva.adultos ?? reserva.huespedes ?? 1;
+    const nuevosNinos = dto.guests ? dto.guests.children?.length || 0 : reserva.ninos ?? 0;
     const noches = validarEstancia(nuevoCheckin, nuevoCheckout);
 
     const local = await this.alojamientoRepo.findOne({ where: { id: reserva.alojamientoId } });
+    let tipo: TipoHabitacion | null = null;
     if (local) {
-      validarCapacidad(local, nuevosAdultos, dto.guests?.children?.length || 0, nuevasHabitaciones);
-      const ocupacion = await this.getAvailability(local.id, nuevoCheckin, nuevoCheckout, reserva.id);
-      if (ocupacion.available_rooms < nuevasHabitaciones) {
-        throw conflicto(
-          CodigoProblema.ROOM_NO_LONGER_AVAILABLE,
-          'No hay disponibilidad para las nuevas fechas u ocupación solicitadas.',
-        );
+      // Se mantiene el tipo de habitación reservado; se revalida su capacidad y su cupo.
+      const tipoId = reserva.tipoHabitacionId || (await this.tiposService.tipoPorDefecto(local))?.id;
+      try {
+        ({ tipo } = await this.elegirTipo(local, {
+          tipoId,
+          adultos: nuevosAdultos,
+          ninos: nuevosNinos,
+          habitaciones: nuevasHabitaciones,
+          checkin: nuevoCheckin,
+          checkout: nuevoCheckout,
+          excluirReservaId: reserva.id,
+          noVendibleEsConflicto: true,
+        }));
+      } catch (e) {
+        if (e instanceof ProblemaApi && e.codigo === CodigoProblema.ROOM_NO_LONGER_AVAILABLE) {
+          throw conflicto(CodigoProblema.ROOM_NO_LONGER_AVAILABLE, 'No hay disponibilidad para las nuevas fechas u ocupación solicitadas.');
+        }
+        throw e;
       }
     }
 
     reserva.checkin = nuevoCheckin;
     reserva.checkout = nuevoCheckout;
     reserva.noches = noches;
-    reserva.huespedes = nuevosAdultos;
+    reserva.adultos = nuevosAdultos;
+    reserva.ninos = nuevosNinos;
+    reserva.huespedes = nuevosAdultos + nuevosNinos;
     reserva.habitacionesCount = nuevasHabitaciones;
+    if (tipo && !reserva.tipoHabitacionId) reserva.tipoHabitacionId = tipo.id;
 
-    // El precio por noche se mantiene (tarifa contratada); cambia por noches/habitaciones.
-    const moneda = reserva.totalPrice?.currency || local?.moneda || 'USD';
-    const precioNoche = local ? Number(local.precioPorNoche) : Number(reserva.total) / Math.max(1, calcularNoches(reserva.checkin, reserva.checkout));
+    // La tarifa por noche contratada se mantiene; el total cambia por noches/habitaciones.
+    const moneda = reserva.moneda || reserva.totalPrice?.currency || local?.moneda || 'USD';
+    const precioNoche = Number(reserva.precioNoche) || (tipo ? Number(tipo.precioNoche) : Number(reserva.total) / Math.max(1, calcularNoches(reserva.checkin, reserva.checkout)));
+    reserva.precioNoche = precioNoche;
+    reserva.moneda = moneda;
     reserva.total = Number((precioNoche * noches * nuevasHabitaciones).toFixed(2));
     reserva.totalPrice = { currency: moneda, total: reserva.total };
 
@@ -941,7 +1199,7 @@ export class AlojamientosService implements OnModuleInit {
       total: reserva.total,
     });
 
-    return this.buildOrderDetailDto(reserva, local);
+    return this.buildOrderDetailDto(reserva, local, undefined, tipo);
   }
 
   async cancelOrder(orderId: string, idempotencyKey: string, reason?: string): Promise<any> {
@@ -964,6 +1222,8 @@ export class AlojamientosService implements OnModuleInit {
       }
 
       reserva.status = ReservationStatus.CANCELLED;
+      reserva.motivoCancelacion = reason?.slice(0, 500) || null;
+      reserva.canceladaEn = new Date();
       await this.reservaRepo.save(reserva);
 
       this.triggerWebhookNotification('ORDER_CANCELLED', reserva.id, {
@@ -1132,7 +1392,9 @@ export class AlojamientosService implements OnModuleInit {
     });
 
     if (local) {
-      return this.transformAlojamiento(local);
+      // La ficha incluye sus tipos de habitación, como la tabla de habitaciones de Booking.
+      const tipos = await this.tiposService.asegurarTipoBase(local);
+      return this.transformAlojamiento(local, tipos);
     }
 
     throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
@@ -1144,26 +1406,16 @@ export class AlojamientosService implements OnModuleInit {
     if (!local) {
       throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
     }
-    const precio = Number(local.precioPorNoche) || 150.0;
-    const totalRooms = local.habitaciones || 5;
-
     const startDate = date || new Date().toISOString().split('T')[0];
     const endDate = checkoutDate || new Date(new Date(startDate).getTime() + 86400000).toISOString().split('T')[0];
 
-    // Contabilizar reservas confirmadas activas que se crucen con el rango [startDate, endDate)
-    const activeReservations = await this.reservaRepo.find({
-      where: {
-        alojamientoId: id,
-        status: ReservationStatus.CONFIRMED,
-      },
-    });
-
-    const overlapping = activeReservations.filter((r) => {
-      return r.id !== excluirReservaId && r.checkin < endDate && r.checkout > startDate;
-    });
-
-    const reservedRooms = overlapping.reduce((sum, r) => sum + (r.habitacionesCount || 1), 0);
-    const availableRooms = Math.max(0, totalRooms - reservedRooms);
+    // Reservas confirmadas que se cruzan con [startDate, endDate), por tipo de habitación.
+    const ocupacion = await this.tiposService.ocupacion(local, startDate, endDate, excluirReservaId);
+    const totalRooms = ocupacion.reduce((s, o) => s + o.total, 0);
+    const reservedRooms = ocupacion.reduce((s, o) => s + o.reservadas, 0);
+    const availableRooms = ocupacion.reduce((s, o) => s + o.libres, 0);
+    const conCupo = ocupacion.filter((o) => o.libres > 0);
+    const precios = (conCupo.length ? conCupo : ocupacion).map((o) => Number(o.tipo.precioNoche));
 
     return {
       alojamiento_id: id,
@@ -1173,17 +1425,26 @@ export class AlojamientosService implements OnModuleInit {
       total_rooms: totalRooms,
       reserved_rooms: reservedRooms,
       available_rooms: availableRooms,
-      price_per_night: precio,
+      price_per_night: precios.length ? Math.min(...precios) : Number(local.precioPorNoche),
       checkin_times: ['14:00', '15:00', '16:00'],
       is_available: availableRooms > 0,
+      tipos: ocupacion.map((o) => ({
+        id: o.tipo.id,
+        codigo: o.tipo.codigo,
+        nombre: o.tipo.nombre,
+        precio_noche: Number(o.tipo.precioNoche),
+        total_rooms: o.total,
+        reserved_rooms: o.reservadas,
+        available_rooms: o.libres,
+      })),
     };
   }
 
-  async reservar(id: string, dto: ReservationRequestDto, idempotencyKey: string): Promise<any> {
-    return this.enSerie(() => this.reservarEnSerie(id, dto, idempotencyKey));
+  async reservar(id: string, dto: ReservationRequestDto, idempotencyKey: string, usuario?: UsuarioSupabase | null): Promise<any> {
+    return this.enSerie(() => this.reservarEnSerie(id, dto, idempotencyKey, usuario));
   }
 
-  private async reservarEnSerie(id: string, dto: ReservationRequestDto, idempotencyKey: string): Promise<any> {
+  private async reservarEnSerie(id: string, dto: ReservationRequestDto, idempotencyKey: string, usuario?: UsuarioSupabase | null): Promise<any> {
     this.logger.log(`Iniciando reserva para Alojamiento ${id} con idempotency key ${idempotencyKey}`);
 
     // 1. Control de Idempotencia estricto
@@ -1195,24 +1456,41 @@ export class AlojamientosService implements OnModuleInit {
       return this.buildReservaResponse(existing);
     }
 
-    const alojamiento = await this.findOne(id);
+    const alojamiento = await this.alojamientoRepo.findOne({ where: { id, ...SOLO_ACTIVOS } as any });
+    if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
     // Las noches salen SIEMPRE de las fechas (fuente de verdad), no de `dto.nights`:
     // así el total cobrado coincide con la estancia real.
     const nights = validarEstancia(dto.checkin, dto.checkout);
     const targetCheckin = dto.checkin;
     const targetCheckout = dto.checkout;
     const roomsCount = Math.max(1, dto.habitaciones_count || 1);
-    validarCapacidad(alojamiento, dto.adultos || 1, dto.ninos || 0, roomsCount);
+    const adultos = dto.adultos || 1;
+    const ninos = dto.ninos || 0;
+    const seleccion = {
+      tipoId: dto.tipo_habitacion_id,
+      adultos,
+      ninos,
+      habitaciones: roomsCount,
+      checkin: targetCheckin,
+      checkout: targetCheckout,
+    };
+    // Tipo de habitación y capacidad primero (400); el cupo se comprueba después del
+    // aviso de reserva duplicada, como antes.
+    await this.elegirTipo(alojamiento, { ...seleccion, ignorarCupo: true });
+    this.validarAcompanantes(dto.acompanantes, adultos, ninos);
 
     // 2. Posible reserva duplicada (mismo cliente, mismo alojamiento, fechas que
     //    se solapan). Como en Booking, NO se bloquea: puede querer otra habitación.
     //    Se devuelve 409 para que el cliente CONFIRME, y basta con reenviar la
     //    petición con `confirmar_duplicado: true` (lo indica `invalidParams`).
-    const customerEmail = (dto.customer_email || '').trim().toLowerCase();
-    if (customerEmail && !dto.confirmar_duplicado) {
-      const delCliente = await this.reservaRepo.find({
-        where: { alojamientoId: id, customerEmail, status: ReservationStatus.CONFIRMED },
+    const customerEmail = (dto.customer_email || usuario?.email || '').trim().toLowerCase();
+    if ((customerEmail || usuario?.id) && !dto.confirmar_duplicado) {
+      const confirmadas = await this.reservaRepo.find({
+        where: { alojamientoId: id, status: ReservationStatus.CONFIRMED } as any,
       });
+      const delCliente = confirmadas.filter(
+        (r) => (usuario?.id && r.usuarioId === usuario.id) || (customerEmail && r.customerEmail === customerEmail),
+      );
       const duplicate = delCliente.find((r) => r.checkin < targetCheckout && r.checkout > targetCheckin);
 
       if (duplicate) {
@@ -1230,16 +1508,10 @@ export class AlojamientosService implements OnModuleInit {
       }
     }
 
-    // 3. Verificación de disponibilidad de habitaciones sincronizada en tiempo real
-    const availability = await this.getAvailability(id, targetCheckin, targetCheckout);
-    if (availability.available_rooms < roomsCount) {
-      throw conflicto(
-        CodigoProblema.ROOM_NO_LONGER_AVAILABLE,
-        `No hay suficientes habitaciones disponibles para las fechas seleccionadas. Habitaciones disponibles: ${availability.available_rooms}, solicitadas: ${roomsCount}.`,
-      );
-    }
+    // 3. Cupo del tipo de habitación, en tiempo real.
+    const { tipo } = await this.elegirTipo(alojamiento, seleccion);
 
-    const pricePerNight = Number(alojamiento.precioPorNoche) || 100.0;
+    const pricePerNight = Number(tipo.precioNoche);
     const total = Number((pricePerNight * nights * roomsCount).toFixed(2));
     const currency = alojamiento.moneda || 'USD';
 
@@ -1248,20 +1520,36 @@ export class AlojamientosService implements OnModuleInit {
     let reserva = this.reservaRepo.create({
       codigoReserva,
       alojamientoId: id,
+      tipoHabitacionId: tipo.id,
+      usuarioId: usuario?.id ?? null,
       idempotencyKey,
       status: ReservationStatus.CONFIRMED,
+      precioNoche: pricePerNight,
+      moneda: currency,
       total,
       totalPrice: { currency, total },
       noches: nights,
       habitacionesCount: roomsCount,
       customerName: dto.customer_name,
       customerEmail: customerEmail || 'cliente@example.com',
+      telefono: dto.phone?.trim() || null,
+      peticionesEspeciales: dto.special_requests?.trim() || null,
+      horaLlegada: dto.arrival_time?.trim() || null,
       checkin: targetCheckin,
       checkout: targetCheckout,
-      huespedes: (dto.adultos || 1) + (dto.ninos || 0),
+      adultos,
+      ninos,
+      huespedes: adultos + ninos,
     });
 
     reserva = await this.reservaRepo.save(reserva);
+    // El titular es el huésped principal (puede no ser quien paga: "reservo para otra persona").
+    const titular = this.partirNombre(dto.guest_name || dto.customer_name);
+    const huespedes = await this.guardarHuespedes(
+      reserva,
+      { ...titular, email: reserva.customerEmail, telefono: reserva.telefono },
+      dto.acompanantes,
+    );
 
     this.telemetryService?.trackEvent({
       event_name: 'booking_confirmed',
@@ -1272,10 +1560,12 @@ export class AlojamientosService implements OnModuleInit {
         alojamiento_id: reserva.alojamientoId,
         total: reserva.total,
         customer_email: reserva.customerEmail,
+        tipo_habitacion: tipo.codigo,
+        con_sesion: Boolean(usuario?.id),
       },
     });
 
-    return this.buildReservaResponse(reserva, alojamiento);
+    return this.buildReservaResponse(reserva, alojamiento, { tipo, huespedes });
   }
 
   async cancelarReserva(reservationId: string, dto: CancelReservationRequestDto, idempotencyKey: string): Promise<any> {
@@ -1300,6 +1590,8 @@ export class AlojamientosService implements OnModuleInit {
     }
 
     reserva.status = ReservationStatus.CANCELLED;
+    reserva.motivoCancelacion = dto.reason?.slice(0, 500) || null;
+    reserva.canceladaEn = new Date();
     await this.reservaRepo.save(reserva);
 
     this.telemetryService?.trackEvent({
@@ -1316,31 +1608,40 @@ export class AlojamientosService implements OnModuleInit {
   }
 
   /**
-   * "Mis reservas": un cliente solo ve SUS reservas (por el correo de su sesión);
-   * un administrador ve todas. Antes devolvía todas las reservas de todos los
-   * clientes, con nombre y correo, a cualquiera.
+   * "Mis reservas": un cliente ve las reservas vinculadas a SU usuario
+   * (usuario_id) y las que hizo sin sesión con su mismo correo; un administrador
+   * ve todas. Una reserva vinculada a otro usuario nunca aparece, aunque el
+   * correo coincida.
    */
   async getReservas(usuario?: UsuarioSupabase | null): Promise<any> {
     this.logger.log('Consultando historial de reservas de alojamientos');
     const email = (usuario?.email || '').trim().toLowerCase();
     const verTodas = esAdministrador(usuario);
-    if (!verTodas && !email) return [];
-    const reservas = await this.reservaRepo.find({
-      ...(verTodas ? {} : { where: { customerEmail: email } }),
-      order: { createdAt: 'DESC' },
-    });
+    if (!verTodas && !email && !usuario?.id) return [];
+    let reservas: ReservaAlojamiento[];
+    if (verTodas) {
+      reservas = await this.reservaRepo.find({ order: { createdAt: 'DESC' } });
+    } else {
+      const condiciones: any[] = [];
+      if (usuario?.id) condiciones.push({ usuarioId: usuario.id });
+      if (email) condiciones.push({ customerEmail: email });
+      const candidatas = await this.reservaRepo.find({ where: condiciones, order: { createdAt: 'DESC' } });
+      reservas = candidatas.filter((r) => r.usuarioId === usuario?.id || (!r.usuarioId && r.customerEmail === email));
+    }
     const ids = [...new Set(reservas.map((r) => r.alojamientoId))];
-    const alojamientos = ids.length > 0 ? await this.alojamientoRepo.find({ where: ids.map((id) => ({ id })) }) : [];
+    const alojamientos = ids.length > 0 ? await this.alojamientoRepo.find({ where: ids.map((id) => ({ id })), withDeleted: true } as any) : [];
     const alojMap = new Map(alojamientos.map((a) => [a.id, a]));
-    return reservas.map((r) => this.buildReservaResponse(r, alojMap.get(r.alojamientoId)));
+    const detalle = await this.detallesDeReservas(reservas);
+    return reservas.map((r) => this.buildReservaResponse(r, alojMap.get(r.alojamientoId), detalle(r)));
   }
 
   async getReservaById(reservationId: string): Promise<any> {
     this.logger.log(`Consultando detalle de reserva ${reservationId}`);
     const reserva = await this.reservaRepo.findOneBy({ id: reservationId });
     if (!reserva) throw new HttpException('Reserva no encontrada', HttpStatus.NOT_FOUND);
-    const alojamiento = await this.alojamientoRepo.findOneBy({ id: reserva.alojamientoId });
-    return this.buildReservaResponse(reserva, alojamiento);
+    const alojamiento = await this.alojamientoRepo.findOne({ where: { id: reserva.alojamientoId }, withDeleted: true } as any);
+    const detalle = await this.detallesDeReservas([reserva]);
+    return this.buildReservaResponse(reserva, alojamiento, detalle(reserva));
   }
 
   /** Id interno estable para un alojamiento que llega de un proveedor. */
@@ -1352,7 +1653,7 @@ export class AlojamientosService implements OnModuleInit {
 
   /** Normaliza el DTO a columnas de la entidad (sin campos ajenos ni el proveedor). */
   private camposDesdeDto(dto: Partial<CreateAlojamientoDto>) {
-    const { proveedorId: _p, ...resto } = dto as any;
+    const { proveedorId: _p, tiposHabitacion: _t, ...resto } = dto as any;
     const campos: Record<string, any> = {};
     for (const [k, v] of Object.entries(resto)) {
       if (v !== undefined) campos[k] = v;
@@ -1360,11 +1661,32 @@ export class AlojamientosService implements OnModuleInit {
     return campos;
   }
 
+  /** 400 si un administrador asigna el alojamiento a un proveedor que no está registrado. */
+  private async exigirProveedorRegistrado(proveedorId: string | null | undefined, campo = 'proveedorId') {
+    if (!proveedorId) return;
+    if (!(await this.proveedoresService.existe(proveedorId))) {
+      throw validacion('El proveedor no está registrado.', [
+        { name: campo, reason: `'${proveedorId}' no existe. Dalo de alta en Gestión → Proveedores (o POST /alojamientos/gestion/proveedores).` },
+      ]);
+    }
+  }
+
+  /** Alojamiento recién guardado, con su resumen de tipos ya recalculado. */
+  private async releer(id: string): Promise<Alojamiento> {
+    return (await this.alojamientoRepo.findOne({ where: { id } as any })) as Alojamiento;
+  }
+
+  /**
+   * Alta. Si trae `tiposHabitacion` se crean; si no, el alojamiento recibe un
+   * tipo "estándar" con su precio, capacidad y habitaciones. El precio "desde",
+   * las habitaciones y la capacidad del alojamiento se calculan de sus tipos.
+   */
   async create(dto: CreateAlojamientoDto, actor?: ActorCatalogo): Promise<any> {
     // Con API key el proveedor es SIEMPRE el de la clave; un admin puede indicarlo.
     const proveedorId = actor?.tipo === 'proveedor' ? actor.proveedorId : dto.proveedorId ?? null;
+    if (actor?.tipo !== 'proveedor') await this.exigirProveedorRegistrado(proveedorId);
     if (dto.idExterno && proveedorId) {
-      const existente = await this.alojamientoRepo.findOne({ where: { proveedorId, idExterno: dto.idExterno } as any });
+      const existente = await this.alojamientoRepo.findOne({ where: { proveedorId, idExterno: dto.idExterno }, withDeleted: true } as any);
       if (existente) {
         throw new ConflictException(
           `El proveedor '${proveedorId}' ya tiene un alojamiento con idExterno '${dto.idExterno}' (id ${existente.id}). Usa PATCH /alojamientos/${existente.id} o POST /alojamientos/sincronizar.`,
@@ -1384,50 +1706,107 @@ export class AlojamientosService implements OnModuleInit {
       host: null,
       ubicacion: dto.ubicacion || { city: dto.destino },
       ultimaSincronizacion: actor?.tipo === 'proveedor' ? new Date() : null,
-    } as any);
-    return this.alojamientoRepo.save(entity);
+    } as Partial<Alojamiento>);
+    const guardado = await this.alojamientoRepo.save(entity);
+    if (dto.tiposHabitacion?.length) await this.tiposService.reemplazar(guardado, dto.tiposHabitacion);
+    else await this.tiposService.asegurarTipoBase(guardado);
+    return this.releer(guardado.id);
+  }
+
+  /**
+   * Aplica una edición (PUT o PATCH) respetando los tipos de habitación: con
+   * `tiposHabitacion` se reemplazan; sin ellos, un cambio de precio/capacidad/
+   * habitaciones se traslada al tipo único (o es un 400 si hay varios).
+   */
+  private async aplicarEdicion(alojamiento: Alojamiento, dto: Partial<CreateAlojamientoDto>, actor?: ActorCatalogo): Promise<Alojamiento> {
+    const campos = this.camposDesdeDto(dto);
+    if (actor?.tipo === 'admin' && dto.proveedorId !== undefined) {
+      await this.exigirProveedorRegistrado(dto.proveedorId);
+      campos.proveedorId = dto.proveedorId;
+    }
+    if (actor?.tipo === 'proveedor') campos.ultimaSincronizacion = new Date();
+    if (!dto.tiposHabitacion) {
+      await this.tiposService.asegurarTipoBase(alojamiento);
+      await this.tiposService.propagarDesdeAlojamiento(alojamiento, campos);
+    }
+    const guardado = await this.alojamientoRepo.save(Object.assign(alojamiento, campos));
+    if (dto.tiposHabitacion) await this.tiposService.reemplazar(guardado, dto.tiposHabitacion);
+    else await this.tiposService.resumir(guardado.id);
+    return this.releer(guardado.id);
   }
 
   async replace(id: string, dto: CreateAlojamientoDto, actor?: ActorCatalogo): Promise<void> {
     const alojamiento = await this.alojamientoRepo.findOneBy({ id });
     if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
     exigirPropiedad(actor, alojamiento.proveedorId);
-    await this.alojamientoRepo.save({
-      ...alojamiento,
-      ...this.camposDesdeDto(dto),
-      ...(actor?.tipo === 'admin' && dto.proveedorId !== undefined ? { proveedorId: dto.proveedorId } : {}),
-      ...(actor?.tipo === 'proveedor' ? { ultimaSincronizacion: new Date() } : {}),
-    } as any);
+    await this.aplicarEdicion(alojamiento, dto, actor);
   }
 
   async update(id: string, dto: UpdateAlojamientoDto, actor?: ActorCatalogo): Promise<any> {
     const alojamiento = await this.alojamientoRepo.findOneBy({ id });
     if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
     exigirPropiedad(actor, alojamiento.proveedorId);
-    Object.assign(alojamiento, this.camposDesdeDto(dto));
-    if (actor?.tipo === 'admin' && (dto as any).proveedorId !== undefined) alojamiento.proveedorId = (dto as any).proveedorId;
-    if (actor?.tipo === 'proveedor') alojamiento.ultimaSincronizacion = new Date();
-    return this.alojamientoRepo.save(alojamiento);
+    return this.aplicarEdicion(alojamiento, dto, actor);
   }
 
   /**
-   * Baja definitiva. Se rechaza (409) si hay reservas confirmadas que aún no han
-   * terminado: borrar el hotel dejaría a esos clientes sin alojamiento ni datos.
-   * En ese caso hay que desactivarlo (estado INACTIVO), que lo oculta sin perder nada.
+   * Baja. Se rechaza (409) si hay reservas confirmadas que aún no han terminado:
+   * hay que desactivarlo (estado INACTIVO). Si solo tiene reservas pasadas o
+   * canceladas, se da de baja LÓGICA (deleted_at) para conservar el historial
+   * contable; sin reservas, se borra.
    */
-  async delete(id: string, actor?: ActorCatalogo): Promise<void> {
+  async delete(id: string, actor?: ActorCatalogo): Promise<{ baja: 'logica' | 'definitiva' }> {
     const alojamiento = await this.alojamientoRepo.findOneBy({ id });
     if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
     exigirPropiedad(actor, alojamiento.proveedorId);
     const hoy = fechaRelativa(0);
-    const pendientes = (await this.reservaRepo.find({ where: { alojamientoId: id, status: ReservationStatus.CONFIRMED } }))
-      .filter((r) => String(r.checkout) >= hoy);
+    const reservas = await this.reservaRepo.find({ where: { alojamientoId: id } as any });
+    const pendientes = reservas.filter((r) => r.status === ReservationStatus.CONFIRMED && String(r.checkout) >= hoy);
     if (pendientes.length > 0) {
       throw new ConflictException(
         `No se puede eliminar: tiene ${pendientes.length} reserva(s) confirmada(s) pendientes. Desactívalo (estado INACTIVO) para ocultarlo sin afectar a esos clientes.`,
       );
     }
+    if (reservas.length > 0) {
+      alojamiento.estado = 'INACTIVO';
+      await this.alojamientoRepo.save(alojamiento);
+      await this.alojamientoRepo.softRemove(alojamiento);
+      return { baja: 'logica' };
+    }
     await this.alojamientoRepo.remove(alojamiento);
+    return { baja: 'definitiva' };
+  }
+
+  // ── Tipos de habitación (panel y proveedores) ────────────────────────────
+
+  /** Tipos a la venta de un alojamiento activo (ficha pública). */
+  async tiposPublicos(id: string) {
+    const alojamiento = await this.alojamientoRepo.findOne({ where: { id, ...SOLO_ACTIVOS } as any });
+    if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
+    return (await this.tiposService.asegurarTipoBase(alojamiento)).map((t) => this.tipoPublico(t));
+  }
+
+  private async alojamientoGestionable(id: string, actor?: ActorCatalogo): Promise<Alojamiento> {
+    const alojamiento = await this.alojamientoRepo.findOneBy({ id });
+    if (!alojamiento) throw new HttpException('Alojamiento no encontrado', HttpStatus.NOT_FOUND);
+    exigirPropiedad(actor, alojamiento.proveedorId);
+    return alojamiento;
+  }
+
+  async crearTipo(id: string, dto: CreateTipoHabitacionDto, actor?: ActorCatalogo) {
+    const alojamiento = await this.alojamientoGestionable(id, actor);
+    await this.tiposService.asegurarTipoBase(alojamiento);
+    return this.tipoPublico(await this.tiposService.crear(alojamiento, dto));
+  }
+
+  async actualizarTipo(id: string, tipoId: string, dto: UpdateTipoHabitacionDto, actor?: ActorCatalogo) {
+    await this.alojamientoGestionable(id, actor);
+    return this.tipoPublico(await this.tiposService.actualizar(id, tipoId, dto));
+  }
+
+  async eliminarTipo(id: string, tipoId: string, actor?: ActorCatalogo) {
+    await this.alojamientoGestionable(id, actor);
+    return this.tiposService.eliminar(id, tipoId);
   }
 
   /**
@@ -1459,10 +1838,16 @@ export class AlojamientosService implements OnModuleInit {
     const todos = await this.alojamientoRepo.find();
     const visibles = actor?.tipo === 'proveedor' ? todos.filter((a) => a.proveedorId === actor.proveedorId) : todos;
     const proveedores = [...new Set(visibles.map((a) => a.proveedorId).filter(Boolean))].sort();
+    // Tipos de habitación de cada alojamiento (también los inactivos: el panel los gestiona).
+    // Un alojamiento sin tipos (insertado a mano en la BD) recibe aquí su tipo "estándar".
+    const tiposPor = await this.tiposService.listarDe(lista.map((a) => a.id));
+    for (const a of lista.filter((x) => !tiposPor.has(x.id))) {
+      tiposPor.set(a.id, await this.tiposService.asegurarTipoBase(a));
+    }
 
     return {
       data: lista.map((a) => ({
-        ...this.transformAlojamiento(a),
+        ...this.transformAlojamiento(a, tiposPor.get(a.id) ?? []),
         reservas_pendientes: pendientesPor.get(a.id) || 0,
         creado_en: a.createdAt,
         actualizado_en: a.updatedAt,
@@ -1496,6 +1881,7 @@ export class AlojamientosService implements OnModuleInit {
         { name: 'proveedorId', reason: 'Obligatorio para un administrador (con API key se toma de la clave). Minúsculas, números y "-".' },
       ]);
     }
+    if (actor.tipo !== 'proveedor') await this.exigirProveedorRegistrado(proveedorId);
 
     const resultados: any[] = [];
     const vistos = new Set<string>();
@@ -1524,14 +1910,25 @@ export class AlojamientosService implements OnModuleInit {
         continue;
       }
 
-      const existente = await this.alojamientoRepo.findOne({ where: { proveedorId, idExterno } as any });
-      if (existente) {
-        Object.assign(existente, this.camposDesdeDto(dto), { ultimaSincronizacion: new Date() });
-        const guardado = await this.alojamientoRepo.save(existente);
-        resultados.push({ indice: i, idExterno, resultado: 'ACTUALIZADO', id: guardado.id, estado: guardado.estado || 'ACTIVO' });
-      } else {
-        const creado = await this.create(dto, { tipo: 'proveedor', proveedorId });
-        resultados.push({ indice: i, idExterno, resultado: 'CREADO', id: creado.id, estado: creado.estado });
+      try {
+        // También los dados de baja lógica: reenviarlos los RESTAURA (mismo id, mismo historial).
+        const existente = await this.alojamientoRepo.findOne({ where: { proveedorId, idExterno }, withDeleted: true } as any);
+        if (existente) {
+          if (existente.deletedAt) {
+            existente.deletedAt = null as any;
+            await this.alojamientoRepo.save(existente);
+          }
+          const guardado = await this.aplicarEdicion(existente, dto, { tipo: 'proveedor', proveedorId });
+          resultados.push({ indice: i, idExterno, resultado: 'ACTUALIZADO', id: guardado.id, estado: guardado.estado || 'ACTIVO' });
+        } else {
+          const creado = await this.create(dto, { tipo: 'proveedor', proveedorId });
+          resultados.push({ indice: i, idExterno, resultado: 'CREADO', id: creado.id, estado: creado.estado });
+        }
+      } catch (e) {
+        // Una regla de negocio (p. ej. tipos de habitación incoherentes) falla solo ese elemento.
+        if (!(e instanceof HttpException) || e.getStatus() >= 500) throw e;
+        const params = e instanceof ProblemaApi && e.invalidParams.length ? e.invalidParams : [{ name: 'alojamiento', reason: e.message }];
+        resultados.push({ indice: i, idExterno, resultado: 'ERROR', errores: params });
       }
     }
 
@@ -1606,7 +2003,11 @@ export class AlojamientosService implements OnModuleInit {
 
   // --- Helpers de Formateo ---
 
-  private buildReservaResponse(reserva: ReservaAlojamiento, alojamiento?: any) {
+  private buildReservaResponse(
+    reserva: ReservaAlojamiento,
+    alojamiento?: any,
+    extra: { tipo?: TipoHabitacion | null; huespedes?: HuespedReserva[] } = {},
+  ) {
     const defaultPhoto = 'https://cf.bstatic.com/xdata/images/hotel/max1024x768/833148758.jpg?k=4af6fee87e75cf2bdb688cfa67e30d77b3282140a0ed4ee22ac61e5be30b95dd&o=&hp=1';
     const photos = alojamiento?.photos;
     const photoUrl = Array.isArray(photos) && photos.length > 0 ? photos[0].url : defaultPhoto;
@@ -1622,8 +2023,37 @@ export class AlojamientosService implements OnModuleInit {
       checkout: reserva.checkout,
       noches: reserva.noches,
       huespedes: reserva.huespedes,
+      adultos: reserva.adultos ?? reserva.huespedes,
+      ninos: reserva.ninos ?? 0,
       habitaciones_count: reserva.habitacionesCount,
-      total_price: reserva.totalPrice || { currency: 'USD', total: Number(reserva.total) },
+      tipo_habitacion: extra.tipo
+        ? {
+            id: extra.tipo.id,
+            codigo: extra.tipo.codigo,
+            nombre: extra.tipo.nombre,
+            regimen: NOMBRE_REGIMEN[extra.tipo.regimen] ?? extra.tipo.regimen,
+            cancelacion: textoCancelacion(extra.tipo.cancelacionGratuitaHoras),
+          }
+        : reserva.tipoHabitacionId
+          ? { id: reserva.tipoHabitacionId }
+          : null,
+      precio_noche: reserva.precioNoche !== undefined && reserva.precioNoche !== null ? Number(reserva.precioNoche) : null,
+      total_price: reserva.totalPrice || { currency: reserva.moneda || 'USD', total: Number(reserva.total) },
+      telefono: reserva.telefono ?? null,
+      peticiones_especiales: reserva.peticionesEspeciales ?? null,
+      hora_llegada: reserva.horaLlegada ?? null,
+      // Vinculada a una cuenta (usuario_id) o hecha sin sesión.
+      cuenta_vinculada: Boolean(reserva.usuarioId),
+      cancelada_en: reserva.canceladaEn ?? null,
+      motivo_cancelacion: reserva.motivoCancelacion ?? null,
+      huespedes_detalle: (extra.huespedes ?? []).map((h) => ({
+        orden: h.orden,
+        es_titular: h.esTitular,
+        tipo: h.tipo,
+        nombre: h.nombre,
+        apellido: h.apellido,
+        edad: h.edad ?? null,
+      })),
       created_at: reserva.createdAt,
       nombre_alojamiento: alojamiento?.nombre || null,
       destino: alojamiento?.destino || null,
@@ -1636,7 +2066,12 @@ export class AlojamientosService implements OnModuleInit {
     };
   }
 
-  private buildOrderDetailDto(reserva: ReservaAlojamiento, alojamiento?: any, paymentReference?: string): OrderDetailDto {
+  private buildOrderDetailDto(
+    reserva: ReservaAlojamiento,
+    alojamiento?: any,
+    paymentReference?: string,
+    tipo?: TipoHabitacion | null,
+  ): OrderDetailDto {
     return {
       order_id: reserva.id,
       codigo_reserva: reserva.codigoReserva,
@@ -1650,9 +2085,13 @@ export class AlojamientosService implements OnModuleInit {
         noches: reserva.noches,
         habitaciones: reserva.habitacionesCount,
         huespedes: reserva.huespedes,
+        adultos: reserva.adultos ?? reserva.huespedes,
+        ninos: reserva.ninos ?? 0,
+        precio_noche: reserva.precioNoche !== undefined && reserva.precioNoche !== null ? Number(reserva.precioNoche) : null,
       },
+      tipo_habitacion: tipo ? { id: tipo.id, codigo: tipo.codigo, nombre: tipo.nombre } : reserva.tipoHabitacionId ? { id: reserva.tipoHabitacionId } : null,
       total_price: Number(reserva.total),
-      currency: reserva.totalPrice?.currency || 'USD',
+      currency: reserva.moneda || reserva.totalPrice?.currency || 'USD',
       creation_date: reserva.createdAt ? new Date(reserva.createdAt).toISOString() : new Date().toISOString(),
       payment_reference: paymentReference || 'pay_verified',
       customer_name: reserva.customerName,

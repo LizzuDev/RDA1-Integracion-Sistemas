@@ -293,7 +293,9 @@ INSERT INTO resenas_alojamiento (alojamiento_id, usuario_id, usuario_nombre, usu
 ('hotel-medellin-04', 'user-04', 'David Silva', 'Ecuador', 'Muy buen ambiente, diseño moderno e innovador. La ubicación en el Poblado te permite ir caminando a los mejores restaurantes y cafés.', 9.3, 9.5, 9.0, 9.4);
 
 -- ============================================================================
--- Bases creadas antes del 2026-10-12: aplicar
--- database/migraciones/2026-10-12_alojamientos_integracion.sql
--- (añade las columnas de proveedor, restricciones, índices y trigger de arriba).
+-- DESPUÉS DE ESTE SCRIPT, aplicar en orden (también en una base nueva):
+--   1. database/migraciones/2026-10-12_alojamientos_integracion.sql
+--   2. database/migraciones/2026-10-13_alojamientos_modelo_relacional.sql
+--      (proveedores, tipos de habitación, huéspedes y la reserva ↔ usuario)
+-- Ambas son idempotentes.
 -- ============================================================================

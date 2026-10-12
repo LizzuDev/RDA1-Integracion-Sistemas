@@ -50,11 +50,46 @@ export class ReservaAlojamiento {
   @Column('jsonb', { name: 'total_price', nullable: true })
   totalPrice?: { currency: string; total: number };
 
-  @Column({ name: 'estado', type: 'varchar', length: 50, default: 'CONFIRMADA' })
+  @Column({ name: 'estado', type: 'varchar', length: 50, default: 'CONFIRMED' })
   status: string;
 
   @Column({ name: 'idempotency_key', type: 'varchar', length: 255, unique: true, nullable: true })
   idempotencyKey?: string;
+
+  /** Usuario de Supabase Auth que reservó (FK a auth.users). NULL = sin sesión. */
+  @Column({ name: 'usuario_id', type: 'uuid', nullable: true })
+  usuarioId?: string | null;
+
+  @Column({ name: 'tipo_habitacion_id', type: 'uuid' })
+  tipoHabitacionId: string;
+
+  @Column({ type: 'smallint', default: 1 })
+  adultos: number;
+
+  @Column({ type: 'smallint', default: 0 })
+  ninos: number;
+
+  /** Tarifa por noche y habitación contratada: no cambia si luego cambia el precio. */
+  @Column('numeric', { name: 'precio_noche', precision: 10, scale: 2, transformer: new ColumnNumericTransformer() })
+  precioNoche: number;
+
+  @Column({ type: 'varchar', length: 3, default: 'USD' })
+  moneda: string;
+
+  @Column({ name: 'cliente_telefono', type: 'varchar', length: 30, nullable: true })
+  telefono?: string | null;
+
+  @Column({ name: 'peticiones_especiales', type: 'text', nullable: true })
+  peticionesEspeciales?: string | null;
+
+  @Column({ name: 'hora_llegada', type: 'varchar', length: 20, nullable: true })
+  horaLlegada?: string | null;
+
+  @Column({ name: 'motivo_cancelacion', type: 'varchar', length: 500, nullable: true })
+  motivoCancelacion?: string | null;
+
+  @Column({ name: 'cancelada_en', type: 'timestamp', nullable: true })
+  canceladaEn?: Date | null;
 
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   createdAt: Date;

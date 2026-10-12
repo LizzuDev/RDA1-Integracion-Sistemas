@@ -14,7 +14,7 @@
  * - Modificar fechas recalcula el total con la tarifa contratada y respeta el cupo.
  */
 import { randomUUID } from 'crypto';
-import { AppPrueba, crearAppPrueba, esperarProblema, camposInvalidos, dia, reservaValida } from './app-prueba';
+import { AppPrueba, crearAppPrueba, esperarProblema, camposInvalidos, dia, reservaValida, TIPOS_EPIQ } from './app-prueba';
 
 const CLIENTE = { first_name: 'Ana', last_name: 'Pérez', email: 'ana@example.com', phone: '+593991234567' };
 
@@ -63,6 +63,9 @@ describe('07 · Órdenes: preview, create, consulta, modificación y cancelació
       expect(res.body.data).toEqual({
         order_preview_id: expect.stringMatching(/^prev_[0-9a-f]{8}$/),
         accommodation_id: 'quito-epiq',
+        product_id: expect.any(String),
+        tipo_habitacion: { id: expect.any(String), codigo: 'estandar', nombre: expect.any(String) },
+        price_per_night: 120,
         total_price: 360,
         currency: 'USD',
         nights: 3,
@@ -75,12 +78,37 @@ describe('07 · Órdenes: preview, create, consulta, modificación y cancelació
     });
 
     it.each([
-      ['estándar', undefined, 360],
-      ['deluxe (+25%)', 'prod_quito-epiq_deluxe_bb', 450],
-      ['suite (+60%)', 'prod_quito-epiq_suite_ai', 576],
-    ])('tarifa %s → total %i', async (_t, product_id, total) => {
+      ['sin product_id: el más barato', undefined, 360],
+      ['deluxe (150/noche)', 'deluxe', 450],
+      ['suite (192/noche)', 'suite', 576],
+    ])('tipo %s → total %i', async (_t, product_id, total) => {
+      t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
       const res = await previewValido(product_id ? { product_id } : {});
       expect(res.body.data.total_price).toBe(total);
+    });
+
+    it('product_id acepta el id del tipo (el de /availability) además del código', async () => {
+      const tipos = t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
+      const suite = tipos.find((x) => x.codigo === 'suite');
+      const res = await previewValido({ product_id: suite.id });
+      expect(res.body.data).toMatchObject({ product_id: suite.id, total_price: 576 });
+    });
+
+    it('product_id que no es un tipo de este hotel → 400 en "product_id"', async () => {
+      const res = await previewValido({ product_id: 'prod_quito-epiq_deluxe_bb' });
+      esperarProblema(res, 400, 'VALIDATION_FAILED');
+      expect(camposInvalidos(res)).toContain('product_id');
+    });
+
+    it('tipo agotado → 409 aunque otros tipos del hotel tengan cupo', async () => {
+      const tipos = t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
+      const suite = tipos.find((x) => x.codigo === 'suite');
+      t.repos.reservas.sembrar({
+        codigoReserva: 'BKG-222222', alojamientoId: 'quito-epiq', tipoHabitacionId: suite.id, customerName: 'X',
+        status: 'CONFIRMED', checkin: dia(9), checkout: dia(14), noches: 5, habitacionesCount: 1, total: 1,
+      });
+      esperarProblema(await previewValido({ product_id: 'suite' }), 409, 'ROOM_NO_LONGER_AVAILABLE');
+      expect((await previewValido({ product_id: 'deluxe' })).status).toBe(200);
     });
 
     it('2 habitaciones duplican el total', async () => {
@@ -90,6 +118,7 @@ describe('07 · Órdenes: preview, create, consulta, modificación y cancelació
     });
 
     it('el precio coincide con el de la consulta de disponibilidad', async () => {
+      t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
       const disp = await t.pedir('POST', '/alojamientos/availability', {
         body: { accommodation: 'quito-epiq', checkin: dia(10), checkout: dia(13) },
       });
@@ -144,7 +173,8 @@ describe('07 · Órdenes: preview, create, consulta, modificación y cancelació
 
   describe('POST /orders/create', () => {
     it('201 con la orden CONFIRMADA al precio cotizado', async () => {
-      const p = await previewValido({ product_id: 'prod_quito-epiq_deluxe_bb' });
+      t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
+      const p = await previewValido({ product_id: 'deluxe' });
       const res = await crear(p.body.data.order_preview_id);
       expect(res.status).toBe(201);
       expect(res.body).toEqual(

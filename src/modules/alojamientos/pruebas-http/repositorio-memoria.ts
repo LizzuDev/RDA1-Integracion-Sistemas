@@ -4,7 +4,8 @@ import { FindOperator } from 'typeorm';
 /**
  * Repositorio en memoria con el subconjunto de la API de TypeORM que usa
  * `AlojamientosService` (find, findOne, findOneBy, findAndCount, count, create,
- * save, remove).
+ * save, remove, softRemove). Como TypeORM, las filas con `deletedAt` (baja
+ * lógica) no aparecen salvo con `withDeleted: true`.
  *
  * Permite probar la API HTTP completa sin Postgres y con datos controlados.
  * Igual que TypeORM, devuelve COPIAS: modificar una entidad leída no cambia lo
@@ -14,6 +15,7 @@ type Where<T> = Partial<Record<keyof T, unknown>>;
 
 interface OpcionesFind<T> {
   where?: Where<T> | Where<T>[];
+  withDeleted?: boolean;
   order?: Partial<Record<keyof T, 'ASC' | 'DESC'>>;
   take?: number;
   skip?: number;
@@ -81,8 +83,18 @@ export class RepositorioMemoria<T extends { id?: string; createdAt?: Date; updat
     return entidad;
   }
 
+  async softRemove(entidad: T): Promise<T> {
+    const fila = this.filas.find((f) => f.id === entidad.id) as any;
+    if (fila) fila.deletedAt = new Date();
+    return entidad;
+  }
+
+  private visibles(opciones: OpcionesFind<T>): T[] {
+    return this.filas.filter((f) => (opciones.withDeleted || !(f as any).deletedAt) && coincide(f, opciones.where));
+  }
+
   async find(opciones: OpcionesFind<T> = {}): Promise<T[]> {
-    let resultado = this.filas.filter((f) => coincide(f, opciones.where));
+    let resultado = this.visibles(opciones);
     if (opciones.order) {
       const [campo, dir] = Object.entries(opciones.order)[0] as [keyof T, 'ASC' | 'DESC'];
       resultado = [...resultado].sort((a, b) => {
@@ -98,7 +110,7 @@ export class RepositorioMemoria<T extends { id?: string; createdAt?: Date; updat
   }
 
   async findAndCount(opciones: OpcionesFind<T> = {}): Promise<[T[], number]> {
-    const total = this.filas.filter((f) => coincide(f, opciones.where)).length;
+    const total = this.visibles(opciones).length;
     return [await this.find(opciones), total];
   }
 
@@ -112,7 +124,7 @@ export class RepositorioMemoria<T extends { id?: string; createdAt?: Date; updat
   }
 
   async count(opciones: OpcionesFind<T> = {}): Promise<number> {
-    return this.filas.filter((f) => coincide(f, opciones.where)).length;
+    return this.visibles(opciones).length;
   }
 
   private guardarUno(entidad: T): T {

@@ -7,6 +7,9 @@ import {
   eliminarAlojamiento,
 } from '../../services/alojamientosApi';
 import { API_BASE } from '../../services/api';
+import { C, Campo, estiloInput, erroresPorCampo, mensajeDe, fmtFecha, Aviso } from './alojamientosUi';
+import { GestorTiposHabitacion } from './GestorTiposHabitacion';
+import { ProveedoresAlojamiento } from './ProveedoresAlojamiento';
 
 /**
  * Gestión del catálogo de alojamientos (panel de administración → Gestión).
@@ -17,13 +20,9 @@ import { API_BASE } from '../../services/api';
  *   amenidades, ubicación, políticas…). Los errores del backend se muestran en
  *   el campo exacto (invalidParams).
  * - Activar / desactivar (oculta el alojamiento sin perder reservas) y borrar
- *   (el backend lo impide si hay reservas pendientes).
+ *   (el backend lo impide si hay reservas pendientes; con historial, baja lógica).
+ * - Tipos de habitación de cada alojamiento y registro de proveedores con su API key.
  */
-const C = {
-  blue: '#006ce4', darkBlue: '#003b95', lightBlue: '#ebf3ff', green: '#008009',
-  red: '#c62828', orange: '#b45309', gray: '#595959', border: '#e7e7e7', white: '#fff', text: '#1a1a1a',
-};
-
 const VACIO = {
   nombre: '', destino: '', descripcion: '', tipoPropiedad: 'Hoteles', tipoAlojamiento: '',
   precioPorNoche: '', moneda: 'USD', capacidadAdultos: 2, capacidadNinos: 0, habitaciones: 1,
@@ -50,8 +49,12 @@ function aFormulario(a) {
   };
 }
 
+/** Alojamientos con varios tipos: precio, habitaciones y capacidad salen de los tipos. */
+const tiposALaVenta = (a) => (a?.tipos_habitacion || []).filter((t) => t.activo && t.cantidad > 0);
+const CAMPOS_RESUMEN = ['precioPorNoche', 'habitaciones', 'capacidadAdultos', 'capacidadNinos'];
+
 /** Valores del formulario → cuerpo del contrato (CreateAlojamientoDto). */
-function aContrato(f) {
+function aContrato(f, { sinResumen = false } = {}) {
   const opcional = (v) => (String(v ?? '').trim() === '' ? undefined : String(v).trim());
   const politicas = {
     checkin_desde: opcional(f.checkinDesde), checkout_hasta: opcional(f.checkoutHasta),
@@ -77,46 +80,10 @@ function aContrato(f) {
     ubicacion: Object.fromEntries(Object.entries(ubicacion).filter(([, v]) => v !== undefined)),
     politicas: Object.fromEntries(Object.entries(politicas).filter(([, v]) => v !== undefined)),
     estado: f.estado,
+    // Con varios tipos de habitación estos valores los calcula el backend.
+    ...(sinResumen ? Object.fromEntries(CAMPOS_RESUMEN.map((c) => [c, undefined])) : {}),
   };
 }
-
-/** Errores del backend → { campoDelFormulario: motivo }. */
-const CAMPO_DE = {
-  'ubicacion.address': 'direccion', 'ubicacion.city': 'ciudad', 'ubicacion.country': 'pais',
-  'politicas.checkin_desde': 'checkinDesde', 'politicas.checkout_hasta': 'checkoutHasta',
-  'politicas.cancelacion': 'cancelacion',
-};
-function erroresPorCampo(err) {
-  const lista = err?.response?.data?.invalidParams || [];
-  const out = {};
-  for (const p of lista) {
-    const base = p.name.startsWith('photos') ? 'fotos' : p.name.startsWith('amenidades') ? 'amenidades' : (CAMPO_DE[p.name] || p.name.split('.')[0]);
-    if (!out[base]) out[base] = p.reason;
-  }
-  return out;
-}
-const mensajeDe = (err, porDefecto) => {
-  const d = err?.response?.data;
-  if (err?.response?.status === 401) return 'Tu sesión caducó. Vuelve a iniciar sesión.';
-  if (err?.response?.status === 403) return 'Tu usuario no tiene permisos de administrador.';
-  return d?.detail || d?.message || (err?.response ? porDefecto : 'No se pudo conectar con el servidor.');
-};
-
-const fmtFecha = (f) => (f ? new Date(f).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }) : '—');
-
-function Campo({ id, label, error, children, ancho }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: ancho ? '1 / -1' : undefined }}>
-      <label htmlFor={id} style={{ fontSize: '0.8rem', fontWeight: 600, color: C.text }}>{label}</label>
-      {children}
-      {error && <span id={`${id}-error`} role="alert" style={{ fontSize: '0.75rem', color: C.red, fontWeight: 600 }}>{error}</span>}
-    </div>
-  );
-}
-
-const estiloInput = (error) => ({
-  padding: '8px 10px', border: `1px solid ${error ? C.red : '#c9c9c9'}`, borderRadius: 6, fontSize: '0.88rem', fontFamily: 'inherit', background: C.white, color: C.text,
-});
 
 function FormularioAlojamiento({ inicial, editando, onCerrar, onGuardado }) {
   const [f, setF] = useState(inicial);
@@ -125,6 +92,7 @@ function FormularioAlojamiento({ inicial, editando, onCerrar, onGuardado }) {
   const [guardando, setGuardando] = useState(false);
   const ref = useRef(null);
   useFocusTrap(true, onCerrar, ref);
+  const variosTipos = tiposALaVenta(editando).length > 1;
 
   const cambiar = (campo) => (e) => {
     const valor = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -153,7 +121,7 @@ function FormularioAlojamiento({ inicial, editando, onCerrar, onGuardado }) {
     if (Object.keys(e).length) return;
     setGuardando(true);
     try {
-      const cuerpo = aContrato(f);
+      const cuerpo = aContrato(f, { sinResumen: variosTipos });
       const res = editando ? await actualizarAlojamiento(editando.id, cuerpo) : await crearAlojamiento(cuerpo);
       onGuardado(res, editando ? 'actualizado' : 'creado');
     } catch (err) {
@@ -167,10 +135,15 @@ function FormularioAlojamiento({ inicial, editando, onCerrar, onGuardado }) {
     }
   };
 
-  const input = (campo, props = {}) => (
-    <input id={`ga-${campo}`} value={f[campo]} onChange={cambiar(campo)} aria-invalid={Boolean(errores[campo])}
-      aria-describedby={errores[campo] ? `ga-${campo}-error` : undefined} style={estiloInput(errores[campo])} {...props} />
-  );
+  const input = (campo, props = {}) => {
+    const calculado = variosTipos && CAMPOS_RESUMEN.includes(campo);
+    return (
+      <input id={`ga-${campo}`} value={f[campo]} onChange={cambiar(campo)} aria-invalid={Boolean(errores[campo])}
+        aria-describedby={errores[campo] ? `ga-${campo}-error` : undefined} readOnly={calculado}
+        title={calculado ? 'Se calcula a partir de los tipos de habitación' : undefined}
+        style={{ ...estiloInput(errores[campo]), ...(calculado ? { background: '#f3f4f6', color: C.gray } : {}) }} {...props} />
+    );
+  };
 
   return (
     <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 16px', overflowY: 'auto' }}>
@@ -203,6 +176,12 @@ function FormularioAlojamiento({ inicial, editando, onCerrar, onGuardado }) {
 
           <fieldset style={{ border: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
             <legend style={{ fontWeight: 700, color: C.darkBlue, marginBottom: 8 }}>Precio e inventario</legend>
+            {variosTipos && (
+              <p role="note" style={{ gridColumn: '1 / -1', margin: 0, fontSize: '0.8rem', color: C.gray }}>
+                Este alojamiento tiene {tiposALaVenta(editando).length} tipos de habitación: el precio «desde», las habitaciones y la
+                capacidad se calculan a partir de ellos. Cámbialos en «Tipos de habitación».
+              </p>
+            )}
             <Campo id="ga-precioPorNoche" label="Precio por noche *" error={errores.precioPorNoche}>{input('precioPorNoche', { type: 'number', min: 0.01, step: 0.01, inputMode: 'decimal' })}</Campo>
             <Campo id="ga-moneda" label="Moneda (ISO)" error={errores.moneda}>{input('moneda', { maxLength: 3 })}</Campo>
             <Campo id="ga-habitaciones" label="Habitaciones *" error={errores.habitaciones}>{input('habitaciones', { type: 'number', min: 1 })}</Campo>
@@ -263,6 +242,8 @@ export function GestionAlojamientos() {
   const [formulario, setFormulario] = useState(null); // { inicial, editando }
   const [ocupado, setOcupado] = useState(null);
   const [verIntegracion, setVerIntegracion] = useState(false);
+  const [gestorTipos, setGestorTipos] = useState(null); // alojamiento
+  const [verProveedores, setVerProveedores] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -298,11 +279,11 @@ export function GestionAlojamientos() {
   };
 
   const borrar = async (a) => {
-    if (!window.confirm(`¿Eliminar definitivamente "${a.nombre}"? Esta acción no se puede deshacer.`)) return;
+    if (!window.confirm(`¿Eliminar "${a.nombre}"? Si tiene reservas pasadas se dará de baja conservando su historial; si no, se borrará definitivamente.`)) return;
     setOcupado(a.id);
     try {
       await eliminarAlojamiento(a.id);
-      setAviso({ tipo: 'ok', texto: `"${a.nombre}" fue eliminado.` });
+      setAviso({ tipo: 'ok', texto: `"${a.nombre}" fue dado de baja.` });
       await cargar();
     } catch (err) {
       setAviso({ tipo: 'error', texto: mensajeDe(err, 'No se pudo eliminar el alojamiento.') });
@@ -321,7 +302,11 @@ export function GestionAlojamientos() {
           <h2 style={{ margin: 0, fontSize: '1.1rem', color: C.darkBlue }}>Catálogo de alojamientos</h2>
           <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: C.gray }}>Altas manuales y alojamientos sincronizados por proveedores.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => setVerProveedores(true)}
+            style={{ background: C.white, border: `1px solid ${C.blue}`, color: C.blue, borderRadius: 8, padding: '9px 14px', fontWeight: 700, cursor: 'pointer' }}>
+            🔑 Proveedores
+          </button>
           <button type="button" onClick={() => setVerIntegracion((v) => !v)} aria-expanded={verIntegracion}
             style={{ background: C.white, border: `1px solid ${C.blue}`, color: C.blue, borderRadius: 8, padding: '9px 14px', fontWeight: 700, cursor: 'pointer' }}>
             🔗 Integración de proveedores
@@ -337,9 +322,10 @@ export function GestionAlojamientos() {
         <div style={{ background: C.lightBlue, border: `1px solid #c4d9f5`, borderRadius: 8, padding: '14px 16px', fontSize: '0.85rem', color: C.text, lineHeight: 1.5 }}>
           <strong>Cómo se integra el sistema de un proveedor</strong>
           <ol style={{ margin: '6px 0 8px', paddingLeft: 20 }}>
-            <li>Se le asigna un <code>proveedorId</code> y una API key en la variable <code>ALOJAMIENTOS_API_KEYS</code> del backend (<code>proveedor:clave</code>, clave de 16+ caracteres).</li>
+            <li>Se registra en <strong>🔑 Proveedores</strong>: se le asigna un id y se genera su API key (se muestra una sola vez; se puede rotar o desactivar).</li>
             <li>Envía su inventario a <code>POST {API_BASE}/alojamientos/sincronizar</code> con la cabecera <code>X-Api-Key</code> (hasta 100 por lote).</li>
             <li>Cada alojamiento lleva su <code>idExterno</code>: reenviarlo actualiza en vez de duplicar. Para retirarlo se envía con <code>estado: &quot;INACTIVO&quot;</code>.</li>
+            <li>Opcional: <code>tiposHabitacion</code> con cada tipo (código, precio, cupo, capacidad, régimen, cancelación). Se emparejan por <code>codigo</code>.</li>
             <li>La respuesta indica, por cada uno, CREADO, ACTUALIZADO o ERROR con el campo exacto. El contrato completo está en <code>/api/docs</code>.</li>
           </ol>
           <pre style={{ margin: 0, background: C.white, border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, overflowX: 'auto', fontSize: '0.75rem' }}>{`curl -X POST ${API_BASE}/alojamientos/sincronizar \\
@@ -348,7 +334,10 @@ export function GestionAlojamientos() {
        "precioPorNoche":38.9,"moneda":"USD","capacidadAdultos":3,"capacidadNinos":1,
        "habitaciones":4,"tienePiscina":false,
        "photos":[{"url":"https://…/1.jpg"}],
-       "politicas":{"checkin_desde":"14:00","checkout_hasta":"11:00"}}]}'`}</pre>
+       "politicas":{"checkin_desde":"14:00","checkout_hasta":"11:00"},
+       "tiposHabitacion":[
+         {"codigo":"doble","nombre":"Doble","capacidadAdultos":2,"precioPorNoche":38.9,"cantidad":3,"regimen":"DESAYUNO"},
+         {"codigo":"familiar","nombre":"Familiar","capacidadAdultos":4,"capacidadNinos":2,"precioPorNoche":62,"cantidad":1,"cancelacionGratuitaHoras":null}]}]}'`}</pre>
         </div>
       )}
 
@@ -381,12 +370,7 @@ export function GestionAlojamientos() {
         </select>
       </div>
 
-      {aviso && (
-        <div role={aviso.tipo === 'error' ? 'alert' : 'status'} style={{ background: aviso.tipo === 'error' ? '#ffebee' : '#e8f5e9', color: aviso.tipo === 'error' ? C.red : C.green, borderRadius: 6, padding: '10px 12px', fontSize: '0.85rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          <span>{aviso.texto}</span>
-          <button type="button" onClick={() => setAviso(null)} aria-label="Cerrar aviso" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>✕</button>
-        </div>
-      )}
+      <Aviso aviso={aviso} onCerrar={() => setAviso(null)} />
       {error && <div role="alert" style={{ background: '#ffebee', color: C.red, borderRadius: 6, padding: '10px 12px', fontSize: '0.85rem', fontWeight: 600 }}>{error} <button type="button" onClick={cargar} style={{ marginLeft: 8 }}>Reintentar</button></div>}
 
       <div style={{ overflowX: 'auto' }}>
@@ -394,7 +378,7 @@ export function GestionAlojamientos() {
           <caption style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Catálogo de alojamientos</caption>
           <thead>
             <tr style={{ background: C.lightBlue }}>
-              {['Alojamiento', 'Destino', 'Precio / noche', 'Hab.', 'Origen', 'Estado', 'Reservas pendientes', 'Acciones'].map((h) => (
+              {['Alojamiento', 'Destino', 'Precio desde', 'Tipos / hab.', 'Origen', 'Estado', 'Reservas pendientes', 'Acciones'].map((h) => (
                 <th key={h} scope="col" style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, color: C.darkBlue, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -410,7 +394,12 @@ export function GestionAlojamientos() {
                 </td>
                 <td style={{ padding: '9px 12px' }}>{a.destino}</td>
                 <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>{Number(a.precioPorNoche).toFixed(2)} {a.moneda}</td>
-                <td style={{ padding: '9px 12px' }}>{a.habitaciones}</td>
+                <td style={{ padding: '9px 12px' }}>
+                  <button type="button" onClick={() => setGestorTipos(a)} aria-label={`Tipos de habitación de ${a.nombre}`}
+                    style={{ background: C.lightBlue, border: `1px solid #c4d9f5`, color: C.darkBlue, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    🛏️ {tiposALaVenta(a).length} · {a.habitaciones} hab.
+                  </button>
+                </td>
                 <td style={{ padding: '9px 12px' }}>
                   {a.proveedor_id ? (
                     <>
@@ -438,6 +427,11 @@ export function GestionAlojamientos() {
           </tbody>
         </table>
       </div>
+
+      {gestorTipos && (
+        <GestorTiposHabitacion alojamiento={gestorTipos} onCerrar={() => setGestorTipos(null)} onCambio={cargar} />
+      )}
+      {verProveedores && <ProveedoresAlojamiento onCerrar={() => setVerProveedores(false)} onCambio={cargar} />}
 
       {formulario && (
         <FormularioAlojamiento

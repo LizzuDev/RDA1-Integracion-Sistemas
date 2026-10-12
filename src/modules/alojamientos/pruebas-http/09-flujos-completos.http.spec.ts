@@ -3,7 +3,7 @@
  * hace el frontend y como funcionaría en Booking.com.
  */
 import { randomUUID } from 'crypto';
-import { AppPrueba, crearAppPrueba, esperarProblema, dia } from './app-prueba';
+import { AppPrueba, crearAppPrueba, esperarProblema, dia, TIPOS_EPIQ } from './app-prueba';
 
 describe('09 · Flujos completos de cliente', () => {
   let t: AppPrueba;
@@ -18,6 +18,9 @@ describe('09 · Flujos completos de cliente', () => {
   });
 
   it('buscar "quito" → elegir → ver detalle y reseñas → disponibilidad → cotizar → pagar → ver → modificar → cancelar', async () => {
+    // EpiQ vende tres tipos de habitación: estándar (2), deluxe con desayuno (1) y suite (1).
+    t.sembrarTipos('quito-epiq', TIPOS_EPIQ);
+
     // 1. Búsqueda como en la barra del frontend (minúsculas, con fechas).
     const busqueda = await t.pedir('POST', '/alojamientos/search', {
       body: { destino: 'quito', dates: { checkin: dia(15), checkout: dia(18) }, adultos: 2, ninos: 0, habitaciones: 1, rows: 25 },
@@ -55,9 +58,11 @@ describe('09 · Flujos completos de cliente', () => {
     expect(orden.status).toBe(201);
     expect(orden.body.total_price).toBe(tarifa.price);
 
-    // 6. El inventario ya descuenta la habitación.
+    // 6. El inventario descuenta la habitación DEL TIPO reservado (deluxe: 1 → 0).
     const inv = await t.pedir('GET', `/alojamientos/${elegido.id}/availability?checkin=${dia(15)}&checkout=${dia(18)}`);
-    expect(inv.body.available_rooms).toBe(1);
+    expect(inv.body.available_rooms).toBe(3);
+    expect(inv.body.tipos.find((x: any) => x.codigo === 'deluxe').available_rooms).toBe(0);
+    expect(orden.body.tipo_habitacion).toMatchObject({ codigo: 'deluxe' });
 
     // 7. Consulta de la orden.
     const consulta = await t.pedir('GET', `/alojamientos/orders/${orden.body.order_id}`);
@@ -74,7 +79,7 @@ describe('09 · Flujos completos de cliente', () => {
     const cancel = await t.pedir('POST', `/alojamientos/orders/${orden.body.order_id}/cancel`, { idem: true, body: { reason: 'Cambio de planes' } });
     expect(cancel.body.status).toBe('CANCELLED');
     const invFinal = await t.pedir('GET', `/alojamientos/${elegido.id}/availability?checkin=${dia(15)}&checkout=${dia(18)}`);
-    expect(invFinal.body.available_rooms).toBe(2);
+    expect(invFinal.body.available_rooms).toBe(4);
   });
 
   it('flujo del frontend: reserva directa → aparece en "Mis reservas" → cancelar', async () => {

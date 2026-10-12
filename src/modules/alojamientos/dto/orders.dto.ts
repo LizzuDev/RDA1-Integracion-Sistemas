@@ -9,8 +9,13 @@ export class OrderPreviewRequestDto {
   @IsNotEmpty()
   accommodation_id: string | number;
 
-  @ApiProperty({ description: 'ID del producto o habitación seleccionado', example: 'room_deluxe_bb', required: false })
+  @ApiProperty({
+    description: 'Tipo de habitación (product_id de /availability, o su código). Si no se indica, el más barato con cupo.',
+    example: '3f1c2a9e-7b6d-4e8f-9a0b-1c2d3e4f5a6b',
+    required: false,
+  })
   @IsString()
+  @MaxLength(60)
   @IsOptional()
   product_id?: string;
 
@@ -40,6 +45,9 @@ export class OrderPreviewResponseDto {
     example: {
       order_preview_id: 'prev_771822',
       accommodation_id: 'aloj-1',
+      product_id: '3f1c2a9e-7b6d-4e8f-9a0b-1c2d3e4f5a6b',
+      tipo_habitacion: { id: '3f1c2a9e-7b6d-4e8f-9a0b-1c2d3e4f5a6b', codigo: 'doble', nombre: 'Habitación doble' },
+      price_per_night: 120.0,
       total_price: 360.0,
       currency: 'USD',
       nights: 3,
@@ -49,6 +57,10 @@ export class OrderPreviewResponseDto {
   data: {
     order_preview_id: string;
     accommodation_id: string | number;
+    /** Tipo de habitación cotizado (el `product_id` de /availability). */
+    product_id?: string;
+    tipo_habitacion?: { id: string; codigo: string; nombre: string };
+    price_per_night?: number;
     total_price: number;
     currency: string;
     nights?: number;
@@ -133,6 +145,9 @@ export class OrderDetailDto {
 
   @ApiProperty({ description: 'Referencia de pago registrada', example: 'pay_3NxQ1mJZqEvB', required: false })
   payment_reference?: string;
+
+  @ApiProperty({ description: 'Tipo de habitación reservado', required: false })
+  tipo_habitacion?: { id: string; codigo?: string; nombre?: string } | null;
 
   @ApiProperty({ description: 'Nombre completo del huésped', required: false })
   customer_name?: string;

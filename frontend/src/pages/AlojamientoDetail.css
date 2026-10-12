@@ -1516,3 +1516,24 @@
   }
 }
 
+
+/* Tabla de tipos de habitación + caja de reserva. En pantallas angostas la caja
+   pasa debajo y la tabla se desplaza dentro de su contenedor (sin desbordar la página). */
+.dt-rooms-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 16px;
+  align-items: start;
+}
+.dt-rooms-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+@media (max-width: 860px) {
+  .dt-rooms-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dt-rooms-table {
+    min-width: 640px;
+  }
+}

@@ -5,9 +5,9 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { timingSafeEqual } from 'crypto';
 import { esAdministrador } from '../../../core/auth/administradores';
 import { SesionSupabaseService, tokenBearer } from '../../../core/auth/sesion-supabase.service';
+import { ProveedoresAlojamientoService } from '../proveedores.service';
 
 /**
  * Quién está modificando el catálogo de alojamientos.
@@ -21,48 +21,24 @@ export type ActorCatalogo =
   | { tipo: 'proveedor'; proveedorId: string };
 
 /**
- * Claves de los proveedores, en la variable de entorno
- * `ALOJAMIENTOS_API_KEYS="proveedorA:clave-larga-1,proveedorB:clave-larga-2"`.
- * Se leen en cada petición para poder rotarlas sin reiniciar en pruebas.
- */
-export function clavesProveedores(): Map<string, string> {
-  const mapa = new Map<string, string>();
-  for (const par of (process.env.ALOJAMIENTOS_API_KEYS || '').split(',')) {
-    const i = par.indexOf(':');
-    if (i <= 0) continue;
-    const id = par.slice(0, i).trim();
-    const clave = par.slice(i + 1).trim();
-    if (id && clave.length >= 16) mapa.set(clave, id);
-  }
-  return mapa;
-}
-
-function proveedorDeClave(clave: string): string | null {
-  const recibida = Buffer.from(clave);
-  for (const [guardada, id] of clavesProveedores()) {
-    const esperada = Buffer.from(guardada);
-    // Comparación en tiempo constante: no revela por tiempos cuánto acierta la clave.
-    if (esperada.length === recibida.length && timingSafeEqual(esperada, recibida)) return id;
-  }
-  return null;
-}
-
-/**
  * Protege las escrituras del catálogo (alta, edición, baja, sincronización).
  * Antes eran PÚBLICAS: cualquiera podía crear, cambiar el precio o borrar un
  * hotel con una sola petición.
  */
 @Injectable()
 export class GestionAlojamientosGuard implements CanActivate {
-  constructor(private readonly sesion: SesionSupabaseService) {}
+  constructor(
+    private readonly sesion: SesionSupabaseService,
+    private readonly proveedores: ProveedoresAlojamientoService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
 
     const apiKey = req.headers['x-api-key'];
     if (typeof apiKey === 'string' && apiKey) {
-      const proveedorId = proveedorDeClave(apiKey);
-      if (!proveedorId) throw new UnauthorizedException('API key de proveedor no válida.');
+      const proveedorId = await this.proveedores.autenticar(apiKey);
+      if (!proveedorId) throw new UnauthorizedException('API key de proveedor no válida o desactivada.');
       req.actorCatalogo = { tipo: 'proveedor', proveedorId } satisfies ActorCatalogo;
       return true;
     }
@@ -99,6 +75,48 @@ export class ClienteAutenticadoGuard implements CanActivate {
     if (!token) throw new UnauthorizedException('Inicia sesión para ver tus reservas.');
     const usuario = await this.sesion.obtenerUsuario(token);
     if (!usuario) throw new UnauthorizedException('La sesión no es válida o caducó. Vuelve a iniciar sesión.');
+    req.user = usuario;
+    return true;
+  }
+}
+
+/**
+ * Gestión de proveedores (altas, claves): solo un ADMINISTRADOR. Un proveedor con
+ * API key no puede crear otros proveedores ni ver sus claves.
+ */
+@Injectable()
+export class SoloAdministradorGuard implements CanActivate {
+  constructor(private readonly sesion: SesionSupabaseService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context.switchToHttp().getRequest();
+    const token = tokenBearer(req.headers.authorization);
+    if (!token) throw new UnauthorizedException('Se requiere un token de administrador (Authorization: Bearer).');
+    const usuario = await this.sesion.obtenerUsuario(token);
+    if (!usuario) throw new UnauthorizedException('Token inválido o expirado.');
+    if (!esAdministrador(usuario)) throw new ForbiddenException('Solo un administrador puede gestionar proveedores.');
+    req.user = usuario;
+    req.actorCatalogo = { tipo: 'admin', email: usuario.email ?? null, id: usuario.id } satisfies ActorCatalogo;
+    return true;
+  }
+}
+
+/**
+ * Sesión OPCIONAL para reservar: sin Authorization se reserva como invitado
+ * (como en Booking); con un token válido la reserva queda vinculada al usuario
+ * (usuario_id) y aparece en "Mis reservas" aunque cambie de correo. Un token
+ * inválido es un 401: es mejor avisar que reservar sin vincular.
+ */
+@Injectable()
+export class SesionOpcionalGuard implements CanActivate {
+  constructor(private readonly sesion: SesionSupabaseService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context.switchToHttp().getRequest();
+    const token = tokenBearer(req.headers.authorization);
+    if (!token) return true;
+    const usuario = await this.sesion.obtenerUsuario(token);
+    if (!usuario) throw new UnauthorizedException('La sesión no es válida o caducó. Vuelve a iniciar sesión o reserva sin sesión.');
     req.user = usuario;
     return true;
   }

@@ -292,8 +292,12 @@ describe('10 · Gestión del catálogo e integración con proveedores', () => {
       expect(camposInvalidos(res)).toContain('alojamientos');
     });
 
-    it('un administrador debe indicar el proveedor del lote', async () => {
+    it('un administrador debe indicar el proveedor del lote, y debe estar registrado', async () => {
       esperarProblema(await sincronizar({ alojamientos: [item('A-1')] }, 'admin'), 400, 'VALIDATION_FAILED');
+      const sinRegistrar = await sincronizar({ proveedorId: 'grupo3-alojamientos', alojamientos: [item('A-1')] }, 'admin');
+      esperarProblema(sinRegistrar, 400, 'VALIDATION_FAILED');
+      expect(camposInvalidos(sinRegistrar)).toContain('proveedorId');
+      await t.pedir('POST', '/alojamientos/gestion/proveedores', { body: { id: 'grupo3-alojamientos', nombre: 'Grupo 3' } });
       const res = await sincronizar({ proveedorId: 'grupo3-alojamientos', alojamientos: [item('A-1')] }, 'admin');
       expect(res.status).toBe(200);
       expect(res.body.resultados[0].id).toBe('grupo3-alojamientos-A-1');
