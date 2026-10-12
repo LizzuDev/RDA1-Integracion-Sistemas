@@ -489,24 +489,19 @@ export class AdminService {
       return { success: true, message: 'Reserva hospedaje cancelada exitosamente' };
     }
 
-    let afectadas = 0;
+    // Vuelos, autos y atracciones: lógica original de sus equipos, sin cambios.
     try {
       if (tipo === 'vuelos') {
-        afectadas = (await this.reservaRepo.update({ idReserva: id }, { estado: 'CANCELLED' as any })).affected ?? 0;
+        await this.reservaRepo.update({ idReserva: id }, { estado: 'CANCELLED' as any });
       } else if (tipo === 'autos') {
-        afectadas = (await this.orderAutoRepo.update({ id }, { status: 'CANCELLED' })).affected ?? 0;
+        await this.orderAutoRepo.update({ id }, { status: 'CANCELLED' });
       } else if (tipo === 'atracciones') {
-        afectadas = (await this.reservaAtraccionRepo.update({ id }, { status: 'CANCELLED' })).affected ?? 0;
-      } else {
-        throw new BadRequestException(`Tipo de reserva no soportado: ${tipo}`);
+        await this.reservaAtraccionRepo.update({ id }, { status: 'CANCELLED' });
       }
+      return { success: true, message: `Reserva ${tipo} cancelada exitosamente` };
     } catch (e) {
-      if (e instanceof BadRequestException) throw e;
       throw new BadRequestException(e.message);
     }
-    // Antes respondía "cancelada exitosamente" aunque el id no existiera.
-    if (!afectadas) throw new NotFoundException(`La reserva de ${tipo} '${id}' no existe.`);
-    return { success: true, message: `Reserva ${tipo} cancelada exitosamente` };
   }
 
   async getReservaDetalles(tipo: string, id: string) {
