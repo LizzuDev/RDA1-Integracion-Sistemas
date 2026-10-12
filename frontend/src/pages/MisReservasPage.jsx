@@ -234,7 +234,13 @@ export function MisReservasPage() {
         // Fallback silencioso
       }
 
-      const alojamientosLocales = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+      // Reservas de alojamiento guardadas en ESTE navegador (p. ej. pendientes de
+      // sincronizar sin conexión). El navegador puede tener reservas de otras
+      // personas o hechas como invitado: solo se muestran las del correo de la
+      // sesión. Las del servidor ya vienen filtradas por cuenta y correo.
+      const correoSesion = (user?.email || '').trim().toLowerCase();
+      const alojamientosLocales = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]')
+        .filter((al) => correoSesion && (al.email || '').trim().toLowerCase() === correoSesion);
       const alojamientosLocalesFormatted = alojamientosLocales.map((al) => {
         const checkinStr = al.checkin ? formatearFecha(al.checkin) : '10 nov.';
         const checkoutStr = al.checkout ? formatearFecha(al.checkout) : '16 nov.';
@@ -312,7 +318,7 @@ export function MisReservasPage() {
         setCargando(false);
       }
     }
-  }, [filtroStatus]);
+  }, [filtroStatus, user?.email]);
 
   useEffect(() => {
     cargarTodasLasReservas();
