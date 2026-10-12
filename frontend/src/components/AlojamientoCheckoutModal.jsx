@@ -61,9 +61,12 @@ export function AlojamientoCheckoutModal({
   const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1: Tus datos, 2: Finalizar reserva, 3: Confirmada
 
-  const defaultNombre = user?.user_metadata?.nombre || user?.nombre || 'Liz';
-  const defaultApellido = user?.user_metadata?.apellido || user?.apellido || 'Cadena';
-  const defaultEmail = user?.email || 'lizcadena@example.com';
+  // Con sesión se precargan los datos de la cuenta; sin sesión, vacíos. Antes se
+  // precargaba "Liz Cadena / lizcadena@example.com": todas las reservas de
+  // invitado compartían ese correo y el backend las tomaba por duplicadas.
+  const defaultNombre = user?.user_metadata?.nombre || user?.nombre || '';
+  const defaultApellido = user?.user_metadata?.apellido || user?.apellido || '';
+  const defaultEmail = user?.email || '';
   const defaultCardHolder = `${defaultNombre} ${defaultApellido}`.trim();
 
   // Step 1 Form state
@@ -75,7 +78,7 @@ export function AlojamientoCheckoutModal({
   const [confirmEmail, setConfirmEmail] = useState(defaultEmail);
   const [pais, setPais] = useState('EC');
   const [telefonoPrefijo, setTelefonoPrefijo] = useState('+593');
-  const [telefono, setTelefono] = useState('0991234567');
+  const [telefono, setTelefono] = useState(user?.user_metadata?.telefono || '');
   const [confirmacionSinPapel, setConfirmacionSinPapel] = useState(true);
   const [nombreHuesped, setNombreHuesped] = useState(defaultCardHolder);
   const [deseaAuto, setDeseaAuto] = useState(false);
@@ -187,8 +190,13 @@ export function AlojamientoCheckoutModal({
   // Detectar si el usuario ya tiene una reserva confirmada para este alojamiento en estas fechas
   const existingActiveBooking = useMemo(() => {
     try {
+      // Solo las reservas hechas con este correo: el navegador puede tener
+      // reservas de otra persona o de pruebas (y un invitado no tiene correo aún).
+      const correo = (email || '').trim().toLowerCase();
+      if (!correo) return null;
       const reservas = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
-      return reservas.find((r) => 
+      return reservas.find((r) =>
+        (r.email || '').trim().toLowerCase() === correo && 
         (r.alojamientoId === alojamiento?.id || r.alojamiento_id === alojamiento?.id) &&
         !['CANCELLED', 'Cancelada', 'FALLIDA'].includes(r.status) &&
         (r.checkin === checkin || (r.checkin < checkout && r.checkout > checkin))
@@ -196,7 +204,7 @@ export function AlojamientoCheckoutModal({
     } catch {
       return null;
     }
-  }, [alojamiento?.id, checkin, checkout]);
+  }, [alojamiento?.id, checkin, checkout, email]);
 
   // Submission handler in Step 2
   const handleCompletarReserva = async (e) => {
@@ -218,7 +226,7 @@ export function AlojamientoCheckoutModal({
 
     // ¿Ya tiene una reserva que coincide con estas fechas (en cualquier alojamiento)?
     if (!confirmadoDuplicadoRef.current) {
-      const solapadas = reservasQueSeSolapan(checkin, checkout);
+      const solapadas = reservasQueSeSolapan(checkin, checkout, email);
       if (solapadas.length > 0) {
         setReservasSolapadas(solapadas);
         setMensajeDuplicado('');
@@ -255,7 +263,7 @@ export function AlojamientoCheckoutModal({
       habitaciones_count: Math.max(1, parseInt(rooms, 10) || 1),
       nights: Math.max(1, parseInt(nightsCount, 10) || 1),
       customer_name: `${nombre} ${apellidos}`.trim() || 'Huésped',
-      customer_email: email.trim() || 'cliente@example.com',
+      customer_email: email.trim(),
       adultos: Math.max(1, parseInt(adults, 10) || 2),
       ninos: Math.max(0, parseInt(children, 10) || 0),
       ...(tipoHabitacion?.product_id ? { tipo_habitacion_id: tipoHabitacion.product_id } : {}),

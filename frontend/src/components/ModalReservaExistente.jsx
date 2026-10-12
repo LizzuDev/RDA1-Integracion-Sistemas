@@ -147,17 +147,22 @@ export function ModalReservaExistente({
 }
 
 /**
- * Reservas activas guardadas en este navegador que se solapan con [checkin, checkout)
- * en CUALQUIER alojamiento. Dos estancias se solapan si una empieza antes de que
- * termine la otra (salir el día 13 y entrar el 13 no es solape).
+ * Reservas guardadas en ESTE navegador que se solapan con las fechas (en
+ * cualquier alojamiento; salir el 13 y entrar el 13 no es solape) y que se
+ * hicieron con el MISMO correo. Sin correo no se avisa: el navegador puede ser
+ * compartido (o tener reservas de pruebas de otra persona) y no se puede saber
+ * si son de quien está reservando ahora. El backend hace además su propia
+ * comprobación por cuenta y por correo.
  */
-export function reservasQueSeSolapan(checkin, checkout) {
-  if (!checkin || !checkout) return [];
+export function reservasQueSeSolapan(checkin, checkout, email) {
+  const correo = (email || '').trim().toLowerCase();
+  if (!checkin || !checkout || !correo) return [];
   try {
     const reservas = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
     return reservas.filter(
       (r) =>
         r && r.checkin && r.checkout &&
+        (r.email || '').trim().toLowerCase() === correo &&
         !['CANCELLED', 'Cancelada', 'FALLIDA'].includes(r.status) &&
         r.checkin < checkout && r.checkout > checkin,
     );
