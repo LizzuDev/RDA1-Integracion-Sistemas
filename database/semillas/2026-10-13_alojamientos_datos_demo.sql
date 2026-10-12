@@ -2,6 +2,7 @@
 -- DATOS COHERENTES · ALOJAMIENTOS (tipos de habitación por hotel)
 -- Requisito: migraciones 2026-10-12 y 2026-10-13 ya aplicadas.
 --
+-- Se puede ejecutar entero en el editor SQL de Supabase (o en psql).
 -- No borra nada. Para cada uno de los 13 alojamientos del catálogo:
 --   1. Completa su tipo «estandar» con un nombre real de habitación, camas, m²,
 --      régimen, política de cancelación, servicios e inventario creíble.
@@ -36,27 +37,8 @@ BEGIN;
 --    (alojamiento, nombre, descripción, camas, detalle camas, m², cupo mínimo,
 --     régimen, horas de cancelación gratis, servicios, adultos, niños)
 --    adultos/niños NULL = se mantiene la capacidad actual.
-CREATE TEMP TABLE semilla_estandar (
-  alojamiento_id VARCHAR(50), nombre VARCHAR(150), descripcion TEXT, camas SMALLINT, descripcion_camas VARCHAR(150),
-  tamano_m2 NUMERIC(6,1), cantidad SMALLINT, regimen VARCHAR(20), horas SMALLINT, amenidades JSONB,
-  adultos SMALLINT, ninos SMALLINT
-) ON COMMIT DROP;
-
-INSERT INTO semilla_estandar VALUES
-('hotel-quito-03',     'Habitación Clásica', 'Habitación de estilo colonial restaurada, con techos altos y detalles de época.', 1, '1 cama king', 32, 6, 'DESAYUNO', 48, '["WiFi gratis","Desayuno incluido","Calefacción","Artículos de aseo de lujo"]', NULL, NULL),
-('hotel-cancun-01',    'Habitación Deluxe vista a la laguna', 'Balcón con vista a la laguna Nichupté. Plan todo incluido.', 2, '2 camas dobles', 42, 8, 'TODO_INCLUIDO', 72, '["WiFi gratis","Todo incluido","Balcón","Aire acondicionado","Minibar"]', NULL, NULL),
-('hotel-cartagena-02', 'Habitación Superior', 'En el antiguo convento de Santa Teresa, dentro de la ciudad amurallada.', 1, '1 cama queen', 30, 6, 'DESAYUNO', 48, '["WiFi gratis","Desayuno incluido","Aire acondicionado","Caja fuerte"]', NULL, NULL),
-('hotel-medellin-04',  'Habitación Medium', 'Habitación de diseño en El Poblado, con ducha de lluvia.', 1, '1 cama queen', 22, 6, 'SOLO_ALOJAMIENTO', 48, '["WiFi gratis","Aire acondicionado","Smart TV","Ducha de lluvia"]', NULL, NULL),
-('hotel-puntacana-05', 'Habitación Deluxe vista al jardín', 'Rodeada de jardines tropicales, a pocos pasos de la playa.', 2, '2 camas dobles', 45, 8, 'DESAYUNO', 72, '["WiFi gratis","Desayuno incluido","Terraza","Aire acondicionado","Cafetera"]', NULL, NULL),
-('hotel-cusco-06',     'Habitación Deluxe', 'Frente al Qoricancha, con calefacción y decoración inspirada en el arte cusqueño.', 1, '1 cama king', 30, 6, 'DESAYUNO', 48, '["WiFi gratis","Desayuno incluido","Calefacción","Mate de coca de cortesía"]', NULL, NULL),
-('quito-terraza-01',   'Habitación doble con baño compartido', 'Habitación sencilla con acceso a la terraza panorámica del hostal.', 1, '1 cama doble', 12, 3, 'SOLO_ALOJAMIENTO', 24, '["WiFi gratis","Terraza compartida","Cocina compartida"]', NULL, NULL),
-('quito-epiq-02',      'Apartamento de 1 dormitorio', 'Apartamento completo en La Carolina, con cocina equipada.', 1, '1 cama queen + sofá cama', 55, 3, 'SOLO_ALOJAMIENTO', 48, '["WiFi gratis","Cocina equipada","Lavadora","Piscina climatizada","Gimnasio"]', NULL, NULL),
-('quito-tobar-03',     'Habitación doble', 'Casona tradicional cerca del centro, con patio interior.', 1, '1 cama doble', 16, 4, 'DESAYUNO', 24, '["WiFi gratis","Desayuno incluido","Baño privado"]', NULL, NULL),
-('quito-ejido-04',     'Habitación doble', 'Frente al parque El Ejido, a pocos minutos del centro histórico.', 1, '1 cama queen', 20, 5, 'DESAYUNO', 24, '["WiFi gratis","Desayuno incluido","TV por cable"]', NULL, NULL),
-('quito-latitud-05',   'Cama en dormitorio mixto', 'Litera en dormitorio compartido de 8 camas, con taquilla individual.', 1, '1 cama en litera', 4, 8, 'SOLO_ALOJAMIENTO', 24, '["WiFi gratis","Taquilla","Cocina compartida","Ropa de cama incluida"]', 1, 0),
-('quito-artplaza-06',  'Habitación doble estándar', 'Hotel boutique con obras de artistas ecuatorianos en cada habitación.', 1, '1 cama queen', 18, 4, 'DESAYUNO', 24, '["WiFi gratis","Desayuno incluido","Baño privado","Obras de arte originales"]', NULL, NULL),
-('quito-rossamia-07',  'Habitación doble deluxe', 'Habitación amplia con decoración de estilo italiano.', 1, '1 cama king', 26, 4, 'DESAYUNO', 48, '["WiFi gratis","Desayuno incluido","Smart TV","Minibar"]', NULL, NULL);
-
+--    Sin tablas temporales: el editor SQL de Supabase no conserva la sesión
+--    entre sentencias. Cada sentencia funciona sola y se puede repetir.
 UPDATE tipos_habitacion t
 SET nombre                     = s.nombre,
     descripcion                = coalesce(t.descripcion, s.descripcion),
@@ -70,7 +52,21 @@ SET nombre                     = s.nombre,
     capacidad_adultos          = coalesce(s.adultos, t.capacidad_adultos),
     capacidad_ninos            = coalesce(s.ninos, t.capacidad_ninos),
     orden                      = 1
-FROM semilla_estandar s
+FROM (VALUES
+('hotel-quito-03'::varchar,     'Habitación Clásica'::varchar, 'Habitación de estilo colonial restaurada, con techos altos y detalles de época.', 1::smallint, '1 cama king'::varchar, 32::numeric, 6::smallint, 'DESAYUNO'::varchar, 48::smallint, '["WiFi gratis","Desayuno incluido","Calefacción","Artículos de aseo de lujo"]'::jsonb, NULL::smallint, NULL::smallint),
+('hotel-cancun-01',    'Habitación Deluxe vista a la laguna', 'Balcón con vista a la laguna Nichupté. Plan todo incluido.', 2, '2 camas dobles', 42, 8, 'TODO_INCLUIDO', 72, '["WiFi gratis","Todo incluido","Balcón","Aire acondicionado","Minibar"]', NULL, NULL),
+('hotel-cartagena-02', 'Habitación Superior', 'En el antiguo convento de Santa Teresa, dentro de la ciudad amurallada.', 1, '1 cama queen', 30, 6, 'DESAYUNO', 48, '["WiFi gratis","Desayuno incluido","Aire acondicionado","Caja fuerte"]', NULL, NULL),
+('hotel-medellin-04',  'Habitación Medium', 'Habitación de diseño en El Poblado, con ducha de lluvia.', 1, '1 cama queen', 22, 6, 'SOLO_ALOJAMIENTO', 48, '["WiFi gratis","Aire acondicionado","Smart TV","Ducha de lluvia"]', NULL, NULL),
+('hotel-puntacana-05', 'Habitación Deluxe vista al jardín', 'Rodeada de jardines tropicales, a pocos pasos de la playa.', 2, '2 camas dobles', 45, 8, 'DESAYUNO', 72, '["WiFi gratis","Desayuno incluido","Terraza","Aire acondicionado","Cafetera"]', NULL, NULL),
+('hotel-cusco-06',     'Habitación Deluxe', 'Frente al Qoricancha, con calefacción y decoración inspirada en el arte cusqueño.', 1, '1 cama king', 30, 6, 'DESAYUNO', 48, '["WiFi gratis","Desayuno incluido","Calefacción","Mate de coca de cortesía"]', NULL, NULL),
+('quito-terraza-01',   'Habitación doble con baño compartido', 'Habitación sencilla con acceso a la terraza panorámica del hostal.', 1, '1 cama doble', 12, 3, 'SOLO_ALOJAMIENTO', 24, '["WiFi gratis","Terraza compartida","Cocina compartida"]', NULL, NULL),
+('quito-epiq-02',      'Apartamento de 1 dormitorio', 'Apartamento completo en La Carolina, con cocina equipada.', 1, '1 cama queen + sofá cama', 55, 3, 'SOLO_ALOJAMIENTO', 48, '["WiFi gratis","Cocina equipada","Lavadora","Piscina climatizada","Gimnasio"]', NULL, NULL),
+('quito-tobar-03',     'Habitación doble', 'Casona tradicional cerca del centro, con patio interior.', 1, '1 cama doble', 16, 4, 'DESAYUNO', 24, '["WiFi gratis","Desayuno incluido","Baño privado"]', NULL, NULL),
+('quito-ejido-04',     'Habitación doble', 'Frente al parque El Ejido, a pocos minutos del centro histórico.', 1, '1 cama queen', 20, 5, 'DESAYUNO', 24, '["WiFi gratis","Desayuno incluido","TV por cable"]', NULL, NULL),
+('quito-latitud-05',   'Cama en dormitorio mixto', 'Litera en dormitorio compartido de 8 camas, con taquilla individual.', 1, '1 cama en litera', 4, 8, 'SOLO_ALOJAMIENTO', 24, '["WiFi gratis","Taquilla","Cocina compartida","Ropa de cama incluida"]', 1, 0),
+('quito-artplaza-06',  'Habitación doble estándar', 'Hotel boutique con obras de artistas ecuatorianos en cada habitación.', 1, '1 cama queen', 18, 4, 'DESAYUNO', 24, '["WiFi gratis","Desayuno incluido","Baño privado","Obras de arte originales"]', NULL, NULL),
+('quito-rossamia-07',  'Habitación doble deluxe', 'Habitación amplia con decoración de estilo italiano.', 1, '1 cama king', 26, 4, 'DESAYUNO', 48, '["WiFi gratis","Desayuno incluido","Smart TV","Minibar"]', NULL, NULL)
+) AS s(alojamiento_id, nombre, descripcion, camas, descripcion_camas, tamano_m2, cantidad, regimen, horas, amenidades, adultos, ninos)
 WHERE t.alojamiento_id = s.alojamiento_id AND t.codigo = 'estandar';
 
 -- 2. Tipos adicionales de cada hotel. Precio por noche en la moneda del hotel.
@@ -83,7 +79,7 @@ INSERT INTO tipos_habitacion (alojamiento_id, codigo, nombre, descripcion, capac
 SELECT v.alojamiento_id, v.codigo, v.nombre, v.descripcion, v.adultos, v.ninos, v.camas, v.descripcion_camas, v.m2,
        v.precio, v.cantidad, v.regimen, v.horas, v.amenidades::jsonb, v.orden
 FROM (VALUES
-  ('hotel-quito-03', 'deluxe-plaza', 'Habitación Deluxe con vista a la plaza', 'Ventanales sobre la Plaza San Francisco.', 2, 1, 1, '1 cama king', 38.0, 360.00, 4, 'DESAYUNO', 48, '["WiFi gratis","Desayuno incluido","Vista a la plaza","Bañera"]', 2),
+  ('hotel-quito-03'::varchar, 'deluxe-plaza'::varchar, 'Habitación Deluxe con vista a la plaza'::varchar, 'Ventanales sobre la Plaza San Francisco.'::text, 2::smallint, 1::smallint, 1::smallint, '1 cama king'::varchar, 38.0::numeric, 360.00::numeric, 4::smallint, 'DESAYUNO'::varchar, 48::smallint, '["WiFi gratis","Desayuno incluido","Vista a la plaza","Bañera"]'::text, 2::smallint),
   ('hotel-quito-03', 'suite', 'Suite Gangotena', 'Suite con sala de estar, chimenea y terraza privada.', 3, 1, 2, '1 cama king + sofá cama', 70.0, 620.00, 1, 'DESAYUNO', NULL, '["WiFi gratis","Desayuno incluido","Terraza privada","Chimenea","Mayordomo"]', 3),
 
   ('hotel-cancun-01', 'deluxe-mar', 'Habitación Deluxe vista al mar', 'Balcón frente al mar Caribe. Plan todo incluido.', 3, 2, 2, '2 camas dobles', 42.0, 410.00, 6, 'TODO_INCLUIDO', 72, '["WiFi gratis","Todo incluido","Vista al mar","Balcón","Minibar"]', 2),
