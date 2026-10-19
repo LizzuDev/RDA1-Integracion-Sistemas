@@ -12,6 +12,7 @@ import { FacturasModule } from './modules/facturas/facturas.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 
 @Module({
   imports: [
@@ -67,6 +68,9 @@ import { TelemetryModule } from './modules/telemetry/telemetry.module';
 
     // Telemetría (analítica y rendimiento)
     TelemetryModule,
+
+    // Microservicio de Inventario gRPC Inbound (Consideraciones RDA2 §1, §3)
+    InventoryModule,
   ],
   controllers: [],
   providers: [],

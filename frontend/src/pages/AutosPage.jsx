@@ -62,7 +62,7 @@ export function AutosPage() {
   };
 
   const handlePickupChange = (e) => {
-    const raw = e.target.value;
+    const raw = e.target.value.slice(0, 60);
     const hasNumbers = /[0-9]/.test(raw);
     const hasSymbols = /[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ0-9]/.test(raw);
     const hasMultipleSpaces = /\s{2,}/.test(raw);
@@ -70,17 +70,26 @@ export function AutosPage() {
     if (hasNumbers) {
       triggerFlash('No se permiten números en el destino');
     } else if (hasSymbols) {
-      triggerFlash('Solo se permiten letras y comas');
+      triggerFlash('Solo se permiten letras, comas y acentos');
     } else if (hasMultipleSpaces) {
       triggerFlash('No se permiten espacios consecutivos');
+    } else if (raw.length >= 60) {
+      triggerFlash('Límite máximo de 60 caracteres alcanzado');
     } else {
       setPickupError('');
     }
 
     const clean = raw.replace(/[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ]/g, '').replace(/\s{2,}/g, ' ');
     setPickupLocation(clean);
-    setShowSuggestions(clean.length > 0);
+    setShowSuggestions(clean.trim().length > 0);
     setFormError('');
+  };
+
+  const handlePickupBlur = () => {
+    setTimeout(() => {
+      setShowSuggestions(false);
+      setPickupLocation(prev => prev.trim().replace(/\s{2,}/g, ' '));
+    }, 200);
   };
 
   const handleSelectSuggestion = (destino) => {
@@ -95,7 +104,12 @@ export function AutosPage() {
   const [pickupTime, setPickupTime] = useState('');
   const [dropoffTime, setDropoffTime] = useState('');
   const [sameDropoff, setSameDropoff] = useState(false);
+  const [dropoffLocation, setDropoffLocation] = useState('');
   const [driverAge, setDriverAge] = useState(true);
+  const [customAge, setCustomAge] = useState(22);
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [selectedTransmission, setSelectedTransmission] = useState('ALL');
+  const [metadata, setMetadata] = useState(null);
   const [openFaq, setOpenFaq] = useState(null);
   const [activeDestinationTab, setActiveDestinationTab] = useState(0);
 
@@ -163,64 +177,48 @@ export function AutosPage() {
     }, 400);
   };
 
-  const fetchData = useCallback(async () => {
+  const calculateDays = () => {
+    if (!startDate || !endDate) return 3;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 1;
+  };
+
+  const fetchData = useCallback(async (catOverride = null, transOverride = null) => {
     setLoading(true);
     setError(null);
     try {
-      const mockRequest = {
-        booker: { country: 'EC' },
-        currency: 'USD',
-        driver: { age: 30 },
-        route: { dropoff: {}, pickup: {} }
+      const cat = catOverride !== null ? catOverride : selectedCategory;
+      const trans = transOverride !== null ? transOverride : selectedTransmission;
+      const ageToUse = driverAge ? 32 : Number(customAge || 22);
+
+      const requestPayload = {
+        pickup_location: pickupLocation || 'Quito',
+        dropoff_location: sameDropoff ? (dropoffLocation || pickupLocation || 'Quito') : (pickupLocation || 'Quito'),
+        pickup_date: startDate || new Date().toISOString().split('T')[0],
+        pickup_time: pickupTime || '10:00',
+        dropoff_date: endDate || new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
+        dropoff_time: dropoffTime || '10:00',
+        driver_age: ageToUse,
+        driver_age_bracket: driverAge,
+        category: cat,
+        transmission: trans,
+        currency: 'USD'
       };
-      const result = await searchAutos(mockRequest);
+
+      const result = await searchAutos(requestPayload);
       setAutos(result.data || []);
+      setMetadata(result.metadata || null);
     } catch (err) {
-      // Como tu backend aún da 404 para autos, usamos datos simulados para que puedas probar la interfaz.
-      const mockAutos = [
-        {
-          vehicle_id: 'auto-1',
-          make: 'Chevrolet',
-          model: 'Spark',
-          supplier_id: 1, // Simular Europcar
-          images: ['https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&w=300&q=80'],
-          seats: 4,
-          transmission: 'Manual',
-          bag_capacity: 1,
-          doors: 4,
-          price: 35.50
-        },
-        {
-          vehicle_id: 'auto-2',
-          make: 'Kia',
-          model: 'Rio',
-          supplier_id: 2, // Simular Alamo
-          images: ['https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=300&q=80'],
-          seats: 5,
-          transmission: 'Automático',
-          bag_capacity: 2,
-          doors: 4,
-          price: 45.00
-        },
-        {
-          vehicle_id: 'auto-3',
-          make: 'Toyota',
-          model: 'Rush (SUV)',
-          supplier_id: 3, // Simular Enterprise
-          images: ['https://images.unsplash.com/photo-1550355291-bbee04a92027?auto=format&fit=crop&w=300&q=80'],
-          seats: 7,
-          transmission: 'Automático',
-          bag_capacity: 3,
-          doors: 5,
-          price: 78.00
-        }
-      ];
-      setAutos(mockAutos);
+      console.error('Error al consultar autos:', err);
+      setError('No se pudo conectar con el servicio de autos o los filtros no arrojaron resultados.');
     } finally {
       setLoading(false);
       setHasSearched(true);
     }
-  }, []);
+  }, [pickupLocation, dropoffLocation, sameDropoff, startDate, endDate, pickupTime, dropoffTime, driverAge, customAge, selectedCategory, selectedTransmission]);
 
   const timeOptions = [];
   for(let i=0; i<24; i++) {
@@ -232,8 +230,9 @@ export function AutosPage() {
 
   const handleSearch = (e) => {
     e.preventDefault();
+    const cleanPickup = pickupLocation.trim().replace(/\s{2,}/g, ' ');
     const faltantes = [];
-    if (pickupLocation.trim() === '') faltantes.push('el lugar de recogida');
+    if (!cleanPickup) faltantes.push('el lugar de recogida');
     if (!startDate) faltantes.push('la fecha de salida');
     if (!endDate) faltantes.push('la fecha de regreso');
     if (!pickupTime) faltantes.push('la hora de salida');
@@ -250,6 +249,20 @@ export function AutosPage() {
         mensaje = `Por favor proporcione ${faltantes.join(', ')} y ${last}.`;
       }
       setFormError(mensaje);
+      setFlashRed(true);
+      setTimeout(() => setFlashRed(false), 800);
+      return;
+    }
+
+    if (startDate && endDate && endDate < startDate) {
+      setFormError('La fecha de regreso no puede ser anterior a la fecha de salida.');
+      setFlashRed(true);
+      setTimeout(() => setFlashRed(false), 800);
+      return;
+    }
+
+    if (!driverAge && (customAge < 18 || customAge > 99)) {
+      setFormError('La edad del conductor debe estar comprendida entre 18 y 99 años.');
       setFlashRed(true);
       setTimeout(() => setFlashRed(false), 800);
       return;
@@ -349,16 +362,23 @@ export function AutosPage() {
                     <label style={{ color: flashRed ? '#d93025' : '#666' }}>Lugar de recogida</label>
                     <input
                       type="text"
+                      maxLength={60}
                       required
                       placeholder="Aeropuerto, ciudad o estación"
                       value={pickupLocation}
                       onChange={handlePickupChange}
-                      onFocus={() => setShowSuggestions(pickupLocation.length > 0)}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      onFocus={() => setShowSuggestions(pickupLocation.trim().length > 0)}
+                      onBlur={handlePickupBlur}
+                      aria-invalid={!!pickupError || flashRed}
                     />
+                    {pickupLocation.length > 30 && (
+                      <span style={{ position: 'absolute', right: 8, bottom: 8, fontSize: '0.7rem', color: pickupLocation.length >= 60 ? '#d93025' : '#9ca3af', pointerEvents: 'none' }}>
+                        {pickupLocation.length}/60
+                      </span>
+                    )}
                   </div>
                 </div>
-                {pickupError && <div style={{ position: 'absolute', top: '-25px', left: 0, color: '#d93025', fontSize: '0.8rem', fontWeight: 'bold', background: '#fce8e6', padding: '2px 8px', borderRadius: '4px' }}>{pickupError}</div>}
+                {pickupError && <div role="alert" style={{ position: 'absolute', top: '-25px', left: 0, color: '#d93025', fontSize: '0.8rem', fontWeight: 'bold', background: '#fce8e6', padding: '2px 8px', borderRadius: '4px' }}>{pickupError}</div>}
                 {showSuggestions && pickupLocation && (
                   <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', listStyle: 'none', margin: 0, padding: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: '4px', zIndex: 1050, maxHeight: '200px', overflowY: 'auto' }}>
                     {destinos.filter(d => d.toLowerCase().includes(pickupLocation.toLowerCase())).length > 0 ? (
@@ -450,17 +470,51 @@ export function AutosPage() {
             )}
 
             {/* Opciones inferiores */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px' }}>
-              <div style={{ display: 'flex', gap: '20px', alignItems: 'center', color: '#1b1b1b' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'center', color: '#1b1b1b', flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={sameDropoff} onChange={(e) => setSameDropoff(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#1b1b1b' }} />
+                  <input type="checkbox" checked={sameDropoff} onChange={(e) => setSameDropoff(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#003580' }} />
                   Devolver el coche en otra oficina
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={driverAge} onChange={(e) => setDriverAge(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#1b1b1b' }} />
+                  <input type="checkbox" checked={driverAge} onChange={(e) => setDriverAge(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#003580' }} />
                   Conductor entre 30 y 65 años
                 </label>
+
+                {!driverAge && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', padding: '4px 10px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                    <label style={{ fontSize: '0.85rem', color: '#333' }}>Edad real:</label>
+                    <input
+                      type="number"
+                      min="18"
+                      max="99"
+                      value={customAge}
+                      onChange={(e) => setCustomAge(e.target.value)}
+                      style={{ width: '60px', padding: '4px', border: '1px solid #aaa', borderRadius: '3px', fontSize: '0.9rem' }}
+                    />
+                    {Number(customAge) < 25 && (
+                      <span style={{ fontSize: '0.75rem', color: '#b06000', fontWeight: 'bold' }}>
+                        *Aplica tasa por conductor joven (+$15/día)
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {sameDropoff && (
+                <div style={{ maxWidth: '420px', marginTop: '6px' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: '#1b1b1b', marginBottom: '3px', fontWeight: 600 }}>
+                    Lugar de devolución diferente:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Oficina, aeropuerto o ciudad de devolución"
+                    value={dropoffLocation}
+                    onChange={(e) => setDropoffLocation(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem' }}
+                  />
+                </div>
+              )}
             </div>
           </form>
         </div>
@@ -726,6 +780,89 @@ export function AutosPage() {
 
             {/* Results Column */}
             <div style={{ flex: 1 }}>
+              {/* Category & Transmission Filter Bar */}
+              <div style={{ background: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #e7e7e7', marginBottom: '20px' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#555', marginBottom: '8px', textTransform: 'uppercase' }}>
+                    Categoría del Vehículo:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {[
+                      { id: 'ALL', label: '🚗 Todos' },
+                      { id: 'ECONOMICO', label: '⚡ Económico' },
+                      { id: 'COMPACTO', label: '🚘 Compacto' },
+                      { id: 'SUV', label: '🚙 SUV / 4x4' },
+                      { id: 'PREMIUM', label: '💎 Premium' },
+                      { id: 'VAN', label: '🚐 Vans' }
+                    ].map(cat => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => { setSelectedCategory(cat.id); fetchData(cat.id, selectedTransmission); }}
+                        style={{
+                          background: selectedCategory === cat.id ? '#003580' : '#f0f4f8',
+                          color: selectedCategory === cat.id ? 'white' : '#333',
+                          border: selectedCategory === cat.id ? '1px solid #003580' : '1px solid #d0d7de',
+                          padding: '6px 14px',
+                          borderRadius: '20px',
+                          fontSize: '0.86rem',
+                          fontWeight: selectedCategory === cat.id ? 700 : 500,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#555', marginBottom: '8px', textTransform: 'uppercase' }}>
+                    Transmisión:
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {[
+                      { id: 'ALL', label: 'Todas' },
+                      { id: 'MANUAL', label: '⚙️ Manual' },
+                      { id: 'AUTOMATICO', label: '🕹️ Automática' }
+                    ].map(trans => (
+                      <button
+                        key={trans.id}
+                        type="button"
+                        onClick={() => { setSelectedTransmission(trans.id); fetchData(selectedCategory, trans.id); }}
+                        style={{
+                          background: selectedTransmission === trans.id ? '#006ce4' : '#f0f4f8',
+                          color: selectedTransmission === trans.id ? 'white' : '#333',
+                          border: selectedTransmission === trans.id ? '1px solid #006ce4' : '1px solid #d0d7de',
+                          padding: '5px 12px',
+                          borderRadius: '16px',
+                          fontSize: '0.82rem',
+                          fontWeight: selectedTransmission === trans.id ? 700 : 500,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {trans.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Banner Informativo de Cooldown y Reglas RDA2 */}
+              <div style={{ background: '#eef8ff', border: '1px solid #b8e2fb', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '1.4rem' }}>🛡️</span>
+                <div style={{ fontSize: '0.85rem', color: '#004373', lineHeight: 1.4 }}>
+                  <b>Garantía de Limpieza e Inspección (RDA2):</b> Los vehículos devueltos cumplen un <b>cooldown estricto de 2 horas</b> de higienización técnica antes de reingresar al catálogo.
+                </div>
+              </div>
+
+              {metadata?.surcharge_applied && (
+                <div style={{ background: '#fef7e0', border: '1px solid #f6e05e', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', color: '#975a16', fontSize: '0.85rem' }}>
+                  ⚠️ Se ha aplicado un recargo por conductor menor de 25 años (+${metadata.surcharge_amount || 15} USD/día) según políticas de alquiler.
+                </div>
+              )}
+
               <div style={{ marginBottom: '20px' }}>
                  <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333', margin: '0 0 15px 0' }}>{autos.length} coches disponibles</h2>
                  <div style={{ display: 'inline-flex', border: '1px solid #666', borderRadius: '32px', padding: '6px 16px', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', alignItems: 'center', gap: '5px' }}>
@@ -734,7 +871,7 @@ export function AutosPage() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
                 {autos.map((a, i) => (
-                  <AutoCard key={a.vehicle_id || i} auto={a} />
+                  <AutoCard key={a.vehicle_id || i} auto={a} dias={calculateDays()} />
                 ))}
               </div>
             </div>

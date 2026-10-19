@@ -9,6 +9,8 @@ import { AdminProveedoresService } from './admin-proveedores.service';
 import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
 import { AdminRoleGuard } from '../../core/guards/admin-role.guard';
 
+import { ConnectorHealthService } from './connector-health.service';
+
 @ApiTags('Admin')
 @ApiBearerAuth()
 @Controller('admin')
@@ -22,7 +24,45 @@ export class AdminController {
     private readonly finanzasService: AdminFinanzasService,
     private readonly auditService: AdminAuditService,
     private readonly proveedoresService: AdminProveedoresService,
+    private readonly connectorHealthService: ConnectorHealthService,
   ) {}
+
+  // ── Monitor de Nodos del Ecosistema y Kill-Switches (RDA2 Brecha B-03) ───
+  @Get('nodes/health')
+  @ApiOperation({ summary: 'Monitoreo en vivo de nodos y semáforo de latencias del ecosistema' })
+  @ApiQuery({ name: 'probe', required: false, description: 'Sondear activamente la red' })
+  async getNodesHealth(@Query('probe') probe?: string) {
+    return this.connectorHealthService.getNodesHealth(probe === 'true');
+  }
+
+  @Post('nodes/:serviceId/toggle')
+  @ApiOperation({ summary: 'Conmutar switch (kill-switch) para desconectar/conectar una tienda externa en tiempo real' })
+  async toggleNode(
+    @Param('serviceId') serviceId: string,
+    @Body() body: { enabled?: boolean },
+    @Req() req: any,
+  ) {
+    const node = this.connectorHealthService.toggleNode(serviceId, body?.enabled);
+    await this.auditService.registrar(
+      actorDesdeRequest(req),
+      `Conmutó kill-switch para conector ${node.nombre} -> ${node.enabled ? 'CONECTADO' : 'DESCONECTADO'}`,
+      'nodo_red',
+      serviceId,
+      { enabled: node.enabled, status: node.status, circuit_breaker: node.circuitBreaker }
+    );
+    return {
+      success: true,
+      message: `Conector '${node.nombre}' ${node.enabled ? 'conectado exitosamente' : 'desconectado (Kill-Switch ACTIVO)'}`,
+      node,
+    };
+  }
+
+  @Post('nodes/:serviceId/ping')
+  @ApiOperation({ summary: 'Probar conectividad directa (ping) hacia un conector externo' })
+  async pingNode(@Param('serviceId') serviceId: string) {
+    const node = await this.connectorHealthService.pingNode(serviceId);
+    return { success: true, node };
+  }
 
   // ── Observabilidad ────────────────────────────────────────────────────────
   @Get('stats')

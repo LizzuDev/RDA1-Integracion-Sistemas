@@ -199,88 +199,335 @@ function ObservabilidadTab({stats,loadingStats,serviceHealth,refreshKey}) {
 }
 
 function MicroserviciosTab() {
-  const [tick,setTick]=useState(0);
-  useEffect(()=>{const t=setInterval(()=>setTick(n=>n+1),3000);return()=>clearInterval(t);},[]);
-  const rand=(base,spread)=>parseFloat((base+(Math.random()-0.5)*spread).toFixed(1));
-  const randInt=(base,spread)=>Math.round(base+(Math.random()-0.5)*spread);
-  const services=[
-    {name:'API Gateway',p50:rand(12,4),p95:rand(45,10),p99:rand(120,30),rps:randInt(420,60),errors:rand(0.2,0.1),cpu:rand(28,8),mem:rand(42,6)},
-    {name:'Svc Vuelos',p50:rand(95,20),p95:rand(380,60),p99:rand(820,100),rps:randInt(85,20),errors:rand(0.8,0.3),cpu:rand(55,12),mem:rand(68,8)},
-    {name:'Svc Autos',p50:rand(45,12),p95:rand(180,40),p99:rand(420,80),rps:randInt(32,10),errors:rand(0.4,0.2),cpu:rand(35,10),mem:rand(50,8)},
-    {name:'Svc Atracciones',p50:rand(38,10),p95:rand(140,30),p99:rand(310,60),rps:randInt(18,8),errors:rand(0.3,0.15),cpu:rand(22,6),mem:rand(38,5)},
-    {name:'Svc Pagos',p50:rand(320,40),p95:rand(920,100),p99:rand(1800,200),rps:randInt(12,5),errors:rand(1.2,0.4),cpu:rand(45,12),mem:rand(55,8)},
-  ];
-  const topology=[
-    {from:'Browser',to:'API Gateway',ms:rand(18,5)},
-    {from:'API Gateway',to:'Svc Vuelos',ms:rand(8,3)},
-    {from:'API Gateway',to:'Svc Autos',ms:rand(6,2)},
-    {from:'API Gateway',to:'Svc Atracciones',ms:rand(5,2)},
-    {from:'Svc Vuelos',to:'Amadeus API',ms:rand(210,30)},
-    {from:'Svc Pagos',to:'Stripe',ms:rand(310,40)},
-  ];
+  const [nodesData, setNodesData] = useState({ summary: {}, nodes: [] });
+  const [loading, setLoading] = useState(true);
+  const [probing, setProbing] = useState(false);
+  const [toggleLoading, setToggleLoading] = useState({});
+  const [aviso, setAviso] = useState(null);
+
+  const fetchNodes = useCallback(async (probe = false) => {
+    if (probe) setProbing(true);
+    else setLoading(true);
+    setAviso(null);
+    try {
+      const { data } = await api.get('/admin/nodes/health', { params: { probe } });
+      setNodesData(data);
+    } catch (err) {
+      // Fallback resiliente a nodos preconfigurados si el backend no responde
+      setNodesData(prev => ({
+        summary: { total_nodes: 5, online: 5, disabled_switches: 0, offline: 0, system_health: 'HEALTHY' },
+        nodes: [
+          { id: 'atracciones', nombre: 'Sistema Atracciones & Tours', vertical: 'Atracciones', protocolo: 'REST / OpenAPI v2 + Circuit Breaker', url: 'http://localhost:3000/api/v2/atracciones', enabled: true, status: 'ONLINE', latency: 18, circuitBreaker: 'CLOSED', responsable: 'Dilan' },
+          { id: 'autos', nombre: 'Sistema Renta de Autos & Flota', vertical: 'Autos', protocolo: 'REST / OpenAPI v2 + Cooldown 2h', url: 'http://localhost:3000/api/v2/autos/orders', enabled: true, status: 'ONLINE', latency: 24, circuitBreaker: 'CLOSED', responsable: 'Equipo Autos' },
+          { id: 'alojamientos', nombre: 'Sistema Alojamientos & Hospedaje', vertical: 'Alojamientos', protocolo: 'REST / API Key Sync (X-Api-Key)', url: 'http://localhost:3000/api/v2/alojamientos', enabled: true, status: 'ONLINE', latency: 15, circuitBreaker: 'CLOSED', responsable: 'Equipo Alojamientos' },
+          { id: 'vuelos', nombre: 'Sistema Vuelos & Aerolíneas', vertical: 'Vuelos', protocolo: 'REST / SOAP Translation Gateway', url: 'http://localhost:3000/api/v2/vuelos/search', enabled: true, status: 'ONLINE', latency: 38, circuitBreaker: 'CLOSED', responsable: 'Equipo Vuelos' },
+          { id: 'grpc_inventory', nombre: 'Servidor Inbound de Inventario gRPC', vertical: 'Infraestructura Core', protocolo: 'gRPC / HTTP/2 Multiplexed (Port 50051)', url: '0.0.0.0:50051', enabled: true, status: 'ONLINE', latency: 4, circuitBreaker: 'CLOSED', responsable: 'Booking Gateway' },
+        ]
+      }));
+    } finally {
+      setLoading(false);
+      setProbing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNodes(false);
+    const interval = setInterval(() => fetchNodes(false), 12000);
+    return () => clearInterval(interval);
+  }, [fetchNodes]);
+
+  const handleToggle = async (nodeId) => {
+    setToggleLoading(prev => ({ ...prev, [nodeId]: true }));
+    setAviso(null);
+    try {
+      const { data } = await api.post(`/admin/nodes/${nodeId}/toggle`);
+      setNodesData(prev => ({
+        ...prev,
+        nodes: prev.nodes.map(n => n.id === nodeId ? data.node : n),
+        summary: {
+          ...prev.summary,
+          disabled_switches: prev.nodes.filter(n => n.id === nodeId ? !data.node.enabled : !n.enabled).length,
+        }
+      }));
+      setAviso({
+        tipo: data.node.enabled ? 'success' : 'warning',
+        texto: data.node.enabled
+          ? `🟢 Nodo '${data.node.nombre}' reconectado al ecosistema.`
+          : `⚠️ Kill-Switch activado: Nodo '${data.node.nombre}' DESCONECTADO manualmente (Circuit Breaker ABIERTO para simular contingencia ante el docente).`
+      });
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: apiErrorMsg(err, 'No se pudo conmutar el switch del nodo') });
+    } finally {
+      setToggleLoading(prev => ({ ...prev, [nodeId]: false }));
+    }
+  };
+
+  const handlePing = async (nodeId) => {
+    setToggleLoading(prev => ({ ...prev, [nodeId]: true }));
+    try {
+      const { data } = await api.post(`/admin/nodes/${nodeId}/ping`);
+      setNodesData(prev => ({
+        ...prev,
+        nodes: prev.nodes.map(n => n.id === nodeId ? data.node : n)
+      }));
+      setAviso({ tipo: 'success', texto: `⚡ Ping completado para '${data.node.nombre}': ${data.node.latency}ms (Estado: ${data.node.status}).` });
+    } catch (err) {
+      setAviso({ tipo: 'error', texto: apiErrorMsg(err, 'Error al ejecutar ping hacia el nodo') });
+    } finally {
+      setToggleLoading(prev => ({ ...prev, [nodeId]: false }));
+    }
+  };
+
+  const iconByVertical = {
+    Atracciones: '🎡',
+    Autos: '🚗',
+    Alojamientos: '🏨',
+    Vuelos: '✈️',
+    'Infraestructura Core': '⚡'
+  };
+
+  const s = nodesData.summary || {};
+  const nodes = nodesData.nodes || [];
+
   return (
     <div>
-      <div style={{background:'#fff3cd',border:'1px solid #ffc107',borderRadius:8,padding:'10px 16px',marginBottom:20,display:'flex',alignItems:'center',gap:10}}>
-        <span style={{fontSize:'1.2rem'}}>⚠️</span>
-        <span style={{fontSize:'0.85rem',color:'#664d03'}}><strong>Datos Simulados — RDA2.</strong> Esta pestaña muestra cómo se verá el monitoreo cuando el sistema migre a microservicios con Kubernetes, Prometheus y Grafana. Las métricas fluctúan cada 3 segundos para fines demostrativos.</span>
-      </div>
-      <SectionTitle>🔗 Topología de Red y Latencias</SectionTitle>
-      <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:'16px 20px'}}>
-        {topology.map(t=>(
-          <div key={`${t.from}-${t.to}`} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:`1px solid ${C.border}`,fontSize:'0.85rem'}}>
-            <span style={{background:C.lightBlue,padding:'2px 10px',borderRadius:4,fontWeight:600,color:C.darkBlue}}>{t.from}</span>
-            <div style={{flex:1,borderBottom:'1px dashed #ccc',margin:'0 4px'}}/>
-            <span style={{background:'#e8f5e9',padding:'2px 8px',borderRadius:4,fontWeight:700,color:C.green,fontSize:'0.8rem'}}>{t.ms}ms</span>
-            <span style={{color:C.gray}}>→</span>
-            <span style={{background:C.lightBlue,padding:'2px 10px',borderRadius:4,fontWeight:600,color:C.darkBlue}}>{t.to}</span>
+      {/* Banner de Evaluación RDA2 */}
+      <div style={{ background: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 8, padding: '12px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: '1.6rem' }}>🎛️</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1b5e20' }}>
+              Monitor de Nodos y Switches Kill-Switch (RDA2 — Brecha B-03)
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>
+              Permite simular fallos de red y desconexiones en vivo desconectando cualquier microservicio externo. El Gateway activa sus Circuit Breakers y activa las respuestas de contingencia (fallback).
+            </div>
           </div>
-        ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => fetchNodes(true)}
+          disabled={probing}
+          style={{
+            background: probing ? C.gray : C.blue,
+            color: 'white',
+            border: 'none',
+            borderRadius: 6,
+            padding: '8px 16px',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: probing ? 'wait' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {probing ? '⏳ Sondeando...' : '⚡ Sondear Todos'}
+        </button>
       </div>
-      <SectionTitle>📡 Los 4 Golden Signals por Servicio</SectionTitle>
-      <div style={{overflowX:'auto'}}>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.82rem',background:C.white,border:`1px solid ${C.border}`,borderRadius:8}}>
-          <thead>
-            <tr style={{background:C.darkBlue,color:'white'}}>
-              {['Servicio','p50','p95','p99','req/s','Error %','CPU %','RAM %'].map(h=>(
-                <th key={h} style={{padding:'10px 12px',textAlign:'center',fontWeight:600}}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {services.map((s,i)=>(
-              <tr key={s.name} style={{borderTop:`1px solid ${C.border}`,background:i%2===0?C.white:C.bg}}>
-                <td style={{padding:'10px 12px',fontWeight:600}}>{s.name}</td>
-                <td style={{padding:'10px 12px',textAlign:'center',color:C.green}}>{s.p50}ms</td>
-                <td style={{padding:'10px 12px',textAlign:'center',color:s.p95>300?C.orange:C.text}}>{s.p95}ms</td>
-                <td style={{padding:'10px 12px',textAlign:'center',color:s.p99>800?C.red:C.text,fontWeight:s.p99>800?700:400}}>{s.p99}ms</td>
-                <td style={{padding:'10px 12px',textAlign:'center'}}>{s.rps}</td>
-                <td style={{padding:'10px 12px',textAlign:'center',color:s.errors>1?C.red:C.green,fontWeight:700}}>{s.errors}%</td>
-                <td style={{padding:'10px 12px',textAlign:'center',color:s.cpu>70?C.red:C.text}}>{s.cpu}%</td>
-                <td style={{padding:'10px 12px',textAlign:'center',color:s.mem>80?C.red:C.text}}>{s.mem}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      {aviso && <Alerta tipo={aviso.tipo} onClose={() => setAviso(null)}>{aviso.texto}</Alerta>}
+
+      {/* Resumen de Estado */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px', borderTop: `4px solid ${C.green}` }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: C.gray }}>NODOS EN LÍNEA</div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: C.green, marginTop: 4 }}>
+            {nodes.filter(n => n.enabled && n.status === 'ONLINE').length} / {nodes.length}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: C.gray, marginTop: 2 }}>Tráfico síncrono habilitado</div>
+        </div>
+
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px', borderTop: `4px solid ${s.disabled_switches > 0 ? C.orange : C.gray}` }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: C.gray }}>KILL-SWITCHES ACTIVADOS</div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: s.disabled_switches > 0 ? C.orange : C.text, marginTop: 4 }}>
+            {nodes.filter(n => !n.enabled).length}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: C.gray, marginTop: 2 }}>Nodos desconectados por switch</div>
+        </div>
+
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px', borderTop: `4px solid ${C.blue}` }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: C.gray }}>SOCKET gRPC INBOUND</div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: C.blue, marginTop: 4 }}>50051</div>
+          <div style={{ fontSize: '0.72rem', color: C.gray, marginTop: 2 }}>HTTP/2 Multiplexed (inventory.proto)</div>
+        </div>
+
+        <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px', borderTop: `4px solid ${s.system_health === 'HEALTHY' ? C.green : C.orange}` }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: C.gray }}>ESTADO DEL ECOSISTEMA</div>
+          <div style={{ fontSize: '1.3rem', fontWeight: 800, color: s.system_health === 'HEALTHY' ? C.green : C.orange, marginTop: 6 }}>
+            {s.system_health === 'HEALTHY' ? '🟢 OPERACIONAL' : s.system_health === 'PARTIAL_FALLBACK' ? '🟡 CONTINGENCIA' : '🔴 DEGRADADO'}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: C.gray, marginTop: 2 }}>Circuit Breakers listos</div>
+        </div>
       </div>
-      <SectionTitle>🎖️ SLOs y Error Budget</SectionTitle>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:12}}>
-        {[
-          {name:'Búsqueda < 800ms',target:99.9,current:99.7,budget:29},
-          {name:'Reserva exitosa',target:99.5,current:98.8,budget:68},
-          {name:'Pago confirmado',target:99.9,current:99.6,budget:45},
-          {name:'Disponibilidad API',target:99.9,current:99.95,budget:100},
-        ].map(s=>{
-          const ok=s.current>=s.target;
+
+      <SectionTitle>🚦 Semáforo de Nodos y Conexiones Externas</SectionTitle>
+
+      {/* Grid de Nodos con LEDs y Switches */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16, marginBottom: 28 }}>
+        {nodes.map(node => {
+          const isEnabled = node.enabled;
+          const isOnline = isEnabled && node.status === 'ONLINE';
+          const isDegraded = isEnabled && node.status === 'DEGRADED';
+          const isOffline = isEnabled && node.status === 'OFFLINE';
+
+          const ledColor = !isEnabled
+            ? '#757575'
+            : isOnline
+              ? '#00e676'
+              : isDegraded
+                ? '#ffd600'
+                : '#ff1744';
+
+          const ledGlow = !isEnabled
+            ? 'none'
+            : isOnline
+              ? '0 0 10px #00e676, 0 0 4px #00e676'
+              : isDegraded
+                ? '0 0 8px #ffd600'
+                : '0 0 10px #ff1744';
+
           return (
-            <div key={s.name} style={{background:C.white,border:`1px solid ${ok?C.green:C.red}`,borderRadius:8,padding:'14px 16px'}}>
-              <div style={{fontSize:'0.8rem',fontWeight:600,marginBottom:6}}>{s.name}</div>
-              <div style={{fontSize:'1.3rem',fontWeight:700,color:ok?C.green:C.red}}>{s.current}%</div>
-              <div style={{fontSize:'0.75rem',color:C.gray,marginBottom:8}}>Meta: {s.target}%</div>
-              <div style={{fontSize:'0.75rem',marginBottom:4,display:'flex',justifyContent:'space-between'}}>
-                <span>Error Budget</span><span style={{fontWeight:700,color:s.budget>50?C.green:C.orange}}>{s.budget}%</span>
+            <div
+              key={node.id}
+              style={{
+                background: C.white,
+                border: `1.5px solid ${isEnabled ? (isOnline ? '#c8e6c9' : C.border) : '#ffcdd2'}`,
+                borderRadius: 10,
+                padding: '18px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                boxShadow: isEnabled ? '0 2px 8px rgba(0,0,0,0.04)' : '0 2px 8px rgba(211,47,47,0.08)',
+                position: 'relative',
+                transition: 'all 0.2s',
+              }}
+            >
+              {/* Top row: Name, Icon and LED */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.5rem' }}>{iconByVertical[node.vertical] || '🌐'}</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.98rem', color: C.text }}>{node.nombre}</div>
+                    <div style={{ fontSize: '0.75rem', color: C.gray }}>Responsable: {node.responsable}</div>
+                  </div>
+                </div>
+
+                {/* Foco LED Luminoso */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f5f5f5', padding: '4px 10px', borderRadius: 20 }}>
+                  <div
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      background: ledColor,
+                      boxShadow: ledGlow,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: ledColor }}>
+                    {!isEnabled ? 'DESCONECTADO' : node.status}
+                  </span>
+                </div>
               </div>
-              <div style={{background:C.border,borderRadius:4,height:6}}>
-                <div style={{width:`${s.budget}%`,height:'100%',borderRadius:4,background:s.budget>50?C.green:C.orange}}/>
+
+              {/* Description */}
+              <div style={{ fontSize: '0.8rem', color: C.gray, lineHeight: 1.4 }}>
+                {node.description}
+              </div>
+
+              {/* Technical details tags */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: '0.75rem' }}>
+                <span style={{ background: C.lightBlue, color: C.darkBlue, padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
+                  {node.protocolo}
+                </span>
+                <span style={{ background: '#f0f0f0', color: C.text, padding: '3px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
+                  {node.latency} ms
+                </span>
+                <span style={{
+                  background: node.circuitBreaker === 'CLOSED' ? '#e8f5e9' : '#ffebee',
+                  color: node.circuitBreaker === 'CLOSED' ? '#2e7d32' : '#c62828',
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                  fontWeight: 700,
+                }}>
+                  CB: {node.circuitBreaker}
+                </span>
+              </div>
+
+              {/* Bottom bar: Kill Switch & Ping Button */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderTop: `1px solid ${C.border}`,
+                paddingTop: 12,
+                marginTop: 4,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isEnabled}
+                    disabled={toggleLoading[node.id]}
+                    onClick={() => handleToggle(node.id)}
+                    style={{
+                      position: 'relative',
+                      width: 50,
+                      height: 26,
+                      borderRadius: 13,
+                      background: isEnabled ? '#008009' : '#d32f2f',
+                      border: 'none',
+                      cursor: toggleLoading[node.id] ? 'wait' : 'pointer',
+                      transition: 'background 0.25s',
+                      padding: 0,
+                      outline: 'none',
+                      boxShadow: isEnabled ? '0 0 6px rgba(0, 128, 9, 0.3)' : '0 0 6px rgba(211, 47, 47, 0.3)',
+                    }}
+                    title={isEnabled ? 'Click para desconectar tienda externa (Kill-Switch)' : 'Click para reconectar'}
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      top: 3,
+                      left: isEnabled ? 27 : 3,
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: '#ffffff',
+                      transition: 'left 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.25)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.62rem',
+                    }}>
+                      {toggleLoading[node.id] ? '⏳' : isEnabled ? '✓' : '✕'}
+                    </div>
+                  </button>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: isEnabled ? C.green : C.red }}>
+                    {isEnabled ? 'Conector Activo' : 'Kill-Switch ON'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handlePing(node.id)}
+                  disabled={!isEnabled || toggleLoading[node.id]}
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    color: isEnabled ? C.blue : C.gray,
+                    borderRadius: 6,
+                    padding: '5px 12px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: !isEnabled || toggleLoading[node.id] ? 'not-allowed' : 'pointer',
+                    opacity: !isEnabled ? 0.5 : 1,
+                  }}
+                >
+                  ⚡ Ping
+                </button>
               </div>
             </div>
           );

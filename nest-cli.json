@@ -4,6 +4,10 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": false,
-    "tsConfigPath": "tsconfig.build.json"
+    "tsConfigPath": "tsconfig.build.json",
+    "assets": [
+      { "include": "proto/**/*.proto", "outDir": "dist/src" },
+      { "include": "proto/**/*.proto", "outDir": "dist" }
+    ]
   }
 }

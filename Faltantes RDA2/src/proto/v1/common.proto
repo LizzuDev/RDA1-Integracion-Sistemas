@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package booking.common.v1;
+
+option go_package = "booking/common/v1;commonv1";
+option java_multiple_files = true;
+option java_package = "com.booking.common.v1";
+option csharp_namespace = "Booking.Common.V1";
+option php_namespace = "Booking\\Common\\V1";
+option ruby_package = "Booking::Common::V1";
+
+/**
+ * Common protocol buffer messages for RDA2
+ * Includes: correlation/trace context, node reference, timestamps, error details
+ */
+
+message Timestamp {
+  // Seconds since Unix epoch
+  int64 seconds = 1;
+  // Nanoseconds
+  int32 nanos = 2;
+}
+
+message NodeRef {
+  // Unique node identifier (UUID)
+  string node_id = 1;
+  // Short node code
+  string node_code = 2;
+  // Base URL of individual web page
+  string node_url_base = 3;
+  // Type: interno|partner|tercero
+  string node_type = 4;
+}
+
+message CorrelationContext {
+  // Correlation ID (UUID)
+  string correlation_id = 1;
+  // Request ID (UUID)
+  string request_id = 2;
+  // W3C Trace Context trace_id (UUID/hex)
+  string trace_id = 3;
+  // Span ID
+  string span_id = 4;
+  // Parent span ID (optional)
+  string parent_span_id = 5;
+  // Environment dev|qa|prod
+  string environment = 6;
+}
+
+message Actor {
+  // Actor ID (UUID)
+  string actor_id = 1;
+  // user|system|service|partner|operator
+  string actor_type = 2;
+}
+
+message ErrorDetail {
+  // Error code (domain-specific)
+  string code = 1;
+  // Human-readable message
+  string message = 2;
+  // Additional details
+  string details = 3;
+  // Correlation ID
+  string correlation_id = 4;
+  // Timestamp
+  Timestamp timestamp = 5;
+}
+EOF
+echo "ok"

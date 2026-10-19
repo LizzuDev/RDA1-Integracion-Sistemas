@@ -1,0 +1,680 @@
+openapi: 3.0.3
+info:
+  title: API de Atracciones Turísticas (Enriquecida v2)
+  description: |
+    Microservicio y API Gateway de Atracciones del Marketplace Booking Prototipo (RDA2).
+    Evolución a especificación v2.0.0 con soporte para:
+    - Árbol jerárquico recursivo de categorías (Closure Table / Inclusiones de comida, guía y transporte).
+    - Disponibilidad dinámica de turnos horarios (Time Slots con aforo en tiempo real).
+    - Desglose de boletos por grupo de edad (Adulto, Niño, Bebé/Infante).
+    - Proceso de Check-in presencial en punto de encuentro con voucher digital QR criptográfico.
+    - Sincronización Inbound de inventario en tiempo real mediante gRPC / HTTP/2 (Protocol Buffers en src/proto/inventory.proto, puerto 50051).
+    - Respuestas de error enriquecidas bajo RFC 7807 (Problem Details).
+    - Cabeceras de resiliencia, trazabilidad e idempotencia obligatorias (Idempotency-Key, X-Correlation-Id).
+  version: 2.0.0
+servers:
+  - url: /api/v2
+    description: API Gateway - Ruta base v2 (RDA2)
+  - url: /api/v1
+    description: API Gateway - Ruta legacy v1 (Compatibilidad hacia atrás)
+tags:
+  - name: Atracciones - Catálogo v2
+    description: Búsqueda, taxonomía jerárquica y disponibilidad de experiencias
+  - name: Atracciones - Reservas y Check-in v2
+    description: Orquestación transaccional de reservas, emisión de tickets y validación de check-in
+
+paths:
+  /atracciones/categorias/arbol:
+    get:
+      tags:
+        - Atracciones - Catálogo v2
+      summary: Consultar árbol jerárquico de categorías (Taxonomía padre-hija)
+      description: Retorna la estructura recursiva de categorías y subcategorías con atributos de inclusiones.
+      responses:
+        '200':
+          description: Árbol de categorías recuperado exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryTreeNode'
+
+  /atracciones/search:
+    post:
+      tags:
+        - Atracciones - Catálogo v2
+      summary: Búsqueda avanzada y filtrado de experiencias
+      description: Búsqueda por destino, fechas, rango de precios, categorías e inclusiones de servicios.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchAtraccionesRequestV2'
+      responses:
+        '200':
+          description: Resultados de la búsqueda
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchAtraccionesResponseV2'
+        '400':
+          $ref: '#/components/responses/ProblemDetails400'
+
+  /atracciones/{id}:
+    get:
+      tags:
+        - Atracciones - Catálogo v2
+      summary: Consultar detalle completo de una atracción turística por ID
+      description: Retorna la ficha técnica con itinerario, valoraciones desglosadas, inclusiones y políticas de cancelación.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 'PRhu4UBTWPBC'
+      responses:
+        '200':
+          description: Ficha de la atracción recuperada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AtraccionDetailResponseV2'
+        '404':
+          $ref: '#/components/responses/ProblemDetails404'
+
+  /atracciones/{id}/disponibilidad:
+    get:
+      tags:
+        - Atracciones - Catálogo v2
+      summary: Consultar disponibilidad de turnos horarios (Time Slots)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Matriz de turnos y cupos disponibles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisponibilidadResponse'
+
+  /atracciones/{id}/reservations:
+    post:
+      tags:
+        - Atracciones - Reservas y Check-in v2
+      summary: Crear reserva de entradas con selección de turno y desglose de boletos
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Correlation-Id
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservaRequestV2'
+      responses:
+        '201':
+          description: Reserva confirmada exitosamente con voucher emitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaConfirmadaResponseV2'
+        '400':
+          $ref: '#/components/responses/ProblemDetails400'
+        '409':
+          $ref: '#/components/responses/ProblemDetails409'
+        '503':
+          $ref: '#/components/responses/ProblemDetails503'
+
+  /atracciones/reservas:
+    post:
+      tags:
+        - Atracciones - Reservas y Check-in v2
+      summary: Crear reserva de atracción (Ruta canónica / Alias v2)
+      description: Permite enviar la reserva especificando el ID de la atracción en el cuerpo JSON o parámetros.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: X-Correlation-Id
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservaRequestV2'
+      responses:
+        '201':
+          description: Reserva confirmada exitosamente con voucher emitido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaConfirmadaResponseV2'
+        '400':
+          $ref: '#/components/responses/ProblemDetails400'
+        '409':
+          $ref: '#/components/responses/ProblemDetails409'
+        '503':
+          $ref: '#/components/responses/ProblemDetails503'
+
+  /atracciones/reservas/{id}/checkin:
+    post:
+      tags:
+        - Atracciones - Reservas y Check-in v2
+      summary: Realizar Check-in presencial en punto de encuentro
+      description: Valida el documento de identidad del titular y emite el pase de abordar oficial con guía asignado.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckinRequest'
+      responses:
+        '200':
+          description: Check-in presencial validado y registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckinResponse'
+        '404':
+          $ref: '#/components/responses/ProblemDetails404'
+        '409':
+          $ref: '#/components/responses/ProblemDetails409'
+
+  /atracciones/reservations/{reservationId}:
+    get:
+      tags:
+        - Atracciones - Reservas y Check-in v2
+      summary: Consultar detalle de una reserva específica por ID
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 'res-atr-8891'
+      responses:
+        '200':
+          description: Ficha y estado de la reserva
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaConfirmadaResponseV2'
+        '404':
+          $ref: '#/components/responses/ProblemDetails404'
+
+  /atracciones/reservations/{reservationId}/cancel:
+    post:
+      tags:
+        - Atracciones - Reservas y Check-in v2
+      summary: Cancelar una reserva de atracción turística
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 'res-atr-8891'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: '4a1ceb4d-3b7d-4bad-9bdd-2b0d7b3dcb7f'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: 'Cancelación gratuita solicitada por el usuario'
+      responses:
+        '200':
+          description: Reserva cancelada exitosamente y cupo liberado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaConfirmadaResponseV2'
+        '400':
+          $ref: '#/components/responses/ProblemDetails400'
+        '404':
+          $ref: '#/components/responses/ProblemDetails404'
+
+components:
+  schemas:
+    CategoryTreeNode:
+      type: object
+      required:
+        - id
+        - nombre
+        - slug
+      properties:
+        id:
+          type: string
+        nombre:
+          type: string
+        slug:
+          type: string
+        incluye_comida:
+          type: boolean
+          default: false
+        incluye_transporte:
+          type: boolean
+          default: false
+        incluye_guia:
+          type: boolean
+          default: false
+        subcategorias:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryTreeNode'
+
+    SearchAtraccionesRequestV2:
+      type: object
+      properties:
+        query:
+          type: string
+          example: "Quito"
+        fecha_inicio:
+          type: string
+          format: date
+        categoria_id:
+          type: string
+        incluye_comida:
+          type: boolean
+        incluye_transporte:
+          type: boolean
+
+    SearchAtraccionesResponseV2:
+      type: object
+      properties:
+        request_id:
+          type: string
+          example: 'req-atr-9871'
+        metadata:
+          type: object
+          properties:
+            total_results:
+              type: integer
+              example: 45
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+            next_page:
+              type: string
+              example: 'eyJwYWdlIjoyfQ=='
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AtraccionCardResponseV2'
+
+    AtraccionCardResponseV2:
+      type: object
+      required:
+        - id
+        - name
+        - price
+      properties:
+        id:
+          type: string
+          example: "PRhu4UBTWPBC"
+        name:
+          type: string
+          example: "Quito City Bus Tour & Mitad del Mundo"
+        description:
+          type: string
+          example: "Recorrido turístico por el centro histórico y la Ciudad Mitad del Mundo con paradas emblemáticas."
+        duration:
+          type: string
+          example: "7 horas"
+        price:
+          type: object
+          properties:
+            currency:
+              type: string
+              example: "USD"
+            adult:
+              type: number
+              example: 30.00
+            child:
+              type: number
+              example: 15.00
+            total:
+              type: number
+              example: 30.00
+        rating:
+          type: object
+          properties:
+            score:
+              type: number
+              example: 9.8
+            review_count:
+              type: integer
+              example: 1250
+        free_cancellation:
+          type: boolean
+          example: true
+        inclusions:
+          type: object
+          properties:
+            incluye_comida:
+              type: boolean
+              example: true
+            incluye_transporte:
+              type: boolean
+              example: true
+            incluye_guia:
+              type: boolean
+              example: true
+        categoria_id:
+          type: string
+          example: "cat-tours-01"
+        categoria_nombre:
+          type: string
+          example: "Tours y Experiencias"
+        meeting_point:
+          type: string
+          example: "Boulevard Naciones Unidas y Av. Shyris"
+        photos:
+          type: array
+          items:
+            type: string
+          example:
+            - "https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?w=600"
+
+    AtraccionDetailResponseV2:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "PRhu4UBTWPBC"
+        name:
+          type: string
+          example: "Quito City Bus Tour & Mitad del Mundo"
+        description:
+          type: string
+        price:
+          type: object
+          properties:
+            currency:
+              type: string
+              example: "USD"
+            adult:
+              type: number
+              example: 30.00
+            child:
+              type: number
+              example: 15.00
+            total:
+              type: number
+              example: 30.00
+        rating:
+          type: object
+          properties:
+            score:
+              type: number
+              example: 9.8
+            review_count:
+              type: integer
+              example: 1250
+            breakdown:
+              type: object
+              properties:
+                limpieza:
+                  type: number
+                  example: 9.9
+                servicio:
+                  type: number
+                  example: 9.8
+                calidad_precio:
+                  type: number
+                  example: 9.6
+        duration:
+          type: string
+          example: "7 horas"
+        free_cancellation:
+          type: boolean
+          example: true
+        inclusions:
+          type: object
+          properties:
+            incluye_comida:
+              type: boolean
+              example: true
+            incluye_transporte:
+              type: boolean
+              example: true
+            incluye_guia:
+              type: boolean
+              example: true
+        itinerary:
+          type: array
+          items:
+            type: object
+            properties:
+              stop_number:
+                type: integer
+              title:
+                type: string
+              duration:
+                type: string
+        meeting_point:
+          type: string
+          example: "Boulevard Naciones Unidas y Av. Shyris"
+        images:
+          type: array
+          items:
+            type: string
+
+    TimeSlotItem:
+      type: object
+      properties:
+        time:
+          type: string
+          example: "10:30 a.m."
+        cupos:
+          type: integer
+          example: 8
+        estado:
+          type: string
+          enum: [DISPONIBLE, ULTIMOS_CUPOS, AGOTADO]
+
+    DisponibilidadResponse:
+      type: object
+      properties:
+        atraccion_id:
+          type: string
+        date:
+          type: string
+        time_slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeSlotItem'
+
+    CreateReservaRequestV2:
+      type: object
+      required:
+        - date
+        - time
+        - adult_count
+        - customer_name
+        - customer_email
+        - document_id
+      properties:
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          example: "10:30 a.m."
+        adult_count:
+          type: integer
+          minimum: 1
+        child_count:
+          type: integer
+          default: 0
+        customer_name:
+          type: string
+        customer_email:
+          type: string
+          format: email
+        customer_phone:
+          type: string
+        document_id:
+          type: string
+        special_requirements:
+          type: string
+
+    ReservaConfirmadaResponseV2:
+      type: object
+      properties:
+        reservation_id:
+          type: string
+        status:
+          type: string
+          example: "CONFIRMED"
+        ticket_count:
+          type: integer
+        total_price:
+          type: number
+        date:
+          type: string
+        time:
+          type: string
+        guia_asignado:
+          type: string
+        voucher_qr_url:
+          type: string
+
+    CheckinRequest:
+      type: object
+      required:
+        - documento_identidad
+      properties:
+        documento_identidad:
+          type: string
+        guia_asignado:
+          type: string
+
+    CheckinResponse:
+      type: object
+      properties:
+        reserva_id:
+          type: string
+        estado:
+          type: string
+          example: "CHECKED_IN"
+        titular_documento:
+          type: string
+        guia_asignado:
+          type: string
+        punto_encuentro:
+          type: string
+        voucher_digital_qr:
+          type: string
+        hora_checkin:
+          type: string
+          format: date-time
+
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - detail
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+
+  responses:
+    ProblemDetails400:
+      description: Parámetros inválidos
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ProblemDetails404:
+      description: Recurso no encontrado
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ProblemDetails409:
+      description: Conflicto de Idempotencia o Aforo Agotado
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ProblemDetails503:
+      description: Circuito abierto o proveedor no disponible
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT emitido para autenticación de usuarios y consumo de microservicios (RDA2 Semana 11)
+

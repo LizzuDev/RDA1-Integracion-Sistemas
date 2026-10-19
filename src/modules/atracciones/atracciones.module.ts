@@ -11,6 +11,9 @@ import { Atraccion } from './entities/atraccion.entity';
 import { ReservaAtraccion } from './entities/reserva.entity';
 import { ResenaAtraccion } from './entities/resena.entity';
 
+import { DilanAtraccionesAdapter } from './acl/dilan-atracciones.adapter';
+import { WinstonPhysicalLoggerService } from '../../core/logger/winston-logger.service';
+
 @Module({
   imports: [
     CommonModule, 
@@ -19,6 +22,7 @@ import { ResenaAtraccion } from './entities/resena.entity';
     CacheModule.register({ ttl: 60 * 1000 }) // Caché en memoria de 60 segundos
   ],
   controllers: [AtraccionesController],
-  providers: [AtraccionesService, PagoService, SoapWrapperService],
+  providers: [AtraccionesService, PagoService, SoapWrapperService, DilanAtraccionesAdapter, WinstonPhysicalLoggerService],
+  exports: [AtraccionesService, DilanAtraccionesAdapter, WinstonPhysicalLoggerService]
 })
 export class AtraccionesModule {}

@@ -6,17 +6,26 @@ import { AutosService } from './autos.service';
 import { AutosController } from './autos.controller';
 import { Auto } from './entities/auto.entity';
 import { OrderAuto } from './entities/order-auto.entity';
+import { MantenimientoAuto } from './entities/mantenimiento-auto.entity';
 import { CommonModule } from '../../common/common.module';
-import { PagoService } from '../atracciones/pago.service'; // We reuse PagoService or create a generic one
+import { PagoService } from '../atracciones/pago.service';
+import { AutosCircuitBreakerAdapter } from './acl/autos-circuit-breaker.adapter';
+import { WinstonPhysicalLoggerService } from '../../core/logger/winston-logger.service';
 
 @Module({
   imports: [
     CommonModule,
     HttpModule,
-    TypeOrmModule.forFeature([Auto, OrderAuto]),
+    TypeOrmModule.forFeature([Auto, OrderAuto, MantenimientoAuto]),
     CacheModule.register({ ttl: 60 * 1000 })
   ],
   controllers: [AutosController],
-  providers: [AutosService, PagoService],
+  providers: [
+    AutosService,
+    PagoService,
+    AutosCircuitBreakerAdapter,
+    WinstonPhysicalLoggerService
+  ],
+  exports: [AutosService]
 })
 export class AutosModule {}

@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package booking.nodehealth.v1;
+
+option go_package = "booking/nodehealth/v1;nodehealthv1";
+option java_multiple_files = true;
+option java_package = "com.booking.nodehealth.v1";
+option csharp_namespace = "Booking.NodeHealth.V1";
+option php_namespace = "Booking\\NodeHealth\\V1";
+option ruby_package = "Booking::NodeHealth::V1";
+
+import "v1/common.proto";
+import "google/protobuf/empty.proto";
+
+/**
+ * Node Health Service - Monitorización de nodos (páginas web individuales)
+ * Estados: conectado|desconectado|mantenimiento|error|desconocido
+ * Acciones: conectar/desconectar con autorización y auditoría
+ */
+
+service NodeHealthService {
+  // Registrar nodo
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+  
+  // Heartbeat periódico
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  
+  // Establecer estado operativo (conectar/desconectar)
+  rpc SetOperationalState(SetOperationalStateRequest) returns (SetOperationalStateResponse);
+  
+  // Obtener salud de nodo(s)
+  rpc GetNodeHealth(GetNodeHealthRequest) returns (GetNodeHealthResponse);
+  
+  // Ping para verificación
+  rpc Ping(booking.common.v1.NodeRef) returns (PingResponse);
+}
+
+message RegisterNodeRequest {
+  booking.common.v1.CorrelationContext ctx = 1;
+  booking.common.v1.NodeRef node_ref = 2;
+  string grpc_endpoint = 3;
+  string health_check_url = 4;
+  repeated string capabilities = 5;
+  string version_conector = 6;
+  int32 heartbeat_interval_ms = 7;
+  int32 timeout_ms = 8;
+  string actor_id = 9;
+}
+
+message RegisterNodeResponse {
+  bool success = 1;
+  string node_id = 2;
+  string status = 3;
+  booking.common.v1.Timestamp registered_at = 4;
+  booking.common.v1.ErrorDetail error = 5;
+}
+
+message HeartbeatRequest {
+  booking.common.v1.CorrelationContext ctx = 1;
+  string node_id = 2;
+  int64 timestamp_sent = 3;
+  string status = 4;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+  int32 latency_ms = 2;
+  booking.common.v1.Timestamp server_time = 3;
+  string next_action = 4;
+  booking.common.v1.ErrorDetail error = 5;
+}
+
+message SetOperationalStateRequest {
+  booking.common.v1.CorrelationContext ctx = 1;
+  string node_id = 2;
+  // activo|inactivo
+  string operational_state = 3;
+  string reason = 4;
+  booking.common.v1.Actor actor = 5;
+  string authorized_role = 6;
+}
+
+message SetOperationalStateResponse {
+  bool success = 1;
+  string previous_state = 2;
+  string current_state = 3;
+  booking.common.v1.Timestamp updated_at = 4;
+  booking.common.v1.ErrorDetail error = 5;
+}
+
+message GetNodeHealthRequest {
+  booking.common.v1.CorrelationContext ctx = 1;
+  string node_id = 2; // opcional: vacío = todos
+  bool include_history = 3;
+}
+
+message NodeHealthDetail {
+  string node_id = 1;
+  string node_code = 2;
+  string node_url_base = 3;
+  string estado_conexion = 4; // conectado|desconectado|mantenimiento|error|desconocido
+  string estado_operativo = 5; // activo|inactivo|bloqueado
+  int64 ultimo_heartbeat = 6;
+  int32 latencia_ms = 7;
+  int32 intentos_fallidos = 8;
+  int32 umbral_fallos = 9;
+  bool enabled = 10;
+}
+
+message GetNodeHealthResponse {
+  bool success = 1;
+  repeated NodeHealthDetail nodes = 2;
+  booking.common.v1.Timestamp generated_at = 3;
+  booking.common.v1.ErrorDetail error = 4;
+}
+
+message PingResponse {
+  bool success = 1;
+  int32 latency_ms = 2;
+  string status = 3;
+  booking.common.v1.Timestamp pong_at = 4;
+}
+EOF
+echo "ok"
