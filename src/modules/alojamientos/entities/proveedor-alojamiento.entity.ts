@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 
 /** Sistema externo que sincroniza alojamientos con una API key. */
-@Entity('proveedores_alojamiento')
+@Entity({ name: 'proveedores_alojamiento', schema: 'schema_alojamientos' })
 export class ProveedorAlojamiento {
   @PrimaryColumn({ type: 'varchar', length: 60 })
   id: string;

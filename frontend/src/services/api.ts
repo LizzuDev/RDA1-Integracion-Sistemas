@@ -111,6 +111,14 @@ api.interceptors.request.use(async (config) => {
     (config.headers as AxiosHeaders).set('Authorization', `Bearer ${accessToken}`);
   }
 
+  // Trazabilidad distribuida: inyectar X-Correlation-Id (RDA2)
+  if (!(config.headers as AxiosHeaders).get('X-Correlation-Id')) {
+    (config.headers as AxiosHeaders).set(
+      'X-Correlation-Id',
+      `corr-fe-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+    );
+  }
+
   if (esPublica) {
     /**
      * Las rutas publicas NO necesitan credenciales, y enviarlas perjudica: con

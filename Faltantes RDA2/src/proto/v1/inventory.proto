@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package booking.inventory.v1;
+
+option go_package = "booking/inventory/v1;inventoryv1";
+option java_multiple_files = true;
+option java_package = "com.booking.inventory.v1";
+option csharp_namespace = "Booking.Inventory.V1";
+option php_namespace = "Booking\\Inventory\\V1";
+option ruby_package = "Booking::Inventory::V1";
+
+import "v1/common.proto";
+
+/**
+ * Inventory Service - Sincronización de inventario web → Booking
+ * Regla RDA2: gRPC para sincronización continua de stock
+ * Compra: ÚNICAMENTE REST
+ */
+
+service InventoryService {
+  // Sincronización unaria puntual
+  rpc SyncStock(SyncStockRequest) returns (SyncStockResponse);
+  
+  // Streaming bidireccional continuo
+  rpc SyncStockStream(stream StockUpdateEvent) returns (stream StockAckEvent);
+  
+  // Heartbeat entre nodos y Booking
+  rpc Heartbeat(NodeInventoryHeartbeatRequest) returns (NodeInventoryHeartbeatResponse);
+  
+  // Validación de disponibilidad
+  rpc ValidateAvailability(ValidateAvailabilityRequest) returns (ValidateAvailabilityResponse);
+}
+
+message StockItem {
+  string tipo_recurso = 1; // auto|vuelo|atraccion|alojamiento
+  string recurso_id = 2;
+  string codigo_recurso = 3;
+  int32 cantidad_disponible = 4;
+  double precio_unitario = 5;
+  string moneda = 6; // ISO 4217
+  string valido_hasta = 7; // ISO 8601
+  map<string, string> metadata = 8;
+}
+
+message SyncStockRequest {
+  booking.common.v1.CorrelationContext ctx = 1;
+  booking.common.v1.NodeRef node_ref = 2;
+  repeated StockItem items = 3;
+  booking.common.v1.Timestamp ts = 4;
+}
+
+message SyncStockResponse {
+  bool success = 1;
+  int32 items_processed = 2;
+  string status = 3;
+  booking.common.v1.Timestamp processed_at = 4;
+  booking.common.v1.ErrorDetail error = 5;
+}
+
+message StockUpdateEvent {
+  booking.common.v1.CorrelationContext ctx = 1;
+  string event_id = 2;
+  booking.common.v1.NodeRef node_ref = 3;
+  string tipo_recurso = 4;
+  string recurso_id = 5;
+  int32 delta = 6; // cambio neto
+  int32 cantidad_final = 7;
+  double precio_unitario = 8;
+  string moneda = 9;
+  booking.common.v1.Timestamp ts = 10;
+  map<string, string> metadata = 11;
+}
+
+message StockAckEvent {
+  bool success = 1;
+  string event_id = 2;
+  string ack_id = 3;
+  string message = 4;
+  booking.common.v1.Timestamp ack_at = 5;
+  booking.common.v1.ErrorDetail error = 6;
+}
+
+message NodeInventoryHeartbeatRequest {
+  booking.common.v1.CorrelationContext ctx = 1;
+  string node_id = 2;
+  int64 sent_at = 3;
+}
+
+message NodeInventoryHeartbeatResponse {
+  bool success = 1;
+  int32 latency_ms = 2;
+  string status = 3;
+  booking.common.v1.Timestamp server_time = 4;
+}
+
+message ValidateAvailabilityRequest {
+  booking.common.v1.CorrelationContext ctx = 1;
+  string tipo_recurso = 2;
+  string recurso_id = 3;
+  int32 cantidad_solicitada = 4;
+  string fecha_inicio = 5; // ISO 8601
+  string fecha_fin = 6;
+}
+
+message ValidateAvailabilityResponse {
+  bool success = 1;
+  bool disponible = 2;
+  int32 cantidad_disponible = 3;
+  string message = 4;
+  booking.common.v1.ErrorDetail error = 5;
+}
+EOF
+echo "ok"

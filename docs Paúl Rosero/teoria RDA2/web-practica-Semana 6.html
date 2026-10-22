@@ -1,0 +1,835 @@
+<title>Semana 6 · Saga de Pedidos</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#f4f2ed; --surface:#ffffff; --surface-2:#eae6dc;
+    --ink:#1b2630; --ink-soft:#5b6970;
+    --accent:#1f7a6c; --accent-ink:#0f4a41; --accent-soft:#dcefea;
+    --amber:#a85a26; --amber-soft:#f3e3d3;
+    --danger:#a13f3f; --danger-soft:#f4dede;
+    --line: rgba(27,38,48,.14);
+    --radius:10px; --shadow:0 1px 2px rgba(27,38,48,.06);
+    --term-bg:#161b1e; --term-ink:#d7e0e0; --term-accent:#7fd9c4;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10161c; --surface:#161e25; --surface-2:#1c252c;
+      --ink:#e7ecec; --ink-soft:#9fb0b6;
+      --accent:#4fc3ae; --accent-ink:#bdeee2; --accent-soft: rgba(79,195,174,.16);
+      --amber:#e2a164; --amber-soft: rgba(226,161,100,.16);
+      --danger:#e58080; --danger-soft: rgba(229,128,128,.14);
+      --line: rgba(231,236,236,.14); --shadow:0 1px 2px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10161c; --surface:#161e25; --surface-2:#1c252c;
+    --ink:#e7ecec; --ink-soft:#9fb0b6;
+    --accent:#4fc3ae; --accent-ink:#bdeee2; --accent-soft: rgba(79,195,174,.16);
+    --amber:#e2a164; --amber-soft: rgba(226,161,100,.16);
+    --danger:#e58080; --danger-soft: rgba(229,128,128,.14);
+    --line: rgba(231,236,236,.14); --shadow:0 1px 2px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:'Source Serif 4',Georgia,serif; line-height:1.62;}
+  h1,h2,h3,h4,button,.mono,.badge,nav{font-family:'Manrope',system-ui,sans-serif;}
+  code,pre,.mono-num{font-family:'JetBrains Mono',ui-monospace,monospace;}
+  h1,h2,h3,h4{text-wrap:balance; font-weight:800; letter-spacing:-.01em; color:var(--ink);}
+  a{color:var(--accent-ink);}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  .topbar{position:sticky; top:0; z-index:5; background:var(--surface); border-bottom:1px solid var(--line); padding:12px clamp(16px,5vw,40px);}
+  .topbar-row{display:flex; align-items:center; justify-content:space-between; gap:16px; max-width:780px; margin:0 auto;}
+  .topbar .kicker{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent-ink); font-weight:700;}
+  .topbar h1{font-size:16px; margin:2px 0 0;}
+  .progress-wrap{display:flex; align-items:center; gap:10px; font-size:11px; color:var(--ink-soft);}
+  .progress-track{width:110px; height:6px; border-radius:4px; background:var(--surface-2); overflow:hidden;}
+  .progress-fill{height:100%; width:0%; background:var(--accent); transition:width .25s;}
+  .theme-btn{font-size:11.5px; font-weight:700; border:1px solid var(--line); background:var(--surface-2); color:var(--ink); padding:6px 10px; border-radius:8px; cursor:pointer;}
+  .theme-btn:hover{border-color:var(--accent);}
+
+  main{padding:44px clamp(16px,5vw,40px) 100px;}
+  .doc{max-width:780px; margin:0 auto;}
+
+  header.hero{margin-bottom:28px;}
+  .hero .kicker{font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent-ink); font-weight:700; display:flex; gap:8px; align-items:center;}
+  .hero .kicker::before{content:""; width:22px; height:1.5px; background:var(--accent);}
+  .hero h1{font-size:clamp(26px,4vw,34px); margin:10px 0 12px;}
+  .hero p{font-family:'Manrope',sans-serif; color:var(--ink-soft); font-size:14px; max-width:64ch; margin:0 0 14px;}
+  .meta-row{display:flex; gap:8px; flex-wrap:wrap;}
+  .badge{font-size:11px; font-weight:700; padding:5px 10px; border-radius:100px; background:var(--surface-2); color:var(--ink-soft); border:1px solid var(--line);}
+
+  .rule-box{font-family:'Manrope',sans-serif; font-size:13px; background:var(--accent-soft); border:1px solid var(--accent); border-radius:9px; padding:14px 16px; margin-bottom:16px; color:var(--ink);}
+  .rule-box strong{color:var(--accent-ink);}
+  .note-box{font-family:'Manrope',sans-serif; font-size:13px; background:var(--surface-2); border:1px dashed var(--line); border-radius:9px; padding:14px 16px; margin-bottom:28px; color:var(--ink-soft);}
+  .note-box strong{color:var(--ink);}
+
+  .checklist{list-style:none; margin:18px 0; padding:0; display:grid; gap:8px;}
+  .checklist li{display:flex; gap:10px; align-items:flex-start; font-family:'Manrope',sans-serif; font-size:13.5px;}
+  .checklist input{margin-top:3px; width:16px; height:16px; accent-color:var(--accent); flex:none;}
+
+  .stepper{display:flex; align-items:flex-start; gap:0; margin:8px 0 40px; overflow-x:auto; padding-bottom:4px;}
+  .stepper-item{flex:1; min-width:62px; display:flex; flex-direction:column; align-items:center; gap:6px; position:relative; background:none; border:none; padding:0; cursor:pointer; font-family:'Manrope',sans-serif;}
+  .stepper-item::after{content:""; position:absolute; top:14px; left:50%; width:100%; height:2px; background:var(--line); z-index:0;}
+  .stepper-item:last-child::after{display:none;}
+  .stepper-item.done::after{background:var(--accent);}
+  .stepper-num{position:relative; z-index:1; width:28px; height:28px; border-radius:50%; background:var(--surface); border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:600; font-size:11.5px; color:var(--ink-soft);}
+  .stepper-item.current .stepper-num{border-color:var(--accent); color:var(--accent-ink);}
+  .stepper-item.done .stepper-num{background:var(--accent); border-color:var(--accent); color:var(--surface);}
+  .stepper-item.locked .stepper-num{opacity:.5;}
+  .stepper-label{font-size:9px; text-align:center; color:var(--ink-soft); line-height:1.2; max-width:70px;}
+  .stepper-item.current .stepper-label{color:var(--ink); font-weight:700;}
+
+  section.step{border-left:2px solid var(--line); padding-left:26px; margin-left:6px; position:relative; margin-bottom:22px; scroll-margin-top:90px; transition:border-color .2s, opacity .2s;}
+  section.step::before{content: attr(data-n); position:absolute; left:-19px; top:-2px; width:36px; height:36px; border-radius:50%; background:var(--surface); border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:600; font-size:13px; color:var(--ink-soft);}
+  section.step.current{border-left-color:var(--accent);}
+  section.step.current::before{border-color:var(--accent); color:var(--accent-ink);}
+  section.step.done::before{background:var(--accent); border-color:var(--accent); color:var(--surface); content:"✓";}
+  section.step.locked{opacity:.5;}
+  section.step .eyebrow{font-size:11.5px; font-weight:700; color:var(--accent-ink); letter-spacing:.05em; display:block; margin-bottom:4px;}
+  section.step h2{font-size:19px; margin:0 0 10px;}
+  section.step h4{font-size:13.5px; margin:16px 0 6px;}
+  section.step p{margin:0 0 12px;}
+  section.step ul, section.step ol{margin:0 0 12px; padding-left:20px;}
+  section.step li{margin-bottom:6px;}
+
+  .verify-box{background:var(--surface); border:1px solid var(--accent); border-radius:9px; padding:14px 16px; margin-top:16px;}
+  .verify-box .vt{font-family:'Manrope',sans-serif; font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--accent-ink); margin-bottom:8px; display:flex; align-items:center; gap:6px;}
+  .verify-box .vt::before{content:"✔";}
+  .verify-list{list-style:none; margin:0; padding:0; display:grid; gap:7px;}
+  .verify-list li{display:flex; gap:9px; align-items:flex-start; font-family:'Manrope',sans-serif; font-size:12.5px;}
+  .verify-list input{margin-top:2px; width:15px; height:15px; accent-color:var(--accent); flex:none;}
+
+  .step-actions{display:flex; align-items:center; gap:12px; margin-top:16px; padding-top:16px; border-top:1px dashed var(--line); flex-wrap:wrap;}
+  .step-done-btn{font-family:'Manrope',sans-serif; font-weight:700; font-size:12.5px; padding:9px 15px; border-radius:8px; border:1px solid var(--accent); background:var(--accent-soft); color:var(--accent-ink); cursor:pointer;}
+  .step-done-btn:hover:not(:disabled){background:var(--accent); color:var(--surface);}
+  .step-done-btn.on{background:var(--accent); color:var(--surface);}
+  .step-done-btn:disabled{opacity:.4; cursor:not-allowed;}
+  .step-done-note{font-family:'Manrope',sans-serif; font-size:11.5px; color:var(--ink-soft);}
+
+  .term{background:var(--term-bg); color:var(--term-ink); border-radius:9px; overflow:hidden; margin:14px 0; box-shadow:var(--shadow); border:1px solid var(--line);}
+  .term-bar{display:flex; align-items:center; justify-content:space-between; padding:8px 14px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#8fa0a0; background:rgba(255,255,255,.03); border-bottom:1px solid rgba(255,255,255,.06);}
+  .term-copy{background:transparent; border:1px solid rgba(255,255,255,.18); color:#cfe0e0; font-size:10.5px; padding:3px 8px; border-radius:6px; cursor:pointer; font-family:'Manrope',sans-serif;}
+  .term-copy:hover{border-color:var(--term-accent); color:var(--term-accent);}
+  .term pre{margin:0; padding:14px 16px; overflow-x:auto; font-family:'JetBrains Mono',monospace; font-size:12.5px; line-height:1.65;}
+  .term .k{color:var(--term-accent);}
+  .term .cm{color:#8fa0a0;}
+
+  pre.code-block{background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:14px 16px; overflow-x:auto; font-size:12.3px; line-height:1.6; margin:10px 0;}
+
+  .callout{border-radius:var(--radius); padding:16px 18px; margin:16px 0; font-family:'Manrope',sans-serif; font-size:13.5px; border:1px solid;}
+  .callout.think{background:var(--surface-2); border-color:var(--line);}
+  .callout.warn{background:var(--amber-soft); border-color:var(--amber);}
+  .callout h4{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em;}
+  .callout.think h4{color:var(--ink-soft);}
+  .callout.warn h4{color:var(--amber);}
+  .callout ul,.callout ol{margin:0; padding-left:18px;}
+  .callout li{margin-bottom:5px;}
+
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-family:'Manrope',sans-serif; font-size:13px;}
+  caption{caption-side:top; text-align:left; font-weight:700; font-size:12.5px; color:var(--ink-soft); margin-bottom:8px;}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line);}
+  th{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft);}
+  td code{font-size:12px;}
+
+  .ai-box{border:1px solid var(--amber); background:var(--amber-soft); border-radius:var(--radius); padding:18px 20px; margin:18px 0;}
+  .ai-box h4{margin:0 0 10px; font-size:12.5px; color:var(--amber); text-transform:uppercase; letter-spacing:.05em; display:flex; gap:7px; align-items:center;}
+  .ai-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; font-family:'Manrope',sans-serif; font-size:13px;}
+  @media(max-width:600px){.ai-grid{grid-template-columns:1fr;}}
+  .ai-grid h5{margin:0 0 6px; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;}
+  .ai-grid .yes h5{color:var(--accent-ink);}
+  .ai-grid .no h5{color:var(--danger);}
+  .ai-grid ul{margin:0; padding-left:16px;}
+
+  .declaration{font-family:'JetBrains Mono',monospace; font-size:12px; background:var(--surface-2); border:1px dashed var(--line); border-radius:8px; padding:14px 16px; margin-top:10px; white-space:pre-wrap;}
+
+  .final-check{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px; box-shadow:var(--shadow);}
+  footer.doc-foot{margin-top:40px; padding-top:20px; border-top:1px solid var(--line); font-family:'Manrope',sans-serif; font-size:12.5px; color:var(--ink-soft); display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+</style>
+
+<div class="topbar">
+  <div class="topbar-row">
+    <div>
+      <div class="kicker">Semana 6 · Práctica</div>
+      <h1>Saga de Pedidos (EDA)</h1>
+    </div>
+    <div class="progress-wrap">
+      <span id="progressLabel">0/10 pasos</span>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <button class="theme-btn" id="themeBtn" type="button">Sistema</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="doc">
+    <header class="hero">
+      <span class="kicker">Horas de práctica de laboratorio</span>
+      <h1>Construye una Saga coreografiada real, con compensación</h1>
+      <p>Vas a construir <strong>4 microservicios NestJS</strong> independientes que se comunican exclusivamente por eventos a través de <strong>RabbitMQ</strong> (<code>@nestjs/microservices</code>, <code>Transport.RMQ</code>): Pedido → Inventario → Pago → Notificaciones, con un correlation-id propagado en cada evento y una compensación real cuando el pago falla.</p>
+      <div class="meta-row">
+        <span class="badge">2.5 h laboratorio</span>
+        <span class="badge">NestJS · @nestjs/microservices · RabbitMQ</span>
+        <span class="badge">Nivel: Saga coreografiada + reto orquestado</span>
+      </div>
+    </header>
+
+    <div class="rule-box">
+      <strong>Regla de esta guía:</strong> sigue los pasos en orden, sin saltarte ninguno. El botón "Marcar paso completado" solo se activa cuando confirmas la Verificación del paso. El <strong>Paso 6 (compensación)</strong> es el corazón de esta semana — no lo apures.
+    </div>
+    <div class="note-box">
+      <strong>Nota:</strong> esta semana no tiene una versión previa en C#/.NET — nace directamente en NestJS. El proyecto original de facturación en .NET Framework + SQL Server de <code>contenido/clase 6/practica semana 6.docx</code> (arquitectura por capas, EF6, Saga sobre 3 microservicios de facturación) queda como pista extendida/opcional para quien quiera profundizar en un caso mucho más grande.
+    </div>
+
+    <nav class="stepper" id="stepper" aria-label="Ruta paso a paso de la Saga de Pedidos">
+      <button class="stepper-item" data-target="step0"><span class="stepper-num">0</span><span class="stepper-label">Entorno</span></button>
+      <button class="stepper-item" data-target="step1"><span class="stepper-num">1</span><span class="stepper-label">4 proyectos</span></button>
+      <button class="stepper-item" data-target="step2"><span class="stepper-num">2</span><span class="stepper-label">Pedido</span></button>
+      <button class="stepper-item" data-target="step3"><span class="stepper-num">3</span><span class="stepper-label">Inventario</span></button>
+      <button class="stepper-item" data-target="step4"><span class="stepper-num">4</span><span class="stepper-label">Pago</span></button>
+      <button class="stepper-item" data-target="step5"><span class="stepper-num">5</span><span class="stepper-label">Flujo feliz</span></button>
+      <button class="stepper-item" data-target="step6"><span class="stepper-num">6</span><span class="stepper-label">Compensación</span></button>
+      <button class="stepper-item" data-target="step7"><span class="stepper-num">7</span><span class="stepper-label">Cerrar ciclo</span></button>
+      <button class="stepper-item" data-target="step8"><span class="stepper-num">8</span><span class="stepper-label">Reto orquestado</span></button>
+      <button class="stepper-item" data-target="step9"><span class="stepper-num">9</span><span class="stepper-label">Entregar</span></button>
+    </nav>
+
+    <!-- PASO 0 -->
+    <section class="step" data-n="0" id="step0">
+      <span class="eyebrow">Paso 0</span>
+      <h2>Verificar el entorno y RabbitMQ</h2>
+      <ol>
+        <li>Confirma <code>node --version</code> (18+) y <code>npm --version</code>.</li>
+        <li>Instala el CLI de NestJS si no lo tienes: <code>npm install -g @nestjs/cli</code>.</li>
+        <li>Levanta RabbitMQ (si ya tienes el contenedor de la Semana 5 corriendo, sáltate este comando).</li>
+      </ol>
+      <div class="term">
+        <div class="term-bar"><span>terminal</span><button class="term-copy" data-copy="docker run -d --name rabbitmq-integracion -p 5672:5672 -p 15672:15672 rabbitmq:3-management">Copiar</button></div>
+        <pre><span class="k">$</span> docker run -d --name rabbitmq-integracion -p 5672:5672 -p 15672:15672 rabbitmq:3-management</pre>
+      </div>
+      <p>Abre <code>http://localhost:15672</code> e inicia sesión con <code>guest</code> / <code>guest</code>.</p>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 0</div>
+        <ul class="verify-list" data-step="step0">
+          <li><input type="checkbox" data-v="0"><span><code>node --version</code>, <code>npm --version</code> y <code>nest --version</code> responden correctamente.</span></li>
+          <li><input type="checkbox" data-v="1"><span>La consola de administración de RabbitMQ carga en el navegador.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step0" data-next="step1" disabled>✓ Marcar paso 0 completado → ir al paso 1</button>
+        <span class="step-done-note">Marca ambas casillas para continuar.</span>
+      </div>
+    </section>
+
+    <!-- PASO 1 -->
+    <section class="step" data-n="1" id="step1">
+      <span class="eyebrow">Paso 1</span>
+      <h2>Crear los 4 proyectos NestJS</h2>
+      <div class="term">
+        <div class="term-bar"><span>terminal</span><button class="term-copy" data-copy="nest new nestjs-pedido-service
+nest new nestjs-inventario-service
+nest new nestjs-pago-service
+nest new nestjs-notificaciones-service">Copiar</button></div>
+        <pre><span class="k">$</span> nest new nestjs-pedido-service
+<span class="k">$</span> nest new nestjs-inventario-service
+<span class="k">$</span> nest new nestjs-pago-service
+<span class="k">$</span> nest new nestjs-notificaciones-service</pre>
+      </div>
+      <p>Cuando <code>nest new</code> pregunte el gestor de paquetes, elige <code>npm</code>. Luego, en <strong>cada uno</strong> de los 4 proyectos:</p>
+      <div class="term">
+        <div class="term-bar"><span>terminal</span><button class="term-copy" data-copy="npm install @nestjs/microservices amqplib amqp-connection-manager">Copiar</button></div>
+        <pre><span class="k">$</span> npm install @nestjs/microservices amqplib amqp-connection-manager</pre>
+      </div>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 1</div>
+        <ul class="verify-list" data-step="step1">
+          <li><input type="checkbox" data-v="0"><span>Los 4 proyectos existen, cada uno con su propio <code>node_modules</code> y <code>package.json</code>.</span></li>
+          <li><input type="checkbox" data-v="1"><span><code>npm install</code> terminó sin errores en los 4.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step1" data-next="step2" disabled>✓ Marcar paso 1 completado → ir al paso 2</button>
+        <span class="step-done-note">Marca ambas casillas para continuar.</span>
+      </div>
+    </section>
+
+    <!-- PASO 2 -->
+    <section class="step" data-n="2" id="step2">
+      <span class="eyebrow">Paso 2</span>
+      <h2><code>nestjs-pedido-service</code>: crear el pedido y publicar <code>PedidoCreado</code></h2>
+      <p>Reemplaza <code>src/app.module.ts</code>:</p>
+      <pre class="code-block">import { Module } from '@nestjs/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AppController } from './app.controller';
+
+@Module({
+  imports: [
+    ClientsModule.register([
+      {
+        name: 'INVENTARIO_SERVICE',
+        transport: Transport.RMQ,
+        options: {
+          urls: ['amqp://localhost:5672'],
+          queue: 'inventario_queue',
+          queueOptions: { durable: false },
+        },
+      },
+    ]),
+  ],
+  controllers: [AppController],
+})
+export class AppModule {}</pre>
+      <p>Reemplaza <code>src/app.controller.ts</code>:</p>
+      <pre class="code-block">import { Controller, Post, Body, Inject } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
+import { randomUUID } from 'crypto';
+
+const PEDIDOS: Record&lt;string, any&gt; = {};
+
+@Controller('pedidos')
+export class AppController {
+  constructor(@Inject('INVENTARIO_SERVICE') private readonly inventarioClient: ClientProxy) {}
+
+  @Post()
+  crearPedido(@Body() body: { productoId: number; cantidad: number }) {
+    const correlationId = 'cid-' + randomUUID().slice(0, 8);
+    const pedido = { pedidoId: correlationId, ...body, estado: 'Creado' };
+    PEDIDOS[correlationId] = pedido;
+
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: 'PedidoService',
+      event_emitted: 'PedidoCreado',
+      correlation_id: correlationId,
+      status: 'ok',
+    }));
+
+    this.inventarioClient.emit('pedido_creado', { correlationId, ...body });
+    return pedido;
+  }
+}</pre>
+      <div class="callout think">
+        <h4>Piensa</h4>
+        <p style="margin:0;"><code>crearPedido</code> no espera ninguna respuesta de Inventario: publica el evento y responde de inmediato — es el desacoplamiento temporal de la teoría §6.4.</p>
+      </div>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 2</div>
+        <ul class="verify-list" data-step="step2">
+          <li><input type="checkbox" data-v="0"><span><code>npm run build</code> en <code>nestjs-pedido-service</code> no reporta errores de TypeScript.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step2" data-next="step3" disabled>✓ Marcar paso 2 completado → ir al paso 3</button>
+        <span class="step-done-note">Aún no lo ejecutes — falta el Paso 3.</span>
+      </div>
+    </section>
+
+    <!-- PASO 3 -->
+    <section class="step" data-n="3" id="step3">
+      <span class="eyebrow">Paso 3</span>
+      <h2><code>nestjs-inventario-service</code>: reservar stock (coreografía)</h2>
+      <p>Reemplaza <code>src/app.module.ts</code>:</p>
+      <pre class="code-block">import { Module } from '@nestjs/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AppController } from './app.controller';
+
+@Module({
+  imports: [
+    ClientsModule.register([
+      {
+        name: 'PAGO_SERVICE',
+        transport: Transport.RMQ,
+        options: { urls: ['amqp://localhost:5672'], queue: 'pago_queue', queueOptions: { durable: false } },
+      },
+    ]),
+  ],
+  controllers: [AppController],
+})
+export class AppModule {}</pre>
+      <p>Reemplaza <code>src/app.controller.ts</code>:</p>
+      <pre class="code-block">import { Controller, Inject } from '@nestjs/common';
+import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
+
+const STOCK: Record&lt;number, number&gt; = { 1: 10, 2: 15, 3: 5 };
+const RESERVAS: Record&lt;string, { productoId: number; cantidad: number }&gt; = {};
+
+@Controller()
+export class AppController {
+  constructor(@Inject('PAGO_SERVICE') private readonly pagoClient: ClientProxy) {}
+
+  @EventPattern('pedido_creado')
+  reservarStock(@Payload() data: { correlationId: string; productoId: number; cantidad: number }) {
+    const inicio = Date.now();
+    const disponible = (STOCK[data.productoId] ?? 0) &gt;= data.cantidad;
+
+    if (disponible) {
+      STOCK[data.productoId] -= data.cantidad;
+      RESERVAS[data.correlationId] = { productoId: data.productoId, cantidad: data.cantidad };
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), service: 'InventarioService',
+        event_received: 'PedidoCreado', event_emitted: 'InventarioReservado',
+        correlation_id: data.correlationId, status: 'processed', duration_ms: Date.now() - inicio,
+      }));
+      this.pagoClient.emit('inventario_reservado', data);
+    } else {
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), service: 'InventarioService',
+        event_received: 'PedidoCreado', event_emitted: 'InventarioRechazado',
+        correlation_id: data.correlationId, status: 'rejected', duration_ms: Date.now() - inicio,
+      }));
+    }
+  }
+
+  @EventPattern('pago_fallido')
+  revertirReserva(@Payload() data: { correlationId: string }) {
+    const reserva = RESERVAS[data.correlationId];
+    if (reserva) {
+      STOCK[reserva.productoId] += reserva.cantidad;
+      delete RESERVAS[data.correlationId];
+    }
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), service: 'InventarioService',
+      event_received: 'PagoFallido', event_emitted: 'InventarioLiberado (compensación)',
+      correlation_id: data.correlationId, status: 'compensated',
+    }));
+  }
+}</pre>
+      <p>Edita <code>src/main.ts</code> para arrancarlo como <strong>microservicio puro</strong> (sin servidor HTTP):</p>
+      <pre class="code-block">import { NestFactory } from '@nestjs/core';
+import { Transport } from '@nestjs/microservices';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.createMicroservice(AppModule, {
+    transport: Transport.RMQ,
+    options: { urls: ['amqp://localhost:5672'], queue: 'inventario_queue', queueOptions: { durable: false } },
+  });
+  await app.listen();
+  console.log('InventarioService escuchando en inventario_queue');
+}
+bootstrap();</pre>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 3</div>
+        <ul class="verify-list" data-step="step3">
+          <li><input type="checkbox" data-v="0"><span><code>npm run build</code> no reporta errores.</span></li>
+          <li><input type="checkbox" data-v="1"><span>Entiendo por qué hay <strong>dos</strong> <code>@EventPattern</code> escuchando la misma cola <code>inventario_queue</code>.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step3" data-next="step4" disabled>✓ Marcar paso 3 completado → ir al paso 4</button>
+        <span class="step-done-note">Marca ambas casillas para continuar.</span>
+      </div>
+    </section>
+
+    <!-- PASO 4 -->
+    <section class="step" data-n="4" id="step4">
+      <span class="eyebrow">Paso 4</span>
+      <h2><code>nestjs-pago-service</code>: procesar el pago</h2>
+      <p>Reemplaza <code>src/app.module.ts</code>:</p>
+      <pre class="code-block">import { Module } from '@nestjs/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { AppController } from './app.controller';
+
+@Module({
+  imports: [
+    ClientsModule.register([
+      { name: 'NOTIFICACIONES_SERVICE', transport: Transport.RMQ, options: { urls: ['amqp://localhost:5672'], queue: 'notificaciones_queue', queueOptions: { durable: false } } },
+      { name: 'INVENTARIO_SERVICE', transport: Transport.RMQ, options: { urls: ['amqp://localhost:5672'], queue: 'inventario_queue', queueOptions: { durable: false } } },
+    ]),
+  ],
+  controllers: [AppController],
+})
+export class AppModule {}</pre>
+      <p>Reemplaza <code>src/app.controller.ts</code> (por ahora el pago siempre tiene éxito — el fallo lo agregas en el Paso 6):</p>
+      <pre class="code-block">import { Controller, Inject } from '@nestjs/common';
+import { ClientProxy, EventPattern, Payload } from '@nestjs/microservices';
+
+@Controller()
+export class AppController {
+  constructor(
+    @Inject('NOTIFICACIONES_SERVICE') private readonly notiClient: ClientProxy,
+    @Inject('INVENTARIO_SERVICE') private readonly inventarioClient: ClientProxy,
+  ) {}
+
+  @EventPattern('inventario_reservado')
+  procesarPago(@Payload() data: { correlationId: string; productoId: number; cantidad: number }) {
+    const inicio = Date.now();
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), service: 'PagoService',
+      event_received: 'InventarioReservado', event_emitted: 'PagoProcesado',
+      correlation_id: data.correlationId, status: 'processed', duration_ms: Date.now() - inicio,
+    }));
+    this.notiClient.emit('pago_procesado', data);
+  }
+}</pre>
+      <p>Edita <code>src/main.ts</code> como microservicio puro sobre <code>pago_queue</code> (mismo patrón del Paso 3, cambiando el nombre de la cola y el mensaje de log).</p>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 4</div>
+        <ul class="verify-list" data-step="step4">
+          <li><input type="checkbox" data-v="0"><span><code>npm run build</code> no reporta errores en <code>nestjs-pago-service</code>.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step4" data-next="step5" disabled>✓ Marcar paso 4 completado → ir al paso 5</button>
+        <span class="step-done-note">Marca la casilla para continuar.</span>
+      </div>
+    </section>
+
+    <!-- PASO 5 -->
+    <section class="step" data-n="5" id="step5">
+      <span class="eyebrow">Paso 5</span>
+      <h2><code>nestjs-notificaciones-service</code> y prueba del flujo feliz completo</h2>
+      <p>Reemplaza <code>src/app.module.ts</code> (sin <code>ClientsModule</code> — es el último eslabón):</p>
+      <pre class="code-block">import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+
+@Module({ controllers: [AppController] })
+export class AppModule {}</pre>
+      <p>Reemplaza <code>src/app.controller.ts</code>:</p>
+      <pre class="code-block">import { Controller } from '@nestjs/common';
+import { EventPattern, Payload } from '@nestjs/microservices';
+
+@Controller()
+export class AppController {
+  @EventPattern('pago_procesado')
+  notificar(@Payload() data: { correlationId: string }) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), service: 'NotificacionesService',
+      event_received: 'PagoProcesado', status: 'processed', correlation_id: data.correlationId,
+    }));
+    console.log(`✅ Pedido ${data.correlationId} confirmado. Se notificó al cliente.`);
+  }
+}</pre>
+      <p>Edita <code>src/main.ts</code> como microservicio puro sobre <code>notificaciones_queue</code>. Ahora arranca las <strong>cuatro</strong> aplicaciones, cada una en su propia terminal:</p>
+      <div class="term">
+        <div class="term-bar"><span>terminal 1-4</span><button class="term-copy" data-copy="cd nestjs-inventario-service && npm run start
+cd nestjs-pago-service && npm run start
+cd nestjs-notificaciones-service && npm run start
+cd nestjs-pedido-service && npm run start">Copiar</button></div>
+        <pre><span class="cm"># terminal 1</span>
+<span class="k">$</span> cd nestjs-inventario-service && npm run start
+<span class="cm"># terminal 2</span>
+<span class="k">$</span> cd nestjs-pago-service && npm run start
+<span class="cm"># terminal 3</span>
+<span class="k">$</span> cd nestjs-notificaciones-service && npm run start
+<span class="cm"># terminal 4 (última, expone HTTP)</span>
+<span class="k">$</span> cd nestjs-pedido-service && npm run start</pre>
+      </div>
+      <p>Prueba el flujo feliz:</p>
+      <div class="term">
+        <div class="term-bar"><span>terminal</span><button class="term-copy" data-copy="curl -X POST http://localhost:3000/pedidos -H &quot;Content-Type: application/json&quot; -d &quot;{\&quot;productoId\&quot;:1,\&quot;cantidad\&quot;:2}&quot;">Copiar</button></div>
+        <pre><span class="k">$</span> curl -X POST http://localhost:3000/pedidos -H "Content-Type: application/json" -d "{\"productoId\":1,\"cantidad\":2}"</pre>
+      </div>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 5</div>
+        <ul class="verify-list" data-step="step5">
+          <li><input type="checkbox" data-v="0"><span>Veo, en orden, el log de PedidoService, luego InventarioService, luego PagoService.</span></li>
+          <li><input type="checkbox" data-v="1"><span>NotificacionesService imprime "✅ Pedido ... confirmado" al final.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step5" data-next="step6" disabled>✓ Marcar paso 5 completado → ir al paso 6</button>
+        <span class="step-done-note">No avances sin ver las 4 líneas en orden.</span>
+      </div>
+    </section>
+
+    <!-- PASO 6 -->
+    <section class="step" data-n="6" id="step6">
+      <span class="eyebrow">Paso 6 — El corazón de la semana</span>
+      <h2>La compensación: simular un fallo de pago</h2>
+      <p>Modifica <code>src/app.controller.ts</code> de <code>nestjs-pago-service</code> para que el pago falle una parte de las veces:</p>
+      <pre class="code-block">@EventPattern('inventario_reservado')
+procesarPago(@Payload() data: { correlationId: string; productoId: number; cantidad: number }) {
+  const inicio = Date.now();
+  const pagoExitoso = Math.random() &gt; 0.4; // ~60% de éxito
+
+  if (pagoExitoso) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), service: 'PagoService',
+      event_received: 'InventarioReservado', event_emitted: 'PagoProcesado',
+      correlation_id: data.correlationId, status: 'processed', duration_ms: Date.now() - inicio,
+    }));
+    this.notiClient.emit('pago_procesado', data);
+  } else {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), service: 'PagoService',
+      event_received: 'InventarioReservado', event_emitted: 'PagoFallido',
+      correlation_id: data.correlationId, status: 'error',
+      error: 'timeout de la pasarela de pago (simulado)', duration_ms: Date.now() - inicio,
+    }));
+    this.inventarioClient.emit('pago_fallido', data);
+  }
+}</pre>
+      <p>Reinicia <code>nestjs-pago-service</code> y ejecuta el mismo <code>curl</code> del Paso 5 <strong>varias veces seguidas</strong> (al menos 8-10 veces) para observar ambos caminos.</p>
+      <div class="callout warn">
+        <h4>Si en 10 intentos nunca ves el fallo</h4>
+        <p style="margin:0;">Sube la probabilidad temporalmente: <code>Math.random() &gt; 0.2</code>, y repite.</p>
+      </div>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 6</div>
+        <ul class="verify-list" data-step="step6">
+          <li><input type="checkbox" data-v="0"><span>Vi al menos una ejecución donde PagoService registra <code>status: "error"</code> y emite PagoFallido.</span></li>
+          <li><input type="checkbox" data-v="1"><span>Vi que InventarioService recibe PagoFallido y registra <code>status: "compensated"</code>.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step6" data-next="step7" disabled>✓ Marcar paso 6 completado → ir al paso 7</button>
+        <span class="step-done-note">No sigas sin haber visto el camino de compensación ocurrir de verdad.</span>
+      </div>
+    </section>
+
+    <!-- PASO 7 -->
+    <section class="step" data-n="7" id="step7">
+      <span class="eyebrow">Paso 7</span>
+      <h2>Cerrar el círculo: <code>InventarioLiberado</code> de vuelta a Pedido</h2>
+      <p>En <code>nestjs-inventario-service</code>, agrega el cliente hacia <code>pedido_queue</code> en <code>src/app.module.ts</code> (junto al de <code>PAGO_SERVICE</code>):</p>
+      <pre class="code-block">{ name: 'PEDIDO_SERVICE', transport: Transport.RMQ, options: { urls: ['amqp://localhost:5672'], queue: 'pedido_queue', queueOptions: { durable: false } } },</pre>
+      <p>Inyecta ese cliente y, al final de <code>revertirReserva</code>, agrega:</p>
+      <pre class="code-block">this.pedidoClient.emit('inventario_liberado', data);</pre>
+      <p>En <code>nestjs-pedido-service</code>, conviértelo en app <strong>híbrida</strong> editando <code>src/main.ts</code>:</p>
+      <pre class="code-block">import { NestFactory } from '@nestjs/core';
+import { Transport } from '@nestjs/microservices';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.connectMicroservice({
+    transport: Transport.RMQ,
+    options: { urls: ['amqp://localhost:5672'], queue: 'pedido_queue', queueOptions: { durable: false } },
+  });
+  await app.startAllMicroservices();
+  await app.listen(3000);
+  console.log('PedidoService: HTTP en :3000 + escuchando pedido_queue');
+}
+bootstrap();</pre>
+      <p>Y agrega en <code>src/app.controller.ts</code>:</p>
+      <pre class="code-block">@EventPattern('inventario_liberado')
+cancelarPedido(@Payload() data: { correlationId: string }) {
+  if (PEDIDOS[data.correlationId]) PEDIDOS[data.correlationId].estado = 'Cancelado';
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(), service: 'PedidoService',
+    event_received: 'InventarioLiberado', correlation_id: data.correlationId, status: 'cancelled',
+  }));
+}</pre>
+      <p>Reinicia <code>nestjs-inventario-service</code> y <code>nestjs-pedido-service</code>.</p>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 7</div>
+        <ul class="verify-list" data-step="step7">
+          <li><input type="checkbox" data-v="0"><span>Al provocar un fallo de pago, la última línea en la terminal de PedidoService tiene <code>status: "cancelled"</code> con el mismo <code>correlation_id</code>.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step7" data-next="step8" disabled>✓ Marcar paso 7 completado → ir al paso 8</button>
+        <span class="step-done-note">La Saga completa (camino feliz + compensación) queda cerrada de punta a punta.</span>
+      </div>
+    </section>
+
+    <!-- PASO 8 -->
+    <section class="step" data-n="8" id="step8">
+      <span class="eyebrow">Paso 8 — Reto</span>
+      <h2>Implementar la versión orquestada</h2>
+      <p>Hasta aquí construiste una <strong>Saga coreografiada</strong>. El reto es construir, en un quinto proyecto (<code>nestjs-orquestador-pedidos</code>), una versión <strong>orquestada</strong> del mismo flujo:</p>
+      <ol>
+        <li>Expón <code>POST /pedidos-orquestados</code>, que llama en secuencia, usando <strong>request-response</strong> (<code>client.send()</code> + <code>@MessagePattern()</code> en cada destino), a: reservar inventario → procesar pago → notificar.</li>
+        <li>Si un paso responde con error, el propio orquestador —no el servicio que falló— decide y dispara la compensación del paso anterior.</li>
+        <li>Compara por escrito: ¿qué parte del código es más simple en cada versión? ¿Qué pasaría si agregaras un quinto paso ("generar factura") a cada una?</li>
+      </ol>
+      <div class="verify-box">
+        <div class="vt">Verificación del Paso 8</div>
+        <ul class="verify-list" data-step="step8">
+          <li><input type="checkbox" data-v="0"><span>Tengo una explicación escrita de al menos dos diferencias concretas de <em>código</em> (no solo de arquitectura en abstracto) entre ambas versiones.</span></li>
+        </ul>
+      </div>
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step8" data-next="step9" disabled>✓ Marcar paso 8 completado → ir al paso 9</button>
+        <span class="step-done-note">Opcional para la nota mínima — obligatorio si tu docente lo marca como parte del Reto de la unidad.</span>
+      </div>
+    </section>
+
+    <!-- PASO 9 -->
+    <section class="step" data-n="9" id="step9">
+      <span class="eyebrow">Paso 9</span>
+      <h2>Documentar y subir tu trabajo</h2>
+      <ol>
+        <li>Dibuja el diagrama de las 4 (o 5) piezas de tu Saga con las flechas de éxito y de compensación etiquetadas, sin ver la Figura 4 de la teoría.</li>
+        <li>Si usaste IA, agrega la declaración de uso.</li>
+        <li>Haz commit de cada proyecto por separado, con su propio <code>.gitignore</code>.</li>
+      </ol>
+      <div class="term">
+        <div class="term-bar"><span>terminal</span><button class="term-copy" data-copy="git add .
+git commit -m &quot;feat: Saga de Pedidos coreografiada (EDA) con NestJS + RabbitMQ&quot;">Copiar</button></div>
+        <pre><span class="k">$</span> git add .
+<span class="k">$</span> git commit -m "feat: Saga de Pedidos coreografiada (EDA) con NestJS + RabbitMQ"</pre>
+      </div>
+
+      <div class="ai-box">
+        <h4>🤖 Uso de IA en esta práctica</h4>
+        <div class="ai-grid">
+          <div class="yes"><h5>Permitido</h5><ul>
+            <li>Interpretar errores de conexión de <code>amqplib</code>.</li>
+            <li>Explicar <code>emit()</code> vs. <code>send()</code>.</li>
+            <li>Revisar tus logs estructurados.</li>
+          </ul></div>
+          <div class="no"><h5>No permitido</h5><ul>
+            <li>Pedir los 4 microservicios completos con compensación de una vez.</li>
+            <li>Aceptar la compensación "funciona" sin verla ocurrir en las terminales.</li>
+            <li>Fusionar los 4 microservicios en uno "para ahorrar tiempo".</li>
+          </ul></div>
+        </div>
+        <div class="declaration">### Declaración de uso de IA
+- Herramienta(s):
+- Nivel de uso:
+- Qué se le pidió:
+- Qué se modificó/verificó manualmente:</div>
+      </div>
+
+      <div class="final-check">
+        <h4 style="margin-top:0;">Checklist de salida</h4>
+        <ul class="checklist" id="exitChecklist">
+          <li><input type="checkbox" data-key="arrancan"><span>Los 4 microservicios arrancan sin errores y se conectan a RabbitMQ.</span></li>
+          <li><input type="checkbox" data-key="feliz"><span>El flujo feliz completo se observa en las 4 terminales, en orden.</span></li>
+          <li><input type="checkbox" data-key="compensacion"><span>Provoqué un fallo de pago y observé la compensación completa.</span></li>
+          <li><input type="checkbox" data-key="correlation"><span>Cada log incluye el mismo <code>correlation_id</code> para un mismo pedido, en los 4 servicios.</span></li>
+          <li><input type="checkbox" data-key="explicar"><span>Puedo explicar, sin ver el código, por qué este diseño es coreografiado y no orquestado.</span></li>
+          <li><input type="checkbox" data-key="reto"><span>(Opcional) Implementé la versión orquestada y comparé ambas por escrito.</span></li>
+          <li><input type="checkbox" data-key="git"><span>Hice commit de cada proyecto, con su <code>.gitignore</code>.</span></li>
+        </ul>
+      </div>
+
+      <div class="step-actions">
+        <button class="step-done-btn" data-step="step9" disabled>✓ Marcar paso 9 completado</button>
+        <span class="step-done-note">Marca al menos la casilla de verificación abajo.</span>
+      </div>
+      <div class="verify-box" style="margin-top:14px;">
+        <div class="vt">Verificación del Paso 9</div>
+        <ul class="verify-list" data-step="step9">
+          <li><input type="checkbox" data-v="0"><span>Dibujé el diagrama de mi Saga sin ver la teoría primero.</span></li>
+          <li><input type="checkbox" data-v="1"><span>Hice commit de los proyectos con su <code>.gitignore</code>.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <footer class="doc-foot">
+      <span>Integración de Sistemas · Semana 6 de 16</span>
+      <a href="web-teoria.html">← Volver a la teoría</a>
+    </footer>
+  </div>
+</main>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const btn = document.getElementById('themeBtn');
+  const labels = {system:'Sistema', light:'Claro', dark:'Oscuro'};
+  let mode='system';
+  try{ mode = localStorage.getItem('s01-theme') || 'system'; }catch(e){}
+  function apply(){ if(mode==='system'){root.removeAttribute('data-theme');} else {root.setAttribute('data-theme',mode);} btn.textContent = labels[mode]; }
+  btn.addEventListener('click', ()=>{ mode = mode==='system'?'light':mode==='light'?'dark':'system'; try{localStorage.setItem('s01-theme',mode);}catch(e){} apply(); });
+  apply();
+})();
+
+document.querySelectorAll('.term-copy').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    const text = btn.getAttribute('data-copy');
+    try{ await navigator.clipboard.writeText(text); btn.textContent='¡Copiado!'; setTimeout(()=>btn.textContent='Copiar',1200); }
+    catch(e){ btn.textContent='No se pudo copiar'; setTimeout(()=>btn.textContent='Copiar',1200); }
+  });
+});
+
+(function(){
+  let state = {};
+  try{ state = JSON.parse(localStorage.getItem('s06-practica-checklist')||'{}'); }catch(e){}
+  const boxes = document.querySelectorAll('#exitChecklist input[type="checkbox"]');
+  function save(){ try{ localStorage.setItem('s06-practica-checklist', JSON.stringify(state)); }catch(e){} }
+  boxes.forEach(b=>{
+    const key = 'exitChecklist:' + b.dataset.key;
+    if(state[key]) b.checked = true;
+    b.addEventListener('change', ()=>{ state[key]=b.checked; save(); });
+  });
+})();
+
+(function(){
+  const STEPS = ['step0','step1','step2','step3','step4','step5','step6','step7','step8','step9'];
+  const stepperItems = Array.from(document.querySelectorAll('.stepper-item'));
+  const sections = STEPS.map(id => document.getElementById(id));
+
+  let doneState = {};
+  let verifyState = {};
+  try{ doneState = JSON.parse(localStorage.getItem('s06-practica-steps')||'{}'); }catch(e){}
+  try{ verifyState = JSON.parse(localStorage.getItem('s06-practica-verify')||'{}'); }catch(e){}
+
+  function saveDone(){ try{ localStorage.setItem('s06-practica-steps', JSON.stringify(doneState)); }catch(e){} }
+  function saveVerify(){ try{ localStorage.setItem('s06-practica-verify', JSON.stringify(verifyState)); }catch(e){} }
+
+  function firstNotDone(){ const idx = STEPS.findIndex(id => !doneState[id]); return idx === -1 ? STEPS.length - 1 : idx; }
+
+  document.querySelectorAll('.verify-list input[type="checkbox"]').forEach(cb=>{
+    const stepId = cb.closest('.verify-list').dataset.step;
+    const key = stepId + ':' + cb.dataset.v;
+    if(verifyState[key]) cb.checked = true;
+    cb.addEventListener('change', ()=>{
+      verifyState[key] = cb.checked;
+      saveVerify();
+      updateStepButton(stepId);
+    });
+  });
+
+  function updateStepButton(stepId){
+    const list = document.querySelector(`.verify-list[data-step="${stepId}"]`);
+    const boxes = list ? Array.from(list.querySelectorAll('input[type="checkbox"]')) : [];
+    const allChecked = boxes.length > 0 && boxes.every(b=>b.checked);
+    const btn = document.querySelector(`.step-done-btn[data-step="${stepId}"]`);
+    if(btn && !doneState[stepId]){ btn.disabled = !allChecked; }
+  }
+
+  function render(){
+    const currentIdx = firstNotDone();
+    STEPS.forEach((id, i)=>{
+      const isDone = !!doneState[id];
+      const isLocked = i > currentIdx;
+      sections[i].classList.toggle('done', isDone);
+      sections[i].classList.toggle('current', i === currentIdx);
+      sections[i].classList.toggle('locked', isLocked);
+      stepperItems[i].classList.toggle('done', isDone);
+      stepperItems[i].classList.toggle('current', i === currentIdx);
+      stepperItems[i].classList.toggle('locked', isLocked);
+      updateStepButton(id);
+    });
+    document.querySelectorAll('.step-done-btn').forEach(btn=>{
+      const id = btn.dataset.step;
+      btn.classList.toggle('on', !!doneState[id]);
+      if(doneState[id]){ btn.disabled = false; btn.textContent = '✓ Paso completado (clic para desmarcar)'; }
+      else { btn.textContent = btn.dataset.label; }
+    });
+    const doneCount = STEPS.filter(id=>doneState[id]).length;
+    document.getElementById('progressLabel').textContent = `${doneCount}/${STEPS.length} pasos`;
+    document.getElementById('progressFill').style.width = (doneCount/STEPS.length*100)+'%';
+  }
+
+  document.querySelectorAll('.step-done-btn').forEach(btn=>{ btn.dataset.label = btn.textContent; });
+
+  document.querySelectorAll('.step-done-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.step;
+      const wasDone = !!doneState[id];
+      if(!wasDone && btn.disabled) return;
+      doneState[id] = !wasDone;
+      saveDone(); render();
+      if(!wasDone && btn.dataset.next){
+        const target = document.getElementById(btn.dataset.next);
+        if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+      }
+    });
+  });
+
+  stepperItems.forEach(item=>{
+    item.addEventListener('click', ()=>{
+      const target = document.getElementById(item.dataset.target);
+      if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+
+  render();
+})();
+</script>

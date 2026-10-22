@@ -73,4 +73,3 @@ export * from './idempotencia.entity';
 export * from './limite_dispositivo.entity';
 export * from './codigo_error.entity';
 export * from './evento_error.entity';
-export * from './log_auditoria_vuelos.entity';

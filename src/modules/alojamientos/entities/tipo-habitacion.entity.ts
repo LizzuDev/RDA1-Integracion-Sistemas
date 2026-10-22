@@ -9,7 +9,7 @@ export type Regimen = (typeof REGIMENES)[number];
  * capacidad, régimen y cupo, como las "room types" de Booking. Una reserva
  * siempre es de un tipo concreto.
  */
-@Entity('tipos_habitacion')
+@Entity({ name: 'alojamientos_tipos_habitacion', schema: 'schema_alojamientos' })
 export class TipoHabitacion {
   @PrimaryGeneratedColumn('uuid')
   id: string;

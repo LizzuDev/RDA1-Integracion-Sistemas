@@ -4,9 +4,9 @@ This README is the index of all AI agent definitions available in this folder. I
 
 | Name | Description | File |
 |---|---|---|
-| architect | Designs scalable architecture, focusing on modularity, separation of concerns, and best practices. | `docs/ai_development/agents/architect.md` |
-| engineer | Applies engineering rigor to every task, ensuring correctness and reproducibility. | `docs/ai_development/agents/engineer.md` |
-| architect-reviewer | Reviews code changes through an architectural lens, ensuring consistency with established patterns. | `docs/ai_development/agents/architect-reviewer.md` |
+| architect | Designs scalable architecture, focusing on modularity, separation of concerns, and best practices. | [`architect.md`](file:///c:/Users/ASUS/Documents/6to%20Semestre/Integraci%C3%B3n%20Sistemas/proyecto/plantilla%20inicial/docs%20Pa%C3%BAl%20Rosero/ai_development/agents/architect.md) |
+| engineer | Applies engineering rigor to every task, ensuring correctness and reproducibility. | [`engineer.md`](file:///c:/Users/ASUS/Documents/6to%20Semestre/Integraci%C3%B3n%20Sistemas/proyecto/plantilla%20inicial/docs%20Pa%C3%BAl%20Rosero/ai_development/agents/engineer.md) |
+| architect-reviewer | Reviews code changes through an architectural lens, ensuring consistency with established patterns. | [`architect-reviewer.md`](file:///c:/Users/ASUS/Documents/6to%20Semestre/Integraci%C3%B3n%20Sistemas/proyecto/plantilla%20inicial/docs%20Pa%C3%BAl%20Rosero/ai_development/agents/architect-reviewer.md) |
 
 **Usage notes:**
 1. Read this file first to discover available agents.

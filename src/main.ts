@@ -1,10 +1,14 @@
 import { NestFactory } from '@nestjs/core';
+import { VersioningType } from '@nestjs/common';
 import { ExpressAdapter, NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Rfc7807ExceptionFilter } from './core/filters/rfc7807-exception.filter';
 import { crearValidationPipeGlobal } from './core/validation/validation-pipe';
 import { HateoasInterceptor } from './core/interceptors/hateoas.interceptor';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import * as path from 'path';
+import * as fs from 'fs';
 
 /**
  * Limite del cuerpo JSON, en bytes.
@@ -73,6 +77,8 @@ async function bootstrap() {
       'Authorization',
       'idempotency-key',
       'Idempotency-Key',
+      'x-correlation-id',
+      'X-Correlation-Id',
       'x-device-fingerprint',
       'X-Device-Fingerprint',
       // API key de los sistemas de proveedores (sincronización de alojamientos).
@@ -82,7 +88,20 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.setGlobalPrefix('api/v1');
+  // Trazabilidad distribuida: Correlation-ID (Consideraciones RDA2 §2)
+  app.use((req: any, res: any, next: any) => {
+    const correlationId = req.headers['x-correlation-id'] || `corr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    req.headers['x-correlation-id'] = correlationId;
+    res.setHeader('X-Correlation-Id', correlationId);
+    next();
+  });
+
+  app.setGlobalPrefix('api');
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: ['1', '2'],
+    prefix: 'v',
+  });
 
   // `whitelist: true` + `forbidNonWhitelisted: true` es lo que hace que un campo
   // no declarado en el DTO sea un 400 y no se ignore en silencio. Sin eso, un
@@ -118,6 +137,36 @@ async function bootstrap() {
 <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script></body></html>`);
   });
 
-  await app.listen(process.env.PORT || 3000);
+  // =========================================================================
+  // SERVIDOR gRPC INBOUND: InventoryStockService (Consideraciones RDA2 §1, §3)
+  // Recepción de stock en tiempo real desde tiendas externas de compañeros
+  // =========================================================================
+  const protoCandidates = [
+    path.join(__dirname, 'proto', 'inventory.proto'),
+    path.join(__dirname, 'src', 'proto', 'inventory.proto'),
+    path.join(process.cwd(), 'src', 'proto', 'inventory.proto'),
+    path.join(process.cwd(), 'dist', 'proto', 'inventory.proto'),
+    path.join(process.cwd(), 'dist', 'src', 'proto', 'inventory.proto')
+  ];
+  const protoPath = protoCandidates.find(p => fs.existsSync(p)) || protoCandidates[2];
+  const grpcPort = process.env.GRPC_PORT || 50051;
+
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.GRPC,
+    options: {
+      package: 'inventory',
+      protoPath,
+      url: `0.0.0.0:${grpcPort}`,
+      loader: {
+        keepCase: true,
+      },
+    },
+  });
+
+  await app.startAllMicroservices();
+  const httpPort = process.env.PORT || 3000;
+  await app.listen(httpPort);
+  console.log(`[Booking Gateway] Servidor HTTP/REST listo en puerto ${httpPort}`);
+  console.log(`[Booking Gateway] Servidor gRPC Inbound listo en puerto ${grpcPort} (proto: ${protoPath})`);
 }
 bootstrap();

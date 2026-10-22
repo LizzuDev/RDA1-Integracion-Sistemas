@@ -12,6 +12,14 @@ import { FacturasModule } from './modules/facturas/facturas.module';
 import { ChatbotModule } from './modules/chatbot/chatbot.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { PaquetesModule } from './modules/paquetes/paquetes.module';
+import { PagosModule } from './modules/pagos/pagos.module';
+import { FinanzasModule } from './modules/finanzas/finanzas.module';
+import { NodesModule } from './modules/nodes/nodes.module';
+import { EsbModule } from './modules/esb/esb.module';
+import { EventBusModule } from './modules/event-bus/event-bus.module';
+import { GraphqlBffModule } from './modules/graphql/graphql-bff.module';
 
 @Module({
   imports: [
@@ -67,6 +75,24 @@ import { TelemetryModule } from './modules/telemetry/telemetry.module';
 
     // Telemetría (analítica y rendimiento)
     TelemetryModule,
+
+    // Microservicio de Inventario gRPC Inbound (Consideraciones RDA2 §1, §3)
+    InventoryModule,
+
+    // Microservicios Core de Plataforma (RDA2)
+    PaquetesModule,
+    PagosModule,
+    FinanzasModule,
+    NodesModule,
+
+    // Capa 3: Enterprise Service Bus Centralizado y Sagas LIFO
+    EsbModule,
+
+    // Capa 4: Broker Dual de Mensajería (RabbitMQ Topic Exchange + Apache Kafka B2B)
+    EventBusModule,
+
+    // Capa 6: Capa de Agregación GraphQL BFF (/graphql con Apollo Server y DataLoaders)
+    GraphqlBffModule,
   ],
   controllers: [],
   providers: [],

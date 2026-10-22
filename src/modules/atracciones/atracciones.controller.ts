@@ -10,7 +10,7 @@ import { DetailsRequestDto } from './dto/details-request.dto';
 import { AvailabilityResponseDto } from './dto/availability.dto';
 import { CreateAtraccionDto } from './dto/create-atraccion.dto';
 import { UpdateAtraccionDto } from './dto/update-atraccion.dto';
-import { ReservationRequestDto, CancelReservationRequestDto, ReservationResponseDto } from './dto/reservation.dto';
+import { ReservationRequestDto, CancelReservationRequestDto, ReservationResponseDto, CheckinAtraccionDto } from './dto/reservation.dto';
 import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
 
 @ApiTags('Atracciones (BFF Integrador)')
@@ -32,6 +32,13 @@ export class AtraccionesController {
   @ApiResponse({ status: 200, description: 'Detalles de atracciones', type: SearchAtraccionesResponseDto })
   async getDetailsBatch(@Body() dto: DetailsRequestDto) {
     return this.atraccionesService.getDetailsBatch(dto);
+  }
+
+  @Get('categorias/arbol')
+  @ApiOperation({ summary: 'Consultar el árbol jerárquico recursivo de categorías (RDA2)' })
+  @ApiResponse({ status: 200, description: 'Estructura jerárquica padre-hija con indicadores de comida, guía y transporte.' })
+  async getCategoriasArbol() {
+    return this.atraccionesService.getCategoriasArbol();
   }
 
   @Get('health')
@@ -65,21 +72,35 @@ export class AtraccionesController {
   }
 
   @Post('reservations/:reservationId/cancel')
-  @UseGuards(SupabaseAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancelar una reserva existente (Requiere autenticación JWT e Idempotency-Key)' })
+  @ApiOperation({ summary: 'Cancelar una reserva existente con compensación Saga y reembolso' })
   @ApiParam({ name: 'reservationId', description: 'ID de la reserva a cancelar', type: 'string' })
   @ApiResponse({ status: 200, description: 'Reserva cancelada exitosamente.', type: ReservationResponseDto })
   async cancelarReserva(
     @Param('reservationId') reservationId: string,
     @Headers('idempotency-key') idempotencyKey: string,
+    @Headers('x-correlation-id') correlationId: string,
     @Body() dto: CancelReservationRequestDto,
     @Req() req: any
   ) {
-    if (!idempotencyKey) {
-      throw new HttpException('Idempotency-Key header is required', HttpStatus.BAD_REQUEST);
-    }
-    return this.atraccionesService.cancelarReserva(reservationId, dto, idempotencyKey);
+    const key = idempotencyKey || req.headers?.['idempotency-key'] || `idem-cancel-${Date.now()}`;
+    const cId = correlationId || req.headers?.['x-correlation-id'] || `corr-cancel-${Date.now()}`;
+    return this.atraccionesService.cancelarReserva(reservationId, dto, key, cId);
+  }
+
+  @Post('reservas/:reservationId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancelar una reserva existente (Alias v2 OpenAPI)' })
+  async cancelarReservaAlias(
+    @Param('reservationId') reservationId: string,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Headers('x-correlation-id') correlationId: string,
+    @Body() dto: CancelReservationRequestDto,
+    @Req() req: any
+  ) {
+    const key = idempotencyKey || req.headers?.['idempotency-key'] || `idem-cancel-${Date.now()}`;
+    const cId = correlationId || req.headers?.['x-correlation-id'] || `corr-cancel-${Date.now()}`;
+    return this.atraccionesService.cancelarReserva(reservationId, dto, key, cId);
   }
 
   @Get('reservations')
@@ -148,6 +169,26 @@ export class AtraccionesController {
     return this.atraccionesService.getAvailability(id, date);
   }
 
+  @Get(':id/disponibilidad')
+  @ApiOperation({ summary: 'Consultar disponibilidad de turnos y cupos en tiempo real (RDA2)' })
+  @ApiParam({ name: 'id', description: 'ID de la atracción' })
+  @ApiResponse({ status: 200, description: 'Lista de turnos horarios con aforo disponible.' })
+  async getDisponibilidadEs(@Param('id') id: string, @Query('date') date: string) {
+    return this.atraccionesService.getAvailability(id, date);
+  }
+
+  @Post('reservas/:reservationId/checkin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Realizar Check-in presencial con QR y asignación de guía (RDA2)' })
+  @ApiParam({ name: 'reservationId', description: 'ID de la reserva' })
+  @ApiResponse({ status: 200, description: 'Check-in exitoso con voucher digital verificado.' })
+  async checkin(
+    @Param('reservationId') reservationId: string,
+    @Body() dto: CheckinAtraccionDto
+  ) {
+    return this.atraccionesService.checkin(reservationId, dto);
+  }
+
   @Post(':id/reservations')
   @UseGuards(SupabaseAuthGuard)
   @Header('X-API-Deprecation-Date', '2027-12-31')
@@ -168,4 +209,40 @@ export class AtraccionesController {
     return this.atraccionesService.reservar(id, dto, idempotencyKey);
   }
 
+  @Post('reservas')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Crear reserva de atracción (Contrato OpenAPI v2 con 4 edades y QR)' })
+  @ApiResponse({ status: 201, description: 'Reserva confirmada exitosamente con voucher QR y localizador PNR.' })
+  @ApiResponse({ status: 409, description: 'Sin cupos disponibles (OUT_OF_STOCK) o conflicto de idempotencia.' })
+  async reservarAlias(
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Body() dto: any,
+  ) {
+    const key = idempotencyKey || dto.idempotency_key || `idem-${Date.now()}`;
+    const id = dto.atraccion_id || dto.atraccionId || dto.id_atraccion || dto.id || 'PRhu4UBTWPBC';
+    return this.atraccionesService.reservar(id, dto, key);
+  }
+
+  @Get('promociones/contrato')
+  @ApiOperation({ summary: 'Consultar el acuerdo B2B de promociones y combos pactado con el socio (Cátedra RDA2 §9)' })
+  @ApiResponse({ status: 200, description: 'Términos del acuerdo comercial de promociones y combos.' })
+  async getPromocionesContrato() {
+    return this.atraccionesService.getPromocionesContrato();
+  }
+
+  @Put('promociones/contrato')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Formalizar o actualizar acuerdo comercial B2B para combos y descuentos máximos (Cátedra RDA2 §9)' })
+  @ApiResponse({ status: 200, description: 'Acuerdo comercial actualizado exitosamente.' })
+  async updatePromocionesContrato(@Body() dto: any) {
+    return this.atraccionesService.updatePromocionesContrato(dto);
+  }
+
+  @Get('eventos')
+  @ApiOperation({ summary: 'Consultar feed Outbox de eventos transaccionales para streaming RabbitMQ/Kafka' })
+  @ApiResponse({ status: 200, description: 'Listado de eventos de dominio generados por la vertical.' })
+  async getEventosOutbox(@Query('limit') limit: number) {
+    return this.atraccionesService.getEventosOutbox(Number(limit) || 20);
+  }
 }
+

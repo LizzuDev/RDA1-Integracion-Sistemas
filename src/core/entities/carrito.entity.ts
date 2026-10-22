@@ -1,18 +1,26 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
-import { Usuario } from './usuario.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { CarritoItem } from './carrito-item.entity';
 
-@Entity('carritos')
+@Entity({ name: 'carritos', schema: 'schema_carritos' })
 export class Carrito {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Usuario, (usuario) => usuario.carritos)
-  @JoinColumn({ name: 'usuario_id' })
-  usuario: Usuario;
+  @Column({ name: 'cliente_id', type: 'uuid' })
+  clienteId: string;
 
-  @Column('text', { default: 'activo' })
-  estado: string; // 'activo', 'convertido', 'abandonado'
+  get usuarioId(): string {
+    return this.clienteId;
+  }
+  set usuarioId(val: string) {
+    this.clienteId = val;
+  }
+
+  @Column('text', { default: 'ACTIVO' })
+  estado: string; // 'ACTIVO', 'PROCESADO', 'ABANDONADO'
+
+  @Column({ length: 3, default: 'USD' })
+  moneda: string;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;

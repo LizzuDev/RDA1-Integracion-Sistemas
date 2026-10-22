@@ -21,7 +21,6 @@ import { BloqueoCupo } from './entities/bloqueo_cupo.entity';
 import { BloqueoItinerario } from './entities/bloqueo_itinerario.entity';
 import { EquipajePasajero } from './entities/equipaje_pasajero.entity';
 import { Idempotencia } from './entities/idempotencia.entity';
-import { LogAuditoriaVuelos } from './entities/log_auditoria_vuelos.entity';
 import { Oferta } from './entities/oferta.entity';
 import { Pasajero } from './entities/pasajero.entity';
 import { AsientoAsignado } from './entities/asiento_asignado.entity';
@@ -2299,7 +2298,6 @@ export class VuelosService {
         const asientoRepo = manager.getRepository(AsientoVuelo);
         const reservaSegmentoRepo = manager.getRepository(ReservaSegmento);
         const eventoRepo = manager.getRepository(EventoWebhook);
-        const auditoriaRepo = manager.getRepository(LogAuditoriaVuelos);
 
         const reserva = await this.exigirReservaPropia(bookingId, propietarioId, undefined, reservaRepo);
 
@@ -2446,21 +2444,8 @@ export class VuelosService {
             asientosLiberados: asientosLiberados,
           });
 
-        // --- Auditoria --------------------------------------------------------
-        await auditoriaRepo.insert({
-          tipoEntidad: 'reserva',
-          entidadId: bookingId,
-          accion: AccionAuditoria.STATUS_CHANGED,
-          datosAntiguos: { estado: reserva.estado },
-          datosNuevos: {
-            estado: destino,
-            quoteId: dto.quoteId,
-            reembolso: cotizacion.montoReembolso,
-          },
-          realizadoPor: propietarioId,
-          fechaHora: new Date(),
-          idempotencyKey: idempotencyKey,
-        });
+        // --- Auditoria Fisica en disco (Cátedra RDA2 §2) -----------------------
+        this.logger.log(`[AUDIT_VUELO] Reserva ${bookingId} cancelada. Estado: ${destino}, Reembolso: ${cotizacion.montoReembolso}`);
 
         const cuerpo: CancelBookingResponseDto = {
           bookingId: bookingId,

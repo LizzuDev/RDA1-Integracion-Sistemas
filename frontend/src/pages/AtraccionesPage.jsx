@@ -14,12 +14,50 @@ const DESTINOS_TOP = [
 ];
 
 const EXPLORA_TABS = ['Pichincha', 'Guayas', 'Azuay', 'Tungurahua', 'Manabí', 'Imbabura', 'Galápagos'];
-const EXPLORA_DESTINOS = [
-  { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://picsum.photos/id/111/800/600' },
-  { nombre: 'Mindo', cosas: '78 cosas que hacer', img: 'https://picsum.photos/id/112/800/600' },
-  { nombre: 'Sangolquí', cosas: '12 cosas que hacer', img: 'https://picsum.photos/id/113/800/600' },
-  { nombre: 'Machachi', cosas: '24 cosas que hacer', img: 'https://picsum.photos/id/114/800/600' },
-];
+const DESTINOS_POR_PROVINCIA = {
+  Pichincha: [
+    { nombre: 'Mitad del Mundo', cosas: '45 cosas que hacer', img: 'https://picsum.photos/id/111/800/600' },
+    { nombre: 'Mindo Bosque Nublado', cosas: '78 cosas que hacer', img: 'https://picsum.photos/id/112/800/600' },
+    { nombre: 'Sangolquí & Valle', cosas: '12 cosas que hacer', img: 'https://picsum.photos/id/113/800/600' },
+    { nombre: 'Machachi & Volcanes', cosas: '24 cosas que hacer', img: 'https://picsum.photos/id/114/800/600' },
+  ],
+  Guayas: [
+    { nombre: 'Malecón 2000', cosas: '52 cosas que hacer', img: 'https://picsum.photos/id/29/800/600' },
+    { nombre: 'Barrio Las Peñas', cosas: '34 cosas que hacer', img: 'https://picsum.photos/id/164/800/600' },
+    { nombre: 'Parque de las Iguanas', cosas: '18 cosas que hacer', img: 'https://picsum.photos/id/169/800/600' },
+    { nombre: 'Isla Santay', cosas: '22 cosas que hacer', img: 'https://picsum.photos/id/175/800/600' },
+  ],
+  Azuay: [
+    { nombre: 'Catedral Nueva de Cuenca', cosas: '38 cosas que hacer', img: 'https://picsum.photos/id/38/800/600' },
+    { nombre: 'Parque Nacional Cajas', cosas: '65 cosas que hacer', img: 'https://picsum.photos/id/184/800/600' },
+    { nombre: 'Mirador de Turi', cosas: '19 cosas que hacer', img: 'https://picsum.photos/id/191/800/600' },
+    { nombre: 'Barranco del Río Tomebamba', cosas: '27 cosas que hacer', img: 'https://picsum.photos/id/195/800/600' },
+  ],
+  Tungurahua: [
+    { nombre: 'Pailón del Diablo (Baños)', cosas: '94 cosas que hacer', img: 'https://picsum.photos/id/49/800/600' },
+    { nombre: 'Casa del Árbol & Columpio', cosas: '41 cosas que hacer', img: 'https://picsum.photos/id/201/800/600' },
+    { nombre: 'Cascada Manto de la Novia', cosas: '32 cosas que hacer', img: 'https://picsum.photos/id/204/800/600' },
+    { nombre: 'Ruta de las Cascadas en Chiva', cosas: '56 cosas que hacer', img: 'https://picsum.photos/id/208/800/600' },
+  ],
+  Manabí: [
+    { nombre: 'Playa Los Frailes', cosas: '29 cosas que hacer', img: 'https://picsum.photos/id/214/800/600' },
+    { nombre: 'Parque Nacional Machalilla', cosas: '48 cosas que hacer', img: 'https://picsum.photos/id/218/800/600' },
+    { nombre: 'Isla de la Plata', cosas: '31 cosas que hacer', img: 'https://picsum.photos/id/222/800/600' },
+    { nombre: 'Canoa & Clases de Surf', cosas: '23 cosas que hacer', img: 'https://picsum.photos/id/225/800/600' },
+  ],
+  Imbabura: [
+    { nombre: 'Laguna de Cuicocha', cosas: '35 cosas que hacer', img: 'https://picsum.photos/id/231/800/600' },
+    { nombre: 'Mercado de Ponchos Otavalo', cosas: '60 cosas que hacer', img: 'https://picsum.photos/id/235/800/600' },
+    { nombre: 'Cascada de Peguche', cosas: '21 cosas que hacer', img: 'https://picsum.photos/id/239/800/600' },
+    { nombre: 'Paseo en Lago San Pablo', cosas: '26 cosas que hacer', img: 'https://picsum.photos/id/243/800/600' },
+  ],
+  Galápagos: [
+    { nombre: 'Estación Charles Darwin', cosas: '42 cosas que hacer', img: 'https://picsum.photos/id/58/800/600' },
+    { nombre: 'Tortuga Bay (Santa Cruz)', cosas: '39 cosas que hacer', img: 'https://picsum.photos/id/249/800/600' },
+    { nombre: 'Túneles de Lava en Isabela', cosas: '51 cosas que hacer', img: 'https://picsum.photos/id/253/800/600' },
+    { nombre: 'Snorkel en Kicker Rock', cosas: '28 cosas que hacer', img: 'https://picsum.photos/id/257/800/600' },
+  ],
+};
 
 const ECUADOR_IMAGES = [
   'https://picsum.photos/id/28/800/600',
@@ -49,7 +87,7 @@ export function AtraccionesPage() {
   };
 
   const handleSearchChange = (e) => {
-    const raw = e.target.value;
+    const raw = e.target.value.slice(0, 60);
     const hasNumbers = /[0-9]/.test(raw);
     const hasSymbols = /[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ0-9]/.test(raw);
     const hasMultipleSpaces = /\s{2,}/.test(raw);
@@ -57,17 +95,26 @@ export function AtraccionesPage() {
     if (hasNumbers) {
       triggerFlash('No se permiten números en el destino');
     } else if (hasSymbols) {
-      triggerFlash('Solo se permiten letras y comas');
+      triggerFlash('Solo se permiten letras, comas y acentos');
     } else if (hasMultipleSpaces) {
       triggerFlash('No se permiten espacios consecutivos');
+    } else if (raw.length >= 60) {
+      triggerFlash('Límite máximo de 60 caracteres alcanzado');
     } else {
       setSearchError('');
     }
 
     const clean = raw.replace(/[^a-zA-Z\s,áéíóúÁÉÍÓÚñÑ]/g, '').replace(/\s{2,}/g, ' ');
     setBusqueda(clean);
-    setShowSuggestions(clean.length > 0);
+    setShowSuggestions(clean.trim().length > 0);
     setFormError('');
+  };
+
+  const handleSearchBlur = () => {
+    setTimeout(() => {
+      setShowSuggestions(false);
+      setBusqueda(prev => prev.trim().replace(/\s{2,}/g, ' '));
+    }, 200);
   };
 
   const handleSelectSuggestion = (destino) => {
@@ -78,13 +125,23 @@ export function AtraccionesPage() {
   };
 
   const [tabActivo, setTabActivo] = useState('Pichincha');
+  const [tabTransitioning, setTabTransitioning] = useState(false);
+
+  const handleTabChange = (tab) => {
+    if (tab === tabActivo) return;
+    setTabTransitioning(true);
+    setTabActivo(tab);
+    setTimeout(() => setTabTransitioning(false), 200);
+  };
+
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
   const [formError, setFormError] = useState('');
 
   const handleSearch = () => {
+    const cleanDestino = busqueda.trim().replace(/\s{2,}/g, ' ');
     const faltantes = [];
-    if (busqueda.trim() === '') faltantes.push('el destino');
+    if (!cleanDestino) faltantes.push('el destino');
     if (!startDate) faltantes.push('la fecha de inicio');
     if (!endDate) faltantes.push('la fecha de fin');
 
@@ -98,11 +155,12 @@ export function AtraccionesPage() {
         mensaje = `Por favor proporcione ${faltantes[0]}, ${faltantes[1]} y ${faltantes[2]}.`;
       }
       setFormError(mensaje);
+      triggerFlash(mensaje);
       return;
     }
 
     setFormError('');
-    navigate(`/search?destino=${encodeURIComponent(busqueda)}`);
+    navigate(`/search?destino=${encodeURIComponent(cleanDestino)}`);
   };
 
   const fetchData = useCallback(async () => {
@@ -142,18 +200,50 @@ export function AtraccionesPage() {
             <svg width="24" height="24" fill="none" stroke={flashRed ? '#d93025' : 'currentColor'} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
-            <div className="input-text-wrapper" style={{ width: '100%' }}>
+            <div className="input-text-wrapper" style={{ width: '100%', position: 'relative' }}>
               <input
                 type="text"
+                maxLength={60}
                 placeholder="Destino o ¿A dónde vas?"
                 value={busqueda}
                 onChange={handleSearchChange}
-                onFocus={() => setShowSuggestions(busqueda.length > 0)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                style={{ background: 'transparent' }}
+                onFocus={() => setShowSuggestions(busqueda.trim().length > 0)}
+                onBlur={handleSearchBlur}
+                aria-invalid={!!searchError || flashRed}
+                style={{ background: 'transparent', paddingRight: '45px' }}
               />
+              {busqueda.length > 30 && (
+                <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: '0.72rem', color: busqueda.length >= 60 ? '#d93025' : '#9ca3af', pointerEvents: 'none' }}>
+                  {busqueda.length}/60
+                </span>
+              )}
             </div>
-            {searchError && <div style={{ position: 'absolute', top: '-25px', left: 0, color: '#d93025', fontSize: '0.8rem', fontWeight: 'bold', background: '#fce8e6', padding: '2px 8px', borderRadius: '4px' }}>{searchError}</div>}
+            {searchError && (
+              <div 
+                role="alert" 
+                aria-live="assertive"
+                style={{ 
+                  position: 'absolute', 
+                  top: '-32px', 
+                  left: 0, 
+                  color: '#991b1b', 
+                  fontSize: '0.82rem', 
+                  fontWeight: '700', 
+                  background: '#fee2e2', 
+                  border: '1px solid #ef4444',
+                  padding: '3px 10px', 
+                  borderRadius: '6px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  zIndex: 30,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <span>⚠️</span> {searchError}
+              </div>
+            )}
             {showSuggestions && busqueda && (
               <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', listStyle: 'none', margin: 0, padding: '0', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', borderRadius: '4px', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
                 {destinos.filter(d => d.toLowerCase().includes(busqueda.toLowerCase())).length > 0 ? (
@@ -206,6 +296,42 @@ export function AtraccionesPage() {
 
       <div className="main-content">
         
+        {/* CATEGORÍAS JERÁRQUICAS DE ATRACCIONES (RDA2) */}
+        <section className="section-block" style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
+            <button 
+              onClick={() => setBusqueda('')} 
+              style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid #006ce4', background: !busqueda ? '#006ce4' : '#fff', color: !busqueda ? '#fff' : '#006ce4', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              🌟 Todas las experiencias
+            </button>
+            <button 
+              onClick={() => setBusqueda('Tours')} 
+              style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid #d1d5db', background: '#fff', color: '#1f2937', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              🚶 Tours y Visitas Guiadas 🗣️
+            </button>
+            <button 
+              onClick={() => setBusqueda('Cacao')} 
+              style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid #d1d5db', background: '#fff', color: '#1f2937', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              🍫 Gastronomía y Degustación 🍽️
+            </button>
+            <button 
+              onClick={() => setBusqueda('Museo')} 
+              style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid #d1d5db', background: '#fff', color: '#1f2937', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              🏛️ Museos y Cultura
+            </button>
+            <button 
+              onClick={() => setBusqueda('Volcán')} 
+              style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid #d1d5db', background: '#fff', color: '#1f2937', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              🌋 Naturaleza y Volcanes 🚌
+            </button>
+          </div>
+        </section>
+
         {/* RECOMENDADO GENERADO POR IA */}
         <section className="section-block">
           <div className="section-header">
@@ -319,19 +445,26 @@ export function AtraccionesPage() {
               <button 
                 key={tab} 
                 className={`tab-btn ${tabActivo === tab ? 'active' : ''}`}
-                onClick={() => setTabActivo(tab)}
+                onClick={() => handleTabChange(tab)}
               >
                 {tab}
               </button>
             ))}
           </div>
           
-          <div className="explora-grid">
-            {EXPLORA_DESTINOS.map((dest, idx) => (
+          <div 
+            className="explora-grid"
+            style={{ 
+              opacity: tabTransitioning ? 0.35 : 1, 
+              transition: 'opacity 0.2s ease-in-out',
+              minHeight: '220px'
+            }}
+          >
+            {(DESTINOS_POR_PROVINCIA[tabActivo] || DESTINOS_POR_PROVINCIA['Pichincha']).map((dest, idx) => (
               <div 
-                key={idx} 
+                key={dest.nombre} 
                 className="explora-card"
-                onClick={() => navigate(`/atracciones/${idx + 1}`)}
+                onClick={() => navigate(`/search?destino=${encodeURIComponent(dest.nombre.split(' ')[0])}`)}
                 style={{ cursor: 'pointer' }}
               >
                 <img src={dest.img} alt={dest.nombre} />

@@ -48,7 +48,6 @@ import {
   LimiteDispositivo,
   CodigoError,
   EventoError,
-  LogAuditoriaVuelos,
 } from './entities';
 
 /**
@@ -123,7 +122,6 @@ const ENTIDADES = [
   LimiteDispositivo,
   CodigoError,
   EventoError,
-  LogAuditoriaVuelos,
 ];
 
 @Module({
