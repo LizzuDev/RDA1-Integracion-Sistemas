@@ -1,37 +1,55 @@
 import { Column, Entity, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import { ColumnNumericTransformer } from '../../../common/transformers/column-numeric.transformer';
 
-@Entity('autos_mantenimiento_bitacora')
+@Entity({ name: 'autos_mantenimientos', schema: 'schema_autos' })
 export class MantenimientoAuto {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 50 })
+  @Column({ name: 'auto_id', type: 'uuid' })
   autoId: string;
 
-  @Column({ type: 'varchar', length: 100 })
-  tecnicoId: string;
+  @Column({ name: 'tipo_mantenimiento', type: 'varchar', length: 100, default: 'Mantenimiento Preventivo (Cambio de aceite y frenos)' })
+  tipoMantenimiento: string;
 
-  @Column({ type: 'int' })
-  kilometrajeRegistrado: number;
-
-  @Column({ type: 'int', default: 100 })
-  nivelCombustible: number;
+  @Column({ name: 'kilometraje_servicio', type: 'int', default: 15000 })
+  kilometrajeServicio: number;
 
   @Column({ type: 'text', nullable: true })
-  condicionesCarroceria: string;
+  descripcion: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'BUENO' })
-  estadoNeumaticos: string;
+  @Column('numeric', {
+    precision: 10,
+    scale: 2,
+    default: 0.00,
+    transformer: new ColumnNumericTransformer(),
+  })
+  costo: number;
 
-  @Column({ type: 'text', nullable: true })
-  observaciones: string;
+  @Column({ name: 'tecnico_responsable', type: 'varchar', length: 120, default: 'Taller Central Quito' })
+  tecnicoResponsable: string;
 
-  @Column({ type: 'boolean', default: false })
-  mantenimientoRealizado: boolean;
+  @Column({ name: 'fecha_ingreso', type: 'timestamptz', default: () => 'NOW()' })
+  fechaIngreso: Date;
 
-  @Column({ type: 'int', nullable: true })
-  proximoMantenimientoKm: number;
+  @Column({ name: 'fecha_salida', type: 'timestamptz', nullable: true })
+  fechaSalida: Date;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
+
+  // Compatibilidad
+  get tecnicoId(): string {
+    return this.tecnicoResponsable;
+  }
+  set tecnicoId(val: string) {
+    this.tecnicoResponsable = val;
+  }
+
+  get kilometrajeRegistrado(): number {
+    return this.kilometrajeServicio;
+  }
+  set kilometrajeRegistrado(val: number) {
+    this.kilometrajeServicio = val;
+  }
 }

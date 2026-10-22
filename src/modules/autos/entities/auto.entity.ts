@@ -1,72 +1,156 @@
-import { Column, Entity, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { ColumnNumericTransformer } from '../../../common/transformers/column-numeric.transformer';
 
 export enum EstadoVehiculo {
   DISPONIBLE = 'DISPONIBLE',
   RESERVADO = 'RESERVADO',
+  LISTO_PARA_ENTREGAR = 'LISTO_PARA_ENTREGAR',
   ENTREGADO = 'ENTREGADO',
-  EN_LIMPIEZA = 'EN_LIMPIEZA'
+  EN_LIMPIEZA = 'EN_LIMPIEZA',
+  EN_MANTENIMIENTO = 'EN_MANTENIMIENTO'
 }
 
-@Entity('autos')
+@Entity({ name: 'autos_catalogo', schema: 'schema_autos' })
 export class Auto {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  supplier_name: string;
+  @Column({ type: 'varchar', length: 60, default: 'Chevrolet' })
+  marca: string;
 
-  @Column({ type: 'numeric', precision: 10, scale: 2, default: 50.00 })
-  price: number;
+  @Column({ type: 'varchar', length: 60, default: 'Sail' })
+  modelo: string;
 
-  @Column('jsonb', { nullable: true })
-  vehicle_info: {
-    category: string;
-    type: string;
-    transmission: string;
-    fuel: string;
-    air_conditioning: boolean;
-    doors: number;
-    seats: number;
-    bags: number;
-    marca?: string;
-    modelo?: string;
-    politica_combustible?: string;
-    kilometraje_ilimitado?: boolean;
-    deposito_garantia?: number;
-  };
+  @Column({ type: 'int', default: 2024 })
+  anio: number;
 
-  @Column('jsonb', { nullable: true })
-  images: string[];
+  @Column({ type: 'varchar', length: 30, default: 'ECONOMICO' })
+  categoria: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'MANUAL' })
+  transmision: string;
+
+  @Column({ name: 'capacidad_pasajeros', type: 'int', default: 5 })
+  capacidadPasajeros: number;
+
+  @Column('numeric', {
+    name: 'precio_diario',
+    precision: 10,
+    scale: 2,
+    default: 40.00,
+    transformer: new ColumnNumericTransformer(),
+  })
+  precioDiario: number;
+
+  @Column({ name: 'kilometraje_actual', type: 'int', default: 12000 })
+  kilometrajeActual: number;
+
+  @Column({ name: 'umbral_mantenimiento_km', type: 'int', default: 15000 })
+  umbralMantenimientoKm: number;
+
+  @Column({ name: 'alerta_mantenimiento_activa', type: 'boolean', default: false })
+  alertaMantenimientoActiva: boolean;
+
+  // Máquina de estados obligatoria de 6 fases (§5 Consideraciones)
+  @Column({
+    name: 'estado_operativo',
+    type: 'varchar',
+    length: 30,
+    default: 'DISPONIBLE',
+  })
+  estadoOperativo: string;
+
+  @Column({ name: 'limpieza_inicio_at', type: 'timestamptz', nullable: true })
+  limpiezaInicioAt: Date;
+
+  @Column({ name: 'disponible_estimado_at', type: 'timestamptz', nullable: true })
+  disponibleEstimadoAt: Date;
+
+  @Column({ name: 'foto_url', type: 'text', default: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800' })
+  fotoUrl: string;
+
+  @Column({ type: 'varchar', length: 100, default: 'Quito' })
+  ciudad: string;
 
   @Column({ type: 'boolean', default: true })
-  available: boolean;
+  activo: boolean;
 
-  // Ciclo de vida estricto y Cooldown 2 Horas (Consideraciones RDA2 §5)
-  @Column({ type: 'varchar', length: 50, default: 'DISPONIBLE', nullable: true })
-  estado: string;
-
-  @Column({ type: 'timestamp with time zone', nullable: true })
-  disponible_desde: Date;
-
-  // Gestión de Mantenimiento Preventivo (Consideraciones RDA2 §5)
-  @Column({ type: 'int', default: 5000, nullable: true })
-  kilometraje_actual: number;
-
-  @Column({ type: 'int', default: 10000, nullable: true })
-  proximo_mantenimiento_km: number;
-
-  @Column({ type: 'boolean', default: false, nullable: true })
-  mantenimiento_requerido: boolean;
-
-  @Column({ type: 'int', default: 100, nullable: true })
-  nivel_combustible_actual: number;
-
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
-  updatedAt: Date;
+  // --- Getters y Setters de compatibilidad con código existente ---
+  get supplier_name(): string {
+    return 'Europcar / Avis Ecuador';
+  }
 
-  @DeleteDateColumn({ type: 'timestamp', nullable: true })
-  deletedAt: Date;
+  get price(): number {
+    return Number(this.precioDiario || 40.00);
+  }
+  set price(val: number) {
+    this.precioDiario = val;
+  }
+
+  get estado(): string {
+    return this.estadoOperativo;
+  }
+  set estado(val: string) {
+    this.estadoOperativo = val;
+  }
+
+  get disponible_desde(): Date {
+    return this.disponibleEstimadoAt;
+  }
+  set disponible_desde(val: Date) {
+    this.disponibleEstimadoAt = val;
+  }
+
+  get kilometraje_actual(): number {
+    return this.kilometrajeActual;
+  }
+  set kilometraje_actual(val: number) {
+    this.kilometrajeActual = val;
+  }
+
+  get proximo_mantenimiento_km(): number {
+    return this.umbralMantenimientoKm;
+  }
+  set proximo_mantenimiento_km(val: number) {
+    this.umbralMantenimientoKm = val;
+  }
+
+  get mantenimiento_requerido(): boolean {
+    return this.alertaMantenimientoActiva || this.kilometrajeActual >= this.umbralMantenimientoKm;
+  }
+  set mantenimiento_requerido(val: boolean) {
+    this.alertaMantenimientoActiva = val;
+  }
+
+  get images(): string[] {
+    return [this.fotoUrl || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800'];
+  }
+
+  get vehicle_info(): any {
+    return {
+      category: this.categoria,
+      type: 'Sedan',
+      transmission: this.transmision,
+      fuel: 'Gasolina',
+      air_conditioning: true,
+      doors: 4,
+      seats: this.capacidadPasajeros,
+      bags: 2,
+      marca: this.marca,
+      modelo: this.modelo,
+    };
+  }
+
+  get available(): boolean {
+    if (this.estadoOperativo === EstadoVehiculo.EN_LIMPIEZA) {
+      if (this.disponibleEstimadoAt && new Date() >= new Date(this.disponibleEstimadoAt)) {
+        return true;
+      }
+      return false;
+    }
+    return this.estadoOperativo === EstadoVehiculo.DISPONIBLE && !this.alertaMantenimientoActiva;
+  }
 }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AdminConfigService } from './admin-config.service';
+import { WinstonPhysicalLoggerService } from '../../core/logger/winston-logger.service';
 
 export interface AuditActor {
   id?: string | null;
@@ -45,12 +46,9 @@ function texto(detalle: any): string {
 }
 
 /**
- * Auditoría REAL:
- *  1. `panel_audit_logs`: cada acción del panel (usuarios, reservas, payouts,
- *     ajustes, tickets) se registra con actor, IP y detalle.
- *  2. Eventos del sistema leídos de las tablas reales: registros e inicios de
- *     sesión (auth.users), reservas creadas (vuelos/autos/atracciones) y tickets
- *     de soporte creados/resueltos.
+ * Auditoría Física Rotativa (Mandato Cátedra RDA2 §2):
+ * - Cero logs en base de datos.
+ * - Toda la auditoría se persiste en logs/audit-YYYY-MM-DD.log y se lee en streaming.
  */
 @Injectable()
 export class AdminAuditService {
@@ -59,28 +57,24 @@ export class AdminAuditService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly configService: AdminConfigService,
+    private readonly winstonLogger: WinstonPhysicalLoggerService,
   ) {}
 
-  /** Nunca rompe la operación principal si la auditoría falla. */
+  /** Registra en archivo físico plano rotativo (logs/audit-YYYY-MM-DD.log) */
   async registrar(actor: AuditActor, accion: string, entidadTipo: string, entidadId: string | null, detalle?: any) {
     try {
-      await this.configService.asegurarEsquema();
-      await this.dataSource.query(
-        `INSERT INTO panel_audit_logs (actor_id, actor_email, accion, entidad_tipo, entidad_id, detalle, ip, user_agent)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
-        [
-          actor.id ?? null,
-          actor.email ?? null,
-          accion.slice(0, 80),
-          entidadTipo?.slice(0, 60) ?? null,
-          entidadId ? String(entidadId).slice(0, 160) : null,
-          detalle === undefined ? null : JSON.stringify(detalle),
-          actor.ip ?? null,
-          actor.userAgent ?? null,
-        ],
-      );
+      this.winstonLogger.logAudit(accion, {
+        actor_id: actor.id ?? null,
+        actor_email: actor.email ?? null,
+        accion: accion.slice(0, 80),
+        entidad_tipo: entidadTipo?.slice(0, 60) ?? null,
+        entidad_id: entidadId ? String(entidadId).slice(0, 160) : null,
+        detalle: detalle === undefined ? null : detalle,
+        ip: actor.ip ?? null,
+        user_agent: actor.userAgent ?? null,
+      });
     } catch (e) {
-      this.logger.error(`No se pudo registrar auditoría "${accion}": ${e.message}`);
+      this.logger.error(`No se pudo registrar auditoría física "${accion}": ${e.message}`);
     }
   }
 
@@ -95,23 +89,29 @@ export class AdminAuditService {
 
   async listar(limit = 300): Promise<{ items: AuditEntry[]; resumen: Record<string, number> }> {
     const lim = Math.min(Math.max(Number(limit) || 300, 1), 1000);
-    await this.configService.asegurarEsquema().catch(() => undefined);
 
-    const [admin, usuarios, vuelos, autos, atracciones, hospedaje, tickets, proveedores] = await Promise.all([
-      this.q(`SELECT id, created_at, actor_email, accion, entidad_tipo, entidad_id, detalle, ip
-              FROM panel_audit_logs ORDER BY created_at DESC LIMIT $1`, [lim]),
-      this.q(`SELECT id, email, created_at, last_sign_in_at FROM auth.users
-              ORDER BY GREATEST(created_at, COALESCE(last_sign_in_at, created_at)) DESC LIMIT $1`, [lim]),
-      this.q(`SELECT id_reserva AS id, res_pnr AS pnr, res_estado AS estado, res_total AS total, res_fechacreacion AS fecha
-              FROM reserva ORDER BY res_fechacreacion DESC LIMIT $1`, [lim]),
-      this.q(`SELECT id, status AS estado, "totalPrice" AS precio, booker, "createdAt" AS fecha
-              FROM orders_autos ORDER BY "createdAt" DESC LIMIT $1`, [lim]),
-      this.q(`SELECT id, status AS estado, "totalPrice" AS precio, "customerEmail" AS email, "customerName" AS nombre, "createdAt" AS fecha
-              FROM reservas_atraccion ORDER BY "createdAt" DESC LIMIT $1`, [lim]),
-      this.q(`SELECT id, codigo_reserva AS codigo, estado, total, cliente_email AS email, cliente_nombre AS nombre, creado_en AS fecha
-              FROM reservas_alojamiento ORDER BY creado_en DESC LIMIT $1`, [lim]),
+    // 1. Leer auditoría administrativa desde archivos planos físicos (logs/audit-*.log)
+    const physicalLogs = this.winstonLogger.getRecentAuditLogs(lim);
+    const admin = physicalLogs.map((p, idx) => ({
+      id: `phys-${p.timestamp}-${idx}`,
+      created_at: p.timestamp,
+      actor_email: p.payload?.actor_email || p.payload?.actor?.email || 'admin@booking.com',
+      accion: p.event || p.payload?.accion || 'Acción Administrativa',
+      entidad_tipo: p.payload?.entidad_tipo || 'sistema',
+      entidad_id: p.payload?.entidad_id || null,
+      detalle: p.payload?.detalle || p.payload,
+      ip: p.payload?.ip || null,
+    }));
+
+    // 2. Consultar eventos de negocio activos de los esquemas sin bloquear
+    const [usuarios, tickets, proveedores, vuelos, autos, atracciones, hospedaje] = await Promise.all([
+      this.q(`SELECT id, email, created_at FROM schema_clientes.clientes ORDER BY created_at DESC LIMIT $1`, [lim]),
       this.q(`SELECT * FROM support_tickets ORDER BY created_at DESC LIMIT $1`, [lim]),
       this.q(`SELECT id, created_at, empresa, tipo, email, ip FROM panel_solicitudes_proveedor ORDER BY created_at DESC LIMIT $1`, [lim]),
+      this.q(`SELECT id, created_at AS fecha, id AS pnr, estado, precio_total AS total FROM schema_vuelos.vuelos_reservas ORDER BY created_at DESC LIMIT $1`, [lim]),
+      this.q(`SELECT id, created_at AS fecha, estado, total, nombre_conductor AS booker FROM schema_autos.autos_reservas ORDER BY created_at DESC LIMIT $1`, [lim]),
+      this.q(`SELECT id, created_at AS fecha, status AS estado, total_price AS precio, customer_name AS nombre, customer_email AS email FROM schema_atracciones.atracciones_reservas ORDER BY created_at DESC LIMIT $1`, [lim]),
+      this.q(`SELECT id, created_at AS fecha, estado, precio_total AS total, nombre_titular AS nombre, email_titular AS email FROM schema_alojamientos.alojamientos_reservas ORDER BY created_at DESC LIMIT $1`, [lim]),
     ]);
 
     const items: AuditEntry[] = [];

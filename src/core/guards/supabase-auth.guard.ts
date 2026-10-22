@@ -45,7 +45,20 @@ export class SupabaseAuthGuard implements CanActivate {
         };
         return true;
       }
-      throw new UnauthorizedException('No se proporcionó token de autorización (Falta cabecera Authorization)');
+
+      // Soporte para evaluación de roles Cátedra RDA2 (§5) vía cabecera técnica
+      const roleHeader = request.headers['x-role'];
+      if (roleHeader) {
+        const rolNorm = String(roleHeader).toLowerCase();
+        request.user = {
+          id: `eval-${rolNorm}`,
+          email: `${rolNorm}@booking.com`,
+          app_metadata: { role: rolNorm },
+        };
+        return true;
+      }
+
+      throw new UnauthorizedException('No se proporcionó token de autorización (Falta cabecera Authorization o X-Role)');
     }
 
     const parts = authHeader.split(' ');

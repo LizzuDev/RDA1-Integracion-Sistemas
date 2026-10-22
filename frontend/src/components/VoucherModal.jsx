@@ -36,6 +36,38 @@ export function VoucherModal({ isOpen, onClose, reserva, atraccion, user, conver
     window.print();
   };
 
+  const handleDownloadIcs = () => {
+    const tourName = atraccion?.nombre || atraccion?.name || 'Atracción Turística';
+    const dateStr = reserva.date || '2026-10-25';
+    const cleanDate = dateStr.replace(/-/g, '');
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Booking Prototipo//Atracciones//ES',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:reserva-${reservationId}@booking.epn.edu.ec`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      `DTSTART:${cleanDate}T100000Z`,
+      `DTEND:${cleanDate}T140000Z`,
+      `SUMMARY:${tourName} - Booking Ecuador`,
+      `DESCRIPTION:Voucher Oficial Booking Ecuador. PNR: ${reservationId}. Guia: ${guiaAsignado}. Mostrar código QR en puerta.`,
+      `LOCATION:${atraccion?.locations?.[0]?.address || 'Punto de encuentro indicado en voucher'}`,
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `reserva-${reservationId}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10000, padding: '20px' }}>
       <div className="voucher-card" style={{ background: '#fff', borderRadius: '14px', maxWidth: '520px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.25)', position: 'relative', border: '1px solid #e0e0e0' }}>
@@ -156,18 +188,24 @@ export function VoucherModal({ isOpen, onClose, reserva, atraccion, user, conver
           )}
 
           {/* Acciones Finales */}
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              onClick={handleDownloadIcs}
+              style={{ flex: 1, background: '#e0f2fe', border: '1px solid #7dd3fc', padding: '10px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', color: '#0369a1', fontSize: '0.85rem' }}
+            >
+              📅 Calendario (.ics)
+            </button>
             <button 
               onClick={handlePrint}
-              style={{ flex: 1, background: '#f3f4f6', border: '1px solid #d1d5db', padding: '12px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', color: '#374151' }}
+              style={{ flex: 1, background: '#f3f4f6', border: '1px solid #d1d5db', padding: '10px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', color: '#374151', fontSize: '0.85rem' }}
             >
-              🖨️ Imprimir / Guardar PDF
+              🖨️ PDF / Imprimir
             </button>
             <button 
               onClick={onClose}
-              style={{ flex: 1, background: '#003580', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', color: '#fff' }}
+              style={{ flex: 1, background: '#003580', border: 'none', padding: '10px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', color: '#fff', fontSize: '0.85rem' }}
             >
-              Cerrar Voucher
+              Cerrar
             </button>
           </div>
 

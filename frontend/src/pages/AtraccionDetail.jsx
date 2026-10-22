@@ -43,10 +43,12 @@ export function AtraccionDetail() {
   ]);
 
   const [form, setForm] = useState({
-    date: '2026-10-15',
+    date: '2026-10-25',
     time: '10:30 a.m.',
     adult_count: 1,
     child_count: 0,
+    senior_count: 0,
+    infant_count: 0,
     special_requirements: ''
   });
 
@@ -98,8 +100,12 @@ export function AtraccionDetail() {
   const todayStr = new Date().toISOString().split('T')[0];
   const precioAdulto = parseFloat(atraccion?.precio_unitario || atraccion?.price?.total || atraccion?.precioTicket || 55);
   const precioNino = parseFloat((precioAdulto * 0.5).toFixed(2));
-  const totalTickets = (form.adult_count || 1) + (form.child_count || 0);
-  const totalCalculado = parseFloat(((form.adult_count * precioAdulto) + (form.child_count * precioNino)).toFixed(2));
+  const precioSenior = parseFloat((precioAdulto * 0.7).toFixed(2)); // Tarifa 3ra edad 30% descuento
+  const precioInfante = 0.0; // Tarifa $0 (Gratis) con cupo de aforo legal (Cátedra RDA2 §6)
+  const totalTickets = (form.adult_count || 0) + (form.child_count || 0) + (form.senior_count || 0) + (form.infant_count || 0);
+  const totalCalculado = parseFloat(
+    ((form.adult_count * precioAdulto) + (form.child_count * precioNino) + (form.senior_count * precioSenior) + (form.infant_count * precioInfante)).toFixed(2)
+  );
 
   // Heurística 5 & V-07: Validación reactiva de aforo y cupos en turno
   const selectedSlot = timeSlots.find(s => s.time === form.time) || timeSlots[0];
@@ -149,6 +155,8 @@ export function AtraccionDetail() {
         time: form.time,
         adult_count: form.adult_count,
         child_count: form.child_count,
+        senior_count: form.senior_count,
+        infant_count: form.infant_count,
         ticket_count: totalTickets,
         customer_name: (user.user_metadata?.full_name || user.email.split('@')[0]).trim().replace(/\s{2,}/g, ' '),
         customer_email: user.email?.trim() || '',
@@ -634,7 +642,7 @@ export function AtraccionDetail() {
               </div>
 
               {/* Niño */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
                 <div>
                   <strong style={{ fontSize: '0.9rem', display: 'block' }}>Niño (5 a 12 años)</strong>
                   <span style={{ fontSize: '0.8rem', color: '#15803d' }}>50% Dcto: {convertPrice(precioNino)}</span>
@@ -656,6 +664,66 @@ export function AtraccionDetail() {
                     +
                   </button>
                 </div>
+              </div>
+
+              {/* Senior (3ra Edad) - GAP-FRONT-01 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
+                <div>
+                  <strong style={{ fontSize: '0.9rem', display: 'block' }}>Senior (65+ años)</strong>
+                  <span style={{ fontSize: '0.8rem', color: '#0369a1' }}>Tarifa 3ra Edad (30% Dcto): {convertPrice(precioSenior)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setForm({ ...form, senior_count: Math.max(0, form.senior_count - 1) })}
+                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    -
+                  </button>
+                  <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.senior_count}</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setForm({ ...form, senior_count: Math.min(10, form.senior_count + 1) })}
+                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Infante (0 a 4 años) - Tarifa $0 con cupo de aforo legal obligatorio - GAP-FRONT-01 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', background: '#f0fdf4', border: '1px dashed #86efac', padding: '10px 12px', borderRadius: '8px' }}>
+                <div>
+                  <strong style={{ fontSize: '0.9rem', display: 'block', color: '#166534' }}>Infante (0 a 4 años)</strong>
+                  <span style={{ fontSize: '0.78rem', color: '#15803d', fontWeight: 600 }}>Tarifa $0.00 (Ocupa cupo legal de aforo)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setForm({ ...form, infant_count: Math.max(0, form.infant_count - 1) })}
+                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    -
+                  </button>
+                  <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.infant_count}</span>
+                  <button 
+                    type="button" 
+                    onClick={() => setForm({ ...form, infant_count: Math.min(10, form.infant_count + 1) })}
+                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* WIDGET PROMO COMBO B2B - GAP-FRONT-05 */}
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1d4ed8', fontWeight: 700, fontSize: '0.85rem', marginBottom: '4px' }}>
+                  <span>🎁</span> Combo Promocional B2B Recomendado
+                </div>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#1e40af' }}>
+                  Añade un auto de alquiler con <strong>15% de descuento directo</strong> negociado mediante contrato con Alamo & Hertz.
+                </p>
               </div>
 
               {/* ALERTA DE CUPO Y AFORO */}

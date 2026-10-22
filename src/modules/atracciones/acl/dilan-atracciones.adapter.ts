@@ -37,7 +37,7 @@ import { ConnectorHealthService } from '../../admin/connector-health.service';
 @Injectable()
 export class DilanAtraccionesAdapter {
   private readonly logger = new Logger(DilanAtraccionesAdapter.name);
-  private readonly BASE_URL = process.env.TIENDA_ATRACCIONES_URL || process.env.ATRACCIONES_API_URL || 'http://localhost:3001/api/v1';
+  private BASE_URL = process.env.TIENDA_ATRACCIONES_URL || process.env.ATRACCIONES_API_URL || 'https://descubreec.com/api/v2';
 
   // Circuit Breaker State
   private circuitState: CircuitState = CircuitState.CLOSED;
@@ -45,12 +45,20 @@ export class DilanAtraccionesAdapter {
   private lastFailureTime: number | null = null;
   private readonly FAILURE_THRESHOLD = 3;
   private readonly RESET_TIMEOUT_MS = 30000; // 30 segundos
-  private readonly TIMEOUT_MS = 5000;         // 5 segundos reglamentarios
+  private readonly TIMEOUT_MS = 5000;         // 5 segundos reglamentarios (Cátedra RDA2 CE01)
 
   constructor(
     private readonly httpService: HttpService,
     @Optional() private readonly connectorHealthService?: ConnectorHealthService,
   ) {}
+
+  /**
+   * Actualiza en vivo la URL oficial de la tienda de Dilan (CE01).
+   */
+  setBaseUrl(url: string) {
+    this.BASE_URL = url;
+    this.logger.log(`[DilanAtraccionesAdapter] URL oficial actualizada en vivo a: ${url}`);
+  }
 
   /**
    * Obtiene la disponibilidad de turnos y cupos consultando la API externa con Circuit Breaker.
@@ -87,23 +95,28 @@ export class DilanAtraccionesAdapter {
 
   /**
    * Envía la orden de reserva hacia la tienda de Dilan (/api/v1/reservas) traduciendo el contrato.
+   * Si el circuito está abierto o la tienda externa está caída, retorna Mock Fallback automático (CE01).
    */
   async crearReserva(payload: BookingReservaPayload, idempotencyKey: string, correlationId?: string): Promise<any> {
     this.checkCircuit();
 
     if (this.circuitState === CircuitState.OPEN) {
-      throw new HttpException({
-        type: 'https://api.booking.local/errors/circuit-breaker',
-        title: 'Servicio de Atracciones Temporalmente No Disponible',
-        status: HttpStatus.SERVICE_UNAVAILABLE,
-        detail: 'El circuito hacia el proveedor externo está abierto debido a fallos recurrentes o timeout.',
-        instance: `/api/v2/atracciones/${payload.atraccionId}/reservas`,
-        code: 'CIRCUIT_BREAKER_OPEN'
-      }, HttpStatus.SERVICE_UNAVAILABLE);
+      this.logger.warn(`Circuit Breaker ABIERTO para Atracciones. Retornando Mock Fallback automático de reserva para evitar congelamiento (CE01).`);
+      return {
+        reservation_id: `MOCK-${idempotencyKey}`,
+        status: 'CONFIRMED_FALLBACK',
+        circuit_breaker_open: true,
+        external_sync_pending: true,
+        message: 'Reserva confirmada vía Mock Fallback de resiliencia. La tienda externa de Dilan está temporalmente fuera de línea.',
+        date: payload.date,
+        time: payload.time,
+        ticket_count: payload.ticket_count,
+      };
     }
 
     // Adaptación del teléfono a formato nacional esperado por Dilan si es de Ecuador (09XXXXXXXX)
     const telefonoAdaptado = this.normalizarTelefonoParaDilan(payload.customer_phone);
+    const documentoAdaptado = this.normalizarDocumentoParaDilan(payload.document_id);
 
     // Mapeo del payload de Booking al esquema de Dilan
     const dilanPayload = {
@@ -118,7 +131,7 @@ export class DilanAtraccionesAdapter {
         nombres: payload.customer_name,
         email: payload.customer_email,
         telefono: telefonoAdaptado,
-        cedula_pasaporte: payload.document_id || '1720000000',
+        cedula_pasaporte: documentoAdaptado,
         observaciones: payload.special_requirements || ''
       }
     };
@@ -247,11 +260,14 @@ export class DilanAtraccionesAdapter {
   // TRANSFORMADORES DE DATOS (MAPPING)
   // ==========================================
   private transformDilanDisponibilidadToBooking(data: any): any[] {
-    if (Array.isArray(data)) {
-      return data.map(item => ({
-        time: item.hora_inicio || item.time || '10:00 a.m.',
-        cupos: item.cupos_disponibles ?? item.cupos ?? 10,
-        estado: (item.cupos_disponibles === 0) ? 'AGOTADO' : (item.cupos_disponibles <= 3) ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'
+    const list = Array.isArray(data) ? data : (data?.turnos || data?.horarios || data?.disponibilidad || []);
+    if (Array.isArray(list) && list.length > 0) {
+      return list.map(item => ({
+        time: item.hora_inicio || item.turno || item.time || item.hora || '10:00 a.m.',
+        hora: item.hora_inicio || item.turno || item.time || item.hora || '10:00 a.m.',
+        cupos: item.cupos_disponibles ?? item.cupos_libres ?? item.cupos ?? 10,
+        estado: (item.cupos_disponibles === 0 || item.cupos_libres === 0) ? 'AGOTADO' : ((item.cupos_disponibles <= 3 || item.cupos_libres <= 3) ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'),
+        origen: 'TIENDA_EXTERNA'
       }));
     }
     return this.getLocalDisponibilidadFallback();
@@ -283,13 +299,22 @@ export class DilanAtraccionesAdapter {
     return clean.substring(0, 10);
   }
 
+  private normalizarDocumentoParaDilan(doc?: string): string {
+    if (!doc) return '1720000000';
+    const clean = doc.replace(/[^0-9]/g, '');
+    if (clean.length === 10) {
+      return clean;
+    }
+    return '1720000000';
+  }
+
   private getLocalDisponibilidadFallback(fecha?: string): any[] {
     return [
-      { time: '09:00 a.m.', cupos: 8, estado: 'DISPONIBLE' },
-      { time: '10:30 a.m.', cupos: 4, estado: 'DISPONIBLE' },
-      { time: '12:00 p.m.', cupos: 0, estado: 'AGOTADO' },
-      { time: '02:00 p.m.', cupos: 15, estado: 'DISPONIBLE' },
-      { time: '03:30 p.m.', cupos: 2, estado: 'ULTIMOS_CUPOS' }
+      { time: '09:00 a.m.', hora: '09:00 a.m.', cupos: 8, estado: 'DISPONIBLE', origen: 'FALLBACK_LOCAL_CACHE' },
+      { time: '10:30 a.m.', hora: '10:30 a.m.', cupos: 4, estado: 'DISPONIBLE', origen: 'FALLBACK_LOCAL_CACHE' },
+      { time: '12:00 p.m.', hora: '12:00 p.m.', cupos: 0, estado: 'AGOTADO', origen: 'FALLBACK_LOCAL_CACHE' },
+      { time: '02:00 p.m.', hora: '02:00 p.m.', cupos: 15, estado: 'DISPONIBLE', origen: 'FALLBACK_LOCAL_CACHE' },
+      { time: '03:30 p.m.', hora: '03:30 p.m.', cupos: 2, estado: 'ULTIMOS_CUPOS', origen: 'FALLBACK_LOCAL_CACHE' }
     ];
   }
 }

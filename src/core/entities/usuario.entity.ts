@@ -1,8 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, OneToMany } from 'typeorm';
-import { Carrito } from './carrito.entity';
-import { Factura } from './factura.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
 
-@Entity('usuarios')
+@Entity({ name: 'clientes', schema: 'schema_clientes' })
 export class Usuario {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -19,16 +17,19 @@ export class Usuario {
   @Column({ length: 20, nullable: true })
   cedula_ruc: string;
 
-  @Column({ length: 20, nullable: true })
+  @Column({ length: 30, nullable: true })
   telefono: string;
 
   @Column('text', { nullable: true })
   direccion: string;
 
-  @Column('text', { default: 'cliente' })
+  @Column({ length: 60, default: 'Ecuador' })
+  pais: string;
+
+  @Column('text', { default: 'CLIENTE' })
   rol: string;
 
-  @Column('text', { default: 'activo' })
+  @Column('text', { default: 'ACTIVO' })
   estado: string;
 
   @Column('text', { nullable: true })
@@ -42,10 +43,4 @@ export class Usuario {
 
   @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deleted_at: Date;
-
-  @OneToMany(() => Carrito, (carrito) => carrito.usuario)
-  carritos: Carrito[];
-
-  @OneToMany(() => Factura, (factura) => factura.usuario)
-  facturas: Factura[];
 }

@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 /** Persona que se aloja en una reserva: el titular y sus acompañantes. */
-@Entity('huespedes_reserva')
+@Entity({ name: 'alojamientos_huespedes', schema: 'schema_alojamientos' })
 export class HuespedReserva {
   @PrimaryGeneratedColumn('uuid')
   id: string;

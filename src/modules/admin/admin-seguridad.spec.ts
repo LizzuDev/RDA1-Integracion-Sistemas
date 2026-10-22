@@ -73,4 +73,51 @@ describe('Seguridad del panel de administración', () => {
       await expect(servicio.cancelarReserva('hospedaje', 'BKG-1')).rejects.toThrow(ConflictException);
     });
   });
+
+  describe('RolesGuard (RBAC Cátedra RDA2 §5: CLIENTE, ADMIN, MANTENIMIENTO)', () => {
+    const { RolesGuard } = require('../../core/guards/roles.guard');
+    const { Rol } = require('../../core/auth/roles.enum');
+    const { Reflector } = require('@nestjs/core');
+
+    const crearGuard = (rolesPermitidos: any[]) => {
+      const reflector = new Reflector();
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(rolesPermitidos);
+      return new RolesGuard(reflector);
+    };
+
+    const contextoRoles = (user: any) =>
+      ({
+        getHandler: () => () => {},
+        getClass: () => class {},
+        switchToHttp: () => ({ getRequest: () => ({ user }) }),
+      } as any);
+
+    it('permite acceso si la ruta exige MANTENIMIENTO o ADMIN y el usuario tiene rol MANTENIMIENTO', () => {
+      const guard = crearGuard([Rol.MANTENIMIENTO, Rol.ADMIN]);
+      const ctx = contextoRoles({
+        email: 'tecnico@booking.com',
+        app_metadata: { role: 'mantenimiento' },
+      });
+      expect(guard.canActivate(ctx)).toBe(true);
+    });
+
+    it('permite acceso si la ruta exige MANTENIMIENTO o ADMIN y el usuario es ADMIN', () => {
+      const guard = crearGuard([Rol.MANTENIMIENTO, Rol.ADMIN]);
+      const ctx = contextoRoles({
+        email: 'admin@booking.com',
+        app_metadata: { role: 'admin' },
+      });
+      expect(guard.canActivate(ctx)).toBe(true);
+    });
+
+    it('rechaza con 403 Forbidden si un CLIENTE intenta ingresar a ruta de MANTENIMIENTO', () => {
+      const guard = crearGuard([Rol.MANTENIMIENTO, Rol.ADMIN]);
+      const ctx = contextoRoles({
+        email: 'turista@gmail.com',
+        app_metadata: { role: 'CLIENTE' },
+      });
+      expect(() => guard.canActivate(ctx)).toThrow(ForbiddenException);
+    });
+  });
 });
+

@@ -41,7 +41,7 @@ export class ConnectorHealthService {
         nombre: 'Sistema Atracciones & Tours',
         vertical: 'Atracciones',
         protocolo: 'REST / OpenAPI v2 + Circuit Breaker',
-        url: process.env.TIENDA_ATRACCIONES_URL || 'http://localhost:3000/api/v2/atracciones',
+        url: process.env.TIENDA_ATRACCIONES_URL || 'https://descubreec.com/api/v2',
         enabled: true,
         status: 'ONLINE',
         latency: 18,
@@ -57,7 +57,7 @@ export class ConnectorHealthService {
         nombre: 'Sistema Renta de Autos & Flota',
         vertical: 'Autos',
         protocolo: 'REST / OpenAPI v2 + Cooldown 2h',
-        url: process.env.TIENDA_AUTOS_URL || 'http://localhost:3000/api/v2/autos/orders',
+        url: process.env.TIENDA_AUTOS_URL || 'http://localhost:3000/api/v2/autos',
         enabled: true,
         status: 'ONLINE',
         latency: 24,
@@ -89,7 +89,7 @@ export class ConnectorHealthService {
         nombre: 'Sistema Vuelos & Aerolíneas',
         vertical: 'Vuelos',
         protocolo: 'REST / SOAP Translation Gateway',
-        url: process.env.TIENDA_VUELOS_URL || 'http://localhost:3000/api/v2/vuelos/search',
+        url: process.env.TIENDA_VUELOS_URL || 'http://localhost:3000/api/v2/vuelos',
         enabled: true,
         status: 'ONLINE',
         latency: 42,
@@ -158,6 +158,40 @@ export class ConnectorHealthService {
   }
 
   /**
+   * Actualiza en vivo la URL oficial de un conector socio en memoria (Cátedra RDA2 CE01).
+   */
+  updateNodeUrl(serviceId: string, newUrl: string): ConnectorNode {
+    let target = this.nodes.get(serviceId);
+    if (!target) {
+      for (const [id, n] of this.nodes.entries()) {
+        if (id.toLowerCase() === serviceId.toLowerCase() || n.vertical.toLowerCase() === serviceId.toLowerCase()) {
+          target = n;
+          break;
+        }
+      }
+    }
+
+    if (!target) {
+      throw new Error(`El conector con ID o vertical '${serviceId}' no existe en la red.`);
+    }
+
+    const prevUrl = target.url;
+    target.url = newUrl;
+    target.lastCheck = new Date().toISOString();
+    this.logger.log(`[PARAMETRIZACIÓN EN VIVO] URL de '${target.id}' actualizada a: ${newUrl}`);
+
+    this.winstonLogger.logAudit('NODE_URL_PARAMETRIZADA_EN_VIVO', {
+      service_id: target.id,
+      nombre: target.nombre,
+      previous_url: prevUrl,
+      new_url: newUrl,
+      timestamp: new Date().toISOString(),
+    });
+
+    return target;
+  }
+
+  /**
    * Conmuta el switch manual (Kill-Switch) de un conector externo para demostración docente (Brecha B-03).
    */
   toggleNode(serviceId: string, forceEnabled?: boolean): ConnectorNode {
@@ -197,7 +231,7 @@ export class ConnectorHealthService {
   }
 
   /**
-   * Prueba de conectividad ping hacia un nodo específico.
+   * Prueba de conectividad ping hacia un nodo específico con timeout reglamentario de 5s (CE01).
    */
   async pingNode(serviceId: string): Promise<ConnectorNode> {
     const node = this.nodes.get(serviceId);
@@ -220,8 +254,8 @@ export class ConnectorHealthService {
       }
 
       const res = await firstValueFrom(
-        this.httpService.get(node.url, { timeout: 3500 }).pipe(
-          timeout(3500),
+        this.httpService.get(node.url, { timeout: 5000 }).pipe(
+          timeout(5000),
           catchError((err) => {
             return of({ status: err.response?.status || 500 });
           }),

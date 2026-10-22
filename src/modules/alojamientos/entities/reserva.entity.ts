@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { ColumnNumericTransformer } from '../../../common/transformers/column-numeric.transformer';
 
-@Entity('reservas_alojamiento')
+@Entity({ name: 'alojamientos_reservas', schema: 'schema_alojamientos' })
 export class ReservaAlojamiento {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -90,6 +90,18 @@ export class ReservaAlojamiento {
 
   @Column({ name: 'cancelada_en', type: 'timestamp', nullable: true })
   canceladaEn?: Date | null;
+
+  @Column({ name: 'habitacion_asignada', type: 'varchar', length: 20, nullable: true })
+  habitacionAsignada?: string | null;
+
+  @Column({ name: 'clave_acceso_digital', type: 'varchar', length: 30, nullable: true })
+  claveAccesoDigital?: string | null;
+
+  @Column({ name: 'checkin_liberado_a_las_14', type: 'boolean', default: false })
+  checkinLiberadoALas14: boolean;
+
+  @Column({ name: 'checkin_completado_at', type: 'timestamptz', nullable: true })
+  checkinCompletadoAt?: Date | null;
 
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   createdAt: Date;

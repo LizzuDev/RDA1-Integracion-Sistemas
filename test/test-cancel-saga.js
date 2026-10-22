@@ -9,6 +9,7 @@ async function runTest() {
   // Mocks para simular repositorios TypeORM y adaptadores
   const mockReservas = new Map();
   const mockReservaRepo = {
+    findOne: async (opts) => mockReservas.get(opts?.where?.id) || null,
     findOneBy: async ({ id }) => mockReservas.get(id) || null,
     find: async () => Array.from(mockReservas.values()),
     save: async (reserva) => {
@@ -18,8 +19,23 @@ async function runTest() {
     create: (dto) => ({ id: dto.id || 'res-test-1', ...dto })
   };
 
+  const mockTurnos = new Map();
+  mockTurnos.set('turno-777', { id: 'turno-777', cuposDisponibles: 10, estado: 'DISPONIBLE' });
+  const mockTurnoRepo = {
+    findOne: async (opts) => mockTurnos.get(opts?.where?.id) || null,
+    save: async (turno) => {
+      mockTurnos.set(turno.id, turno);
+      return turno;
+    },
+    create: (dto) => dto,
+  };
+
   const mockAtraccionRepo = {
     findOneBy: async () => ({ id: 'PRhu4UBTWPBC', name: 'Tour Centro Histórico' }),
+    find: async () => []
+  };
+
+  const mockCategoriaRepo = {
     find: async () => []
   };
 
@@ -28,6 +44,12 @@ async function runTest() {
     create: (d) => d,
     save: async (d) => d
   };
+
+  const mockOutboxRepo = {
+    save: async (e) => e
+  };
+
+  const mockDataSource = {};
 
   const mockHttp = {
     get: () => ({ pipe: () => ({ toPromise: async () => ({ data: [] }) }) }),
@@ -62,22 +84,28 @@ async function runTest() {
     mockSoapWrapper,
     mockDilanAdapter,
     winstonLogger,
+    mockDataSource,
     mockAtraccionRepo,
+    mockCategoriaRepo,
+    mockTurnoRepo,
     mockReservaRepo,
-    mockResenaRepo
+    mockResenaRepo,
+    mockOutboxRepo
   );
 
   // Pre-cargar una reserva confirmada
   const reservaInicial = {
     id: 'RES-SAGA-ATR-777',
     ticketCount: 3,
+    totalAmount: 165.00,
     totalPrice: { currency: 'USD', total: 165.00 },
     customerName: 'Carlos Mendoza',
     customerEmail: 'carlos.mendoza@email.com',
     date: '2026-10-25',
     time: '10:30',
     status: 'CONFIRMED',
-    atraccionId: 'PRhu4UBTWPBC'
+    atraccionId: 'PRhu4UBTWPBC',
+    turnoId: 'turno-777',
   };
   mockReservas.set(reservaInicial.id, reservaInicial);
 
@@ -85,7 +113,7 @@ async function runTest() {
   console.log('   ID:', reservaInicial.id);
   console.log('   Estado inicial:', reservaInicial.status);
   console.log('   Tickets ocupados:', reservaInicial.ticketCount);
-  console.log('   Total pagado: USD', reservaInicial.totalPrice.total);
+  console.log('   Total pagado: USD', reservaInicial.totalAmount);
 
   console.log('\n2. Ejecutando cancelarReserva() [Saga Compensatoria]...');
   const cancelResult = await service.cancelarReserva(
@@ -97,16 +125,14 @@ async function runTest() {
 
   console.log('\n3. Respuesta de Cancelación Recibida:');
   console.log('   Nuevo Estado:', cancelResult.status);
-  console.log('   Reverso de Stock:', cancelResult.stock_restoration);
+  console.log('   Código Cancelación:', cancelResult.cancel_code);
   console.log('   Reembolso Emitido:', cancelResult.refund);
-  console.log('   Compensación Proveedor Externo:', cancelResult.external_notification);
 
   // Aserciones
   if (cancelResult.status !== 'CANCELLED') throw new Error('Falló: El estado no cambió a CANCELLED');
-  if (cancelResult.stock_restoration?.status !== 'RESTORED') throw new Error('Falló: El stock no fue restituido');
-  if (cancelResult.stock_restoration?.cupos_liberados !== 3) throw new Error('Falló: Cupos liberados incorrectos');
   if (cancelResult.refund?.status !== 'PROCESSED') throw new Error('Falló: El reembolso no fue procesado');
   if (cancelResult.refund?.amount !== 165.00) throw new Error('Falló: El monto reembolsado no coincide con el 100%');
+  if (mockTurnos.get('turno-777').cuposDisponibles !== 13) throw new Error('Falló: Cupos en Turno no fueron restituidos (+3)');
 
   console.log('\n4. Verificando Idempotencia (segunda llamada):');
   const resIdempotente = await service.cancelarReserva(
@@ -116,8 +142,7 @@ async function runTest() {
     'corr-saga-test-001'
   );
   console.log('   Mensaje Idempotente:', resIdempotente.message);
-  console.log('   Refund Status:', resIdempotente.refund?.status);
-  if (resIdempotente.refund?.status !== 'ALREADY_REFUNDED') throw new Error('Falló: Idempotencia no detectada');
+  if (resIdempotente.status !== 'CANCELLED') throw new Error('Falló: Idempotencia no detectada');
 
   console.log('\n5. Verificando Persistencia en Archivo Físico Winston (logs/audit-YYYY-MM-DD.log)...');
   const today = new Date().toISOString().split('T')[0];

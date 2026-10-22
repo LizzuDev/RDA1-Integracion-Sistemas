@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { WinstonPhysicalLoggerService } from '../../core/logger/winston-logger.service';
+import { KafkaRabbitBridgeService } from '../event-bus/bridge/kafka-rabbit-bridge.service';
 
 export interface StockUpdateMessage {
   service_id: string;
@@ -49,7 +50,10 @@ export class InventoryService {
   // Almacén en memoria sincronizado del inventario recibido por gRPC
   private readonly stockRegistry = new Map<string, InventoryRecord>();
 
-  constructor(private readonly winstonLogger: WinstonPhysicalLoggerService) {
+  constructor(
+    private readonly winstonLogger: WinstonPhysicalLoggerService,
+    @Optional() private readonly eventBridge?: KafkaRabbitBridgeService,
+  ) {
     // Sembrar registros de ejemplo para arrancar sincronizado
     this.stockRegistry.set('PRhu4UBTWPBC_2026-10-25_10:00', {
       service_id: 'atracciones-dilan',
@@ -107,6 +111,13 @@ export class InventoryService {
       timestamp
     });
 
+    // Emisión hacia Broker Dual (RabbitMQ 'stock.updated' + Apache Kafka 'topic-catalogo-sync')
+    if (this.eventBridge) {
+      this.eventBridge.bridgeEvent('STOCK_UPDATED', itemId, record).catch(err => {
+        this.logger.warn(`Error al propagar evento de stock a bus dual: ${err.message}`);
+      });
+    }
+
     const now = Date.now();
     return {
       success: true,
@@ -154,6 +165,19 @@ export class InventoryService {
       delta,
       new_units: newUnits
     });
+
+    if (this.eventBridge) {
+      this.eventBridge.bridgeEvent('STOCK_DELTA_UPDATED', itemId, {
+        service_id: serviceId,
+        item_id: itemId,
+        date,
+        time_slot: timeSlot,
+        new_units: newUnits,
+        delta,
+      }).catch(err => {
+        this.logger.warn(`Error al propagar delta de stock a bus dual: ${err.message}`);
+      });
+    }
   }
 
   /**

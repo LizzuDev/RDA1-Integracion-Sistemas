@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { ColumnNumericTransformer } from '../../../common/transformers/column-numeric.transformer';
 
-@Entity('alojamientos')
+@Entity({ name: 'alojamientos_catalogo', schema: 'schema_alojamientos' })
 export class Alojamiento {
   @PrimaryColumn({ type: 'varchar', length: 50 })
   id: string;

@@ -211,15 +211,38 @@ export class AtraccionesController {
 
   @Post('reservas')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Crear reserva de atracción (Alias v2 para integración interoperable)' })
-  @ApiResponse({ status: 201, description: 'Reserva confirmada', type: ReservationResponseDto })
+  @ApiOperation({ summary: 'Crear reserva de atracción (Contrato OpenAPI v2 con 4 edades y QR)' })
+  @ApiResponse({ status: 201, description: 'Reserva confirmada exitosamente con voucher QR y localizador PNR.' })
+  @ApiResponse({ status: 409, description: 'Sin cupos disponibles (OUT_OF_STOCK) o conflicto de idempotencia.' })
   async reservarAlias(
     @Headers('idempotency-key') idempotencyKey: string,
-    @Body() dto: any
+    @Body() dto: any,
   ) {
     const key = idempotencyKey || dto.idempotency_key || `idem-${Date.now()}`;
-    const id = dto.atraccionId || dto.id_atraccion || dto.id || 'PRhu4UBTWPBC';
+    const id = dto.atraccion_id || dto.atraccionId || dto.id_atraccion || dto.id || 'PRhu4UBTWPBC';
     return this.atraccionesService.reservar(id, dto, key);
+  }
+
+  @Get('promociones/contrato')
+  @ApiOperation({ summary: 'Consultar el acuerdo B2B de promociones y combos pactado con el socio (Cátedra RDA2 §9)' })
+  @ApiResponse({ status: 200, description: 'Términos del acuerdo comercial de promociones y combos.' })
+  async getPromocionesContrato() {
+    return this.atraccionesService.getPromocionesContrato();
+  }
+
+  @Put('promociones/contrato')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Formalizar o actualizar acuerdo comercial B2B para combos y descuentos máximos (Cátedra RDA2 §9)' })
+  @ApiResponse({ status: 200, description: 'Acuerdo comercial actualizado exitosamente.' })
+  async updatePromocionesContrato(@Body() dto: any) {
+    return this.atraccionesService.updatePromocionesContrato(dto);
+  }
+
+  @Get('eventos')
+  @ApiOperation({ summary: 'Consultar feed Outbox de eventos transaccionales para streaming RabbitMQ/Kafka' })
+  @ApiResponse({ status: 200, description: 'Listado de eventos de dominio generados por la vertical.' })
+  async getEventosOutbox(@Query('limit') limit: number) {
+    return this.atraccionesService.getEventosOutbox(Number(limit) || 20);
   }
 }
 

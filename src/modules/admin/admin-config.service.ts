@@ -42,20 +42,6 @@ CREATE TABLE IF NOT EXISTS panel_config (
   updated_by  VARCHAR(255)
 );
 
-CREATE TABLE IF NOT EXISTS panel_audit_logs (
-  id            BIGSERIAL PRIMARY KEY,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  actor_id      VARCHAR(64),
-  actor_email   VARCHAR(255),
-  accion        VARCHAR(80) NOT NULL,
-  entidad_tipo  VARCHAR(60),
-  entidad_id    VARCHAR(160),
-  detalle       JSONB,
-  ip            VARCHAR(64),
-  user_agent    TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_panel_audit_created ON panel_audit_logs (created_at DESC);
-
 CREATE TABLE IF NOT EXISTS panel_liquidaciones (
   id            BIGSERIAL PRIMARY KEY,
   vertical      VARCHAR(30) NOT NULL,

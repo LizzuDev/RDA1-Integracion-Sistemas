@@ -73,6 +73,39 @@ export class WinstonPhysicalLoggerService implements LoggerService {
     this.writeToFile(filename, entry);
   }
 
+  /**
+   * Lee las líneas más recientes de los archivos de auditoría físicos (Consideraciones RDA2 §2).
+   */
+  getRecentAuditLogs(limit = 300): any[] {
+    try {
+      this.ensureLogsDirectory();
+      const files = fs.readdirSync(this.logsDir)
+        .filter(f => f.startsWith('audit-') && f.endsWith('.log'))
+        .sort()
+        .reverse();
+
+      const entries: any[] = [];
+      for (const file of files) {
+        if (entries.length >= limit) break;
+        const filePath = path.join(this.logsDir, file);
+        const content = fs.readFileSync(filePath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim().length > 0).reverse();
+        for (const line of lines) {
+          if (entries.length >= limit) break;
+          try {
+            entries.push(JSON.parse(line));
+          } catch {
+            // Ignorar líneas corruptas
+          }
+        }
+      }
+      return entries;
+    } catch (err) {
+      console.error('[WinstonPhysicalLogger] Error al leer logs de auditoría:', err);
+      return [];
+    }
+  }
+
   // Métodos estándar de NestJS LoggerService
   log(message: any, ...optionalParams: any[]) {
     this.logAudit('INFO', { message, params: optionalParams });

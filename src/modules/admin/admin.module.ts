@@ -1,8 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
-import { AdminController } from './admin.controller.js';
-import { AdminService } from './admin.service.js';
+import { AdminController } from './admin.controller';
+import { AdminService } from './admin.service';
 import { AdminConfigService } from './admin-config.service';
 import { AdminFinanzasService } from './admin-finanzas.service';
 import { AdminAuditService } from './admin-audit.service';

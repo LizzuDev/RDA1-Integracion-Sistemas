@@ -11,6 +11,8 @@ import { CommonModule } from '../../common/common.module';
 import { PagoService } from '../atracciones/pago.service';
 import { AutosCircuitBreakerAdapter } from './acl/autos-circuit-breaker.adapter';
 import { WinstonPhysicalLoggerService } from '../../core/logger/winston-logger.service';
+import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
+import { RolesGuard } from '../../core/guards/roles.guard';
 
 @Module({
   imports: [
@@ -24,7 +26,9 @@ import { WinstonPhysicalLoggerService } from '../../core/logger/winston-logger.s
     AutosService,
     PagoService,
     AutosCircuitBreakerAdapter,
-    WinstonPhysicalLoggerService
+    WinstonPhysicalLoggerService,
+    SupabaseAuthGuard,
+    RolesGuard,
   ],
   exports: [AutosService]
 })

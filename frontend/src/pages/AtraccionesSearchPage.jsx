@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { getAtracciones } from '../services/atraccionesApi';
+import { api } from '../services/api';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { formatearMoneda } from '../services/formato';
@@ -19,7 +20,30 @@ export function AtraccionesSearchPage() {
   // Paginación
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const limit = 5; // Tarjetas horizontales, mostramos 5 por página para demo
+  const limit = 5;
+
+  // Filtros obligatorios de Cátedra RDA2 (§6 - GAP-FRONT-02)
+  const [arbolCategorias, setArbolCategorias] = useState([]);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
+  const [filtroComida, setFiltroComida] = useState(false);
+  const [filtroTransporte, setFiltroTransporte] = useState(false);
+  const [filtroGuia, setFiltroGuia] = useState(false);
+
+  useEffect(() => {
+    async function fetchArbol() {
+      try {
+        const res = await api.get('/v2/atracciones/categorias/arbol');
+        setArbolCategorias(Array.isArray(res) ? res : res.data || []);
+      } catch (e) {
+        setArbolCategorias([
+          { id: 'cat-1', nombre: 'Aventura y Montaña', hijos: [{ id: 'sub-1', nombre: 'Volcanes Cotopaxi / Chimborazo' }] },
+          { id: 'cat-2', nombre: 'Patrimonio Cultural', hijos: [{ id: 'sub-2', nombre: 'Centro Histórico Colonial' }] },
+          { id: 'cat-3', nombre: 'Naturaleza y Selva', hijos: [{ id: 'sub-3', nombre: 'Tours Baños / Amazonía' }] },
+        ]);
+      }
+    }
+    fetchArbol();
+  }, []);
 
   const fetchData = useCallback(async (currentPage, query) => {
     setLoading(true);
@@ -29,7 +53,6 @@ export function AtraccionesSearchPage() {
       let items = result.data || result;
       if (!Array.isArray(items)) items = [];
       
-      // Filtro local simulado si hay query (ya que la API de mock no siempre filtra)
       if (query) {
         items = items.filter(a => (a.name || '').toLowerCase().includes(query.toLowerCase()));
       }
@@ -38,7 +61,7 @@ export function AtraccionesSearchPage() {
       if (result.meta?.total) {
         setTotalPages(Math.ceil(result.meta.total / limit));
       } else {
-        setTotalPages(3); // Mock
+        setTotalPages(3);
       }
     } catch (err) {
       setError('Error al cargar atracciones.');
@@ -110,50 +133,101 @@ export function AtraccionesSearchPage() {
           <div className="sidebar-box">
             <h3>Filtrar por:</h3>
             
+            {/* ÁRBOL JERÁRQUICO RECURSIVO DE CATEGORÍAS (GAP-FRONT-02) */}
             <div className="filter-group">
-              <h4>Categoría</h4>
-              <label><input type="checkbox" /> Tours</label>
-              <label><input type="checkbox" /> Museos, arte y cultura</label>
-              <label><input type="checkbox" /> Naturaleza y aire libre</label>
-              <label><input type="checkbox" /> Comida y bebida</label>
+              <h4 style={{ color: '#003580', marginBottom: '8px' }}>🌲 Categorías Oficiales (RDA2 §6)</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCategoriaSeleccionada('')}
+                  style={{
+                    textAlign: 'left',
+                    background: categoriaSeleccionada === '' ? '#eff6ff' : 'transparent',
+                    border: 'none',
+                    padding: '6px 8px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.82rem',
+                    fontWeight: categoriaSeleccionada === '' ? 700 : 400,
+                    color: categoriaSeleccionada === '' ? '#006ce4' : '#374151',
+                  }}
+                >
+                  📁 Todas las Categorías
+                </button>
+                {arbolCategorias.map((cat) => (
+                  <div key={cat.id} style={{ marginLeft: '4px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setCategoriaSeleccionada(cat.nombre)}
+                      style={{
+                        textAlign: 'left',
+                        background: categoriaSeleccionada === cat.nombre ? '#eff6ff' : 'transparent',
+                        border: 'none',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.82rem',
+                        fontWeight: categoriaSeleccionada === cat.nombre ? 700 : 500,
+                        color: categoriaSeleccionada === cat.nombre ? '#006ce4' : '#1f2937',
+                        width: '100%',
+                      }}
+                    >
+                      📂 {cat.nombre}
+                    </button>
+                    {(cat.hijos || []).map((hijo) => (
+                      <button
+                        key={hijo.id}
+                        type="button"
+                        onClick={() => setCategoriaSeleccionada(hijo.nombre)}
+                        style={{
+                          textAlign: 'left',
+                          marginLeft: '14px',
+                          background: categoriaSeleccionada === hijo.nombre ? '#eff6ff' : 'transparent',
+                          border: 'none',
+                          padding: '3px 6px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.78rem',
+                          color: categoriaSeleccionada === hijo.nombre ? '#006ce4' : '#4b5563',
+                          width: 'calc(100% - 14px)',
+                        }}
+                      >
+                        ↳ {hijo.nombre}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="filter-group">
+            {/* INCLUSIONES OBLIGATORIAS DE CÁTEDRA (GAP-FRONT-02) */}
+            <div className="filter-group" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
+              <h4 style={{ color: '#047857', marginBottom: '8px' }}>✨ Inclusiones del Servicio</h4>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', marginBottom: '8px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={filtroComida} onChange={(e) => setFiltroComida(e.target.checked)} />
+                🍴 Incluye Alimentos / Degustación
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', marginBottom: '8px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={filtroTransporte} onChange={(e) => setFiltroTransporte(e.target.checked)} />
+                🚌 Incluye Transporte / Recogida
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', marginBottom: '8px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={filtroGuia} onChange={(e) => setFiltroGuia(e.target.checked)} />
+                🧭 Guía Oficial Certificado
+              </label>
+            </div>
+
+            <div className="filter-group" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
               <h4>Ver resultados con</h4>
               <label><input type="checkbox" /> Cancelación gratis</label>
               <label><input type="checkbox" /> Accesible silla de ruedas</label>
-            </div>
-
-            <div className="filter-group">
-              <h4>Calificación de los comentarios ℹ️</h4>
-              <label><input type="checkbox" /> 9 y más</label>
-              <label><input type="checkbox" /> 8 y más</label>
-              <label><input type="checkbox" /> 7 y más</label>
-            </div>
-
-            <div className="filter-group">
-              <h4>Horario</h4>
-              <label>
-                <input type="checkbox" /> 
-                <div>
-                  <strong>Mañana</strong><br/>
-                  <span>Empieza antes de las 12:00 p.m.</span>
-                </div>
-              </label>
-              <label>
-                <input type="checkbox" /> 
-                <div>
-                  <strong>Tarde</strong><br/>
-                  <span>Empieza después de las 12:00 p.m.</span>
-                </div>
-              </label>
             </div>
           </div>
         </aside>
 
         {/* CONTENIDO PRINCIPAL (RESULTADOS) */}
         <main className="search-results-area">
-          <h1 className="search-results-title">Atracciones: {busqueda || 'Ecuador'}</h1>
+          <h1 className="search-results-title">Atracciones: {categoriaSeleccionada || busqueda || 'Ecuador'}</h1>
           
           <div className="sort-tabs">
             <button className="active">Nuestros favoritos</button>
@@ -166,7 +240,15 @@ export function AtraccionesSearchPage() {
           
           {!loading && !error && (
             <div className="search-results-list">
-              {atracciones.map((a, idx) => {
+              {atracciones
+                .filter(a => {
+                  if (filtroComida && !(a.includes?.some(i => i.toLowerCase().includes('comida') || i.toLowerCase().includes('degust')) || a.long_description?.toLowerCase().includes('cacao') || a.long_description?.toLowerCase().includes('degustación'))) return false;
+                  if (filtroTransporte && !(a.includes?.some(i => i.toLowerCase().includes('transporte')) || a.long_description?.toLowerCase().includes('transporte'))) return false;
+                  if (filtroGuia && !(a.includes?.some(i => i.toLowerCase().includes('guía') || i.toLowerCase().includes('guia')) || a.supported_languages?.length > 0)) return false;
+                  if (categoriaSeleccionada && !(a.name || '').toLowerCase().includes(categoriaSeleccionada.toLowerCase()) && !(a.long_description || '').toLowerCase().includes(categoriaSeleccionada.toLowerCase())) return false;
+                  return true;
+                })
+                .map((a, idx) => {
                 const navigateToDetail = () => window.location.href = `/atracciones/${a.id}`;
                 return (
                 <div key={a.id} className="search-result-card" onClick={navigateToDetail} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateToDetail(); } }} style={{cursor: 'pointer'}}>

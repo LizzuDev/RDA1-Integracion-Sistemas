@@ -3,6 +3,16 @@ import { api } from '../services/api';
 import { supabase } from '../services/supabase';
 import { GestionAlojamientos } from '../components/admin/GestionAlojamientos';
 
+// 8 Paneles de Administración Desacoplados (Cátedra RDA2 Brecha B-13)
+import { Panel1_NodosProveedores } from '../components/admin/Panel1_NodosProveedores';
+import { Panel2_GestionFlotaAutos } from '../components/admin/Panel2_GestionFlotaAutos';
+import { Panel3_ArbolCategoriasAtracciones } from '../components/admin/Panel3_ArbolCategoriasAtracciones';
+import { Panel4_LiquidacionesFinanzas } from '../components/admin/Panel4_LiquidacionesFinanzas';
+import { Panel5_ConsolaFiscalFacturas } from '../components/admin/Panel5_ConsolaFiscalFacturas';
+import { Panel6_SimuladorPagosSOA } from '../components/admin/Panel6_SimuladorPagosSOA';
+import { Panel7_MonitorStockGrpc } from '../components/admin/Panel7_MonitorStockGrpc';
+import { Panel8_AuditoriaSagas } from '../components/admin/Panel8_AuditoriaSagas';
+
 const C = {
   blue: '#006ce4', darkBlue: '#003b95', lightBlue: '#ebf3ff',
   yellow: '#febb02', green: '#008009', red: '#d32f2f',
@@ -11,6 +21,7 @@ const C = {
 };
 
 const TABS = [
+  { id: 'paneles_rda2', label: '🚀 8 Paneles RDA2', sub: 'Arquitectura Distribuida' },
   { id: 'observabilidad', label: '📊 Observabilidad & Finanzas', sub: 'Estado en vivo y dinero' },
   { id: 'microservicios', label: '🔬 Servicios & Prov.', sub: 'RDA2 Simulado' },
   { id: 'gestion', label: '🗂️ Gestión', sub: 'Usuarios & Reservas' },
@@ -2705,7 +2716,8 @@ function ConfiguracionTab() {
 }
 
 export function AdminDashboard() {
-  const [activeTab,setActiveTab]=useState('observabilidad');
+  const [activeTab,setActiveTab]=useState('paneles_rda2');
+  const [subPanelRda2, setSubPanelRda2] = useState('panel1');
   const [stats,setStats]=useState(null);
   const [users,setUsers]=useState([]);
   const [usersError,setUsersError]=useState(null);
@@ -2838,6 +2850,51 @@ export function AdminDashboard() {
         </div>
       </div>
       <div style={{maxWidth:1280,margin:'0 auto',padding:'24px'}}>
+        {activeTab==='paneles_rda2' && (
+          <div>
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '16px', marginBottom: '20px', borderBottom: `2px solid ${C.border}` }}>
+              {[
+                { id: 'panel1', label: '🚦 Panel 1: Nodos & Kill-Switches' },
+                { id: 'panel2', label: '🚗 Panel 2: Flota Autos & Cooldown 2h' },
+                { id: 'panel3', label: '🌲 Panel 3: Árbol Recursivo Atracciones' },
+                { id: 'panel4', label: '💼 Panel 4: Liquidaciones Finanzas 10%' },
+                { id: 'panel5', label: '🧾 Panel 5: Consola Fiscal Facturas' },
+                { id: 'panel6', label: '💳 Panel 6: Simulador Pagos SOA' },
+                { id: 'panel7', label: '⚡ Panel 7: Monitor Stock gRPC' },
+                { id: 'panel8', label: '🛡️ Panel 8: Auditoría Sagas LIFO' },
+              ].map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setSubPanelRda2(p.id)}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: subPanelRda2 === p.id ? C.blue : '#fff',
+                    color: subPanelRda2 === p.id ? '#fff' : C.text,
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {subPanelRda2 === 'panel1' && <Panel1_NodosProveedores />}
+            {subPanelRda2 === 'panel2' && <Panel2_GestionFlotaAutos />}
+            {subPanelRda2 === 'panel3' && <Panel3_ArbolCategoriasAtracciones />}
+            {subPanelRda2 === 'panel4' && <Panel4_LiquidacionesFinanzas />}
+            {subPanelRda2 === 'panel5' && <Panel5_ConsolaFiscalFacturas />}
+            {subPanelRda2 === 'panel6' && <Panel6_SimuladorPagosSOA />}
+            {subPanelRda2 === 'panel7' && <Panel7_MonitorStockGrpc />}
+            {subPanelRda2 === 'panel8' && <Panel8_AuditoriaSagas />}
+          </div>
+        )}
         {activeTab==='observabilidad'&&<ObservabilidadTab stats={stats} loadingStats={loadingStats} serviceHealth={serviceHealth} refreshKey={refreshKey}/>}
         {activeTab==='microservicios'&&(
           <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>

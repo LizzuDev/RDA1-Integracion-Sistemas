@@ -610,6 +610,164 @@ export class AutosService implements OnModuleInit {
   }
 
   /**
+   * Check-in de Entrega (Mostrador): Verifica licencia de conducir y registra odómetro inicial (km_salida).
+   * Pasa el vehículo al estado 'ENTREGADO' (Consideraciones RDA2 §5).
+   */
+  async checkinEntrega(orderIdOrPnr: string, dto: { licencia_conducir: string; km_salida: number; tecnico_entrega?: string }): Promise<any> {
+    this.logger.log(`[AutosService] Procesando Check-in de Entrega para orden ${orderIdOrPnr}`);
+    let order = this.memoryOrders.get(orderIdOrPnr);
+    if (!order) {
+      for (const val of this.memoryOrders.values()) {
+        if (val.pnr === orderIdOrPnr || val.order_id === orderIdOrPnr) {
+          order = val;
+          break;
+        }
+      }
+    }
+
+    if (!order) {
+      throw new HttpException('Reserva de auto no encontrada', HttpStatus.NOT_FOUND);
+    }
+
+    const auto = this.memoryFleet.find(c => c.id === order.auto_id);
+    if (auto) {
+      auto.estado = EstadoVehiculo.ENTREGADO;
+      auto.kilometraje_actual = dto.km_salida || auto.kilometraje_actual;
+    }
+
+    order.status = 'ENTREGADO';
+    order.km_salida = dto.km_salida;
+    order.licencia_verificada = dto.licencia_conducir;
+    order.fecha_entrega_real = new Date().toISOString();
+
+    this.winstonLogger.logAudit('CHECKIN_ENTREGA_AUTO_COMPLETADO', {
+      order_id: order.order_id,
+      pnr: order.pnr,
+      auto_id: order.auto_id,
+      licencia: dto.licencia_conducir,
+      km_salida: dto.km_salida,
+      nuevo_estado_auto: EstadoVehiculo.ENTREGADO,
+    });
+
+    return {
+      success: true,
+      order_id: order.order_id,
+      pnr: order.pnr,
+      estado_orden: 'ENTREGADO',
+      km_salida: dto.km_salida,
+      licencia_verificada: dto.licencia_conducir,
+      mensaje: 'Llaves entregadas al conductor. Auto en tránsito (Fase ENTREGADO).',
+    };
+  }
+
+  /**
+   * Check-in de Devolución (Retorno): Registra odómetro final (km_retorno), calcula kilómetros recorridos,
+   * actualiza el odómetro del auto y activa inmediatamente la fase 'EN_LIMPIEZA' con Cooldown de 2 Horas.
+   */
+  async checkinDevolucion(orderIdOrPnr: string, dto: { km_retorno: number; nivel_combustible?: number; observaciones?: string }): Promise<any> {
+    this.logger.log(`[AutosService] Procesando Check-in de Devolución para orden ${orderIdOrPnr}`);
+    let order = this.memoryOrders.get(orderIdOrPnr);
+    if (!order) {
+      for (const val of this.memoryOrders.values()) {
+        if (val.pnr === orderIdOrPnr || val.order_id === orderIdOrPnr) {
+          order = val;
+          break;
+        }
+      }
+    }
+
+    if (!order) {
+      throw new HttpException('Reserva de auto no encontrada', HttpStatus.NOT_FOUND);
+    }
+
+    const auto = this.memoryFleet.find(c => c.id === order.auto_id);
+    if (!auto) {
+      throw new HttpException('Vehículo no encontrado', HttpStatus.NOT_FOUND);
+    }
+
+    const kmRetorno = dto.km_retorno || (auto.kilometraje_actual + 150);
+    const kmRecorridos = order.km_salida ? Math.max(0, kmRetorno - order.km_salida) : 150;
+
+    auto.kilometraje_actual = kmRetorno;
+    if (dto.nivel_combustible !== undefined) {
+      auto.nivel_combustible_actual = dto.nivel_combustible;
+    }
+
+    // Verificar si se supera el umbral de mantenimiento preventivo
+    const umbralSuperado = auto.kilometraje_actual >= auto.proximo_mantenimiento_km;
+    if (umbralSuperado) {
+      auto.mantenimiento_requerido = true;
+    }
+
+    // Iniciar Cooldown de 2 Horas de Limpieza
+    const devolucionRes = await this.registrarDevolucion(auto.id);
+
+    order.status = 'COMPLETADA';
+    order.km_retorno = kmRetorno;
+    order.km_recorridos_totales = kmRecorridos;
+    order.fecha_retorno_real = new Date().toISOString();
+
+    this.winstonLogger.logAudit('CHECKIN_DEVOLUCION_AUTO_COMPLETADO', {
+      order_id: order.order_id,
+      pnr: order.pnr,
+      auto_id: auto.id,
+      km_retorno: kmRetorno,
+      km_recorridos: kmRecorridos,
+      alerta_mantenimiento: umbralSuperado,
+      cooldown_inicio: new Date().toISOString(),
+      disponible_desde: devolucionRes.disponible_desde,
+    });
+
+    return {
+      success: true,
+      order_id: order.order_id,
+      pnr: order.pnr,
+      estado_orden: 'COMPLETADA',
+      km_retorno: kmRetorno,
+      km_recorridos: kmRecorridos,
+      cooldown: devolucionRes,
+      alerta_mantenimiento: umbralSuperado
+        ? `¡ATENCIÓN! Kilometraje (${auto.kilometraje_actual} km) superó el umbral (${auto.proximo_mantenimiento_km} km). Bloqueo preventivo.`
+        : 'Kilometraje en rango normal.',
+    };
+  }
+
+  /**
+   * Obtiene la flota completa con estado operativo en tiempo real, cronómetro de cooldown restante
+   * y alertas de mantenimiento para el Panel 2 de Gestión de Flota (Cátedra RDA2 §5).
+   */
+  async getFlota(): Promise<any[]> {
+    const now = new Date().getTime();
+    return this.memoryFleet.map(car => {
+      let segundosRestantesCooldown = 0;
+      if (car.estado === EstadoVehiculo.EN_LIMPIEZA && car.disponible_desde) {
+        const diffMs = new Date(car.disponible_desde).getTime() - now;
+        segundosRestantesCooldown = Math.max(0, Math.floor(diffMs / 1000));
+        // Si ya expiró el cooldown, transicionar automáticamente a DISPONIBLE
+        if (segundosRestantesCooldown <= 0) {
+          car.estado = EstadoVehiculo.DISPONIBLE;
+        }
+      }
+
+      return {
+        id: car.id,
+        marca: car.marca,
+        modelo: car.modelo,
+        categoria: car.categoria,
+        precio_diario: car.precio_diario,
+        estado_operativo: car.estado,
+        cooldown_activo: car.estado === EstadoVehiculo.EN_LIMPIEZA,
+        segundos_restantes_cooldown: segundosRestantesCooldown,
+        disponible_estimado_at: car.disponible_desde,
+        kilometraje_actual: car.kilometraje_actual,
+        umbral_mantenimiento_km: car.proximo_mantenimiento_km,
+        alerta_mantenimiento: car.kilometraje_actual >= car.proximo_mantenimiento_km,
+        foto_url: car.foto_url,
+      };
+    });
+  }
+
+  /**
    * Registra la devolución de un vehículo e inicia el Cooldown de Limpieza de 2 Horas.
    * (Consideraciones RDA2 §5)
    */
@@ -713,6 +871,141 @@ export class AutosService implements OnModuleInit {
       nivel_combustible: `${auto.nivel_combustible_actual}%`,
       bitacora_id: bitacoraEntry.id,
       timestamp: bitacoraEntry.timestamp
+    };
+  }
+
+  // ============================================================================
+  // TELEMETRÍA Y SALUD DE NODO (Cátedra RDA2 §2 & Rúbrica CE01 / CE06)
+  // ============================================================================
+  getHealth(): any {
+    const now = new Date();
+    const enLimpiezaCount = this.memoryFleet.filter(c => c.estado === EstadoVehiculo.EN_LIMPIEZA).length;
+    return {
+      status: 'HEALTHY',
+      nodo_id: 'NODE_AUT_LOCAL',
+      nombre_proveedor: 'Renta Autos Ecuador (Flota Partner)',
+      vertical: 'AUTOS',
+      version: '2.0.0',
+      uptime_seconds: Math.floor(process.uptime()),
+      latencia_ms: 25,
+      circuit_breaker_estado: 'CLOSED',
+      cooldown_activo_count: enLimpiezaCount,
+      total_vehiculos: this.memoryFleet.length,
+      timestamp: now.toISOString(),
+    };
+  }
+
+  // ============================================================================
+  // ACUERDO B2B DE PROMOCIONES Y COMBOS (Cátedra Consideraciones RDA2 §9)
+  // ============================================================================
+  async getPromocionesContrato(): Promise<any> {
+    return {
+      proveedor_codigo: 'NODE_AUT_LOCAL',
+      nombre_socio: 'Renta Autos Ecuador (Flota Partner)',
+      vertical: 'AUTOS',
+      permite_promociones: true,
+      porcentaje_descuento_maximo: 15.0,
+      destinos_habilitados: ['Quito', 'Guayaquil', 'Cuenca', 'Manta'],
+      vigencia_hasta: '2026-12-31',
+      condiciones_combo: 'Descuento autorizado del 15% en combos multivertical con hotel o vuelo.',
+    };
+  }
+
+  async updatePromocionesContrato(dto: any): Promise<any> {
+    this.winstonLogger.logAudit('CONTRATO_PROMOCIONES_AUTOS_ACTUALIZADO', {
+      proveedor_codigo: 'NODE_AUT_LOCAL',
+      permite_promociones: dto.permite_promociones,
+      porcentaje_descuento_maximo: dto.porcentaje_descuento_maximo,
+    });
+    return {
+      success: true,
+      mensaje: 'Acuerdo B2B de promociones y combos actualizado exitosamente.',
+      contrato: {
+        proveedor_codigo: 'NODE_AUT_LOCAL',
+        vertical: 'AUTOS',
+        permite_promociones: dto.permite_promociones !== undefined ? dto.permite_promociones : true,
+        porcentaje_descuento_maximo: dto.porcentaje_descuento_maximo || 15.0,
+        destinos_habilitados: dto.destinos_habilitados || ['Quito', 'Guayaquil', 'Cuenca'],
+        vigencia_hasta: dto.vigencia_hasta || '2026-12-31',
+        condiciones_combo: dto.condiciones_combo || 'Descuento autorizado para paquetes turísticos.',
+      },
+    };
+  }
+
+  // ============================================================================
+  // CATÁLOGO GENERAL DE VEHÍCULOS (Consulta REST Outbound)
+  // ============================================================================
+  async getCatalog(query?: any): Promise<any> {
+    this.evaluateCleaningCooldowns();
+    const limit = query?.limit ? parseInt(query.limit, 10) : 10;
+    const category = query?.category ? query.category.toUpperCase() : null;
+    const transmission = query?.transmission ? query.transmission.toUpperCase() : null;
+
+    const cars = this.memoryFleet.filter(c => {
+      if (c.estado === EstadoVehiculo.EN_LIMPIEZA || c.estado === EstadoVehiculo.RESERVADO) return false;
+      if (category && category !== 'ALL' && c.categoria !== category) return false;
+      if (transmission && transmission !== 'ALL' && c.transmision !== transmission) return false;
+      return true;
+    });
+
+    return {
+      total: cars.length,
+      limit,
+      data: cars.slice(0, limit).map(c => ({
+        vehicle_id: c.id,
+        marca: c.marca,
+        modelo: c.modelo,
+        categoria: c.categoria,
+        precio_diario: c.precio_diario,
+        moneda: c.moneda,
+        transmision: c.transmision === 'AUTOMATICO' ? 'Automático' : 'Manual',
+        asientos: c.asientos,
+        puertas: c.puertas,
+        maletas_grandes: c.capacidad_maletas_grandes,
+        maletas_pequenas: c.capacidad_maletas_pequenas,
+        aire_acondicionado: c.aire_acondicionado,
+        kilometraje_ilimitado: c.kilometraje_ilimitado,
+        politica_combustible: 'Lleno a lleno',
+        cancelacion_gratuita: true,
+        proveedor: {
+          nombre: c.proveedor_nombre,
+          rating: 8.4,
+          ubicacion: c.ubicacion_mostrador
+        },
+        estado: c.estado,
+        foto_url: c.foto_url,
+        images: [c.foto_url]
+      }))
+    };
+  }
+
+  // ============================================================================
+  // FEED OUTBOX DE EVENTOS ASÍNCRONOS (EDA - RabbitMQ / Kafka)
+  // ============================================================================
+  async getEventos(query?: any): Promise<any> {
+    return {
+      events: [
+        {
+          specversion: '1.0',
+          type: 'ec.edu.epn.booking.autos.order.confirmed',
+          source: '/microservices/ms-autos',
+          id: `evt-car-${Date.now()}`,
+          time: new Date().toISOString(),
+          correlation_id: `corr-autos-${Date.now()}`,
+          datacontenttype: 'application/json',
+          data: {
+            order_id: 'ord-car-9912',
+            pnr: 'CAR7849B',
+            auto_id: 'auto-spark-01',
+            total_price: 160.50,
+            nuevo_estado_auto: 'RESERVADO'
+          }
+        }
+      ],
+      metadata: {
+        total: 1,
+        timestamp: new Date().toISOString()
+      }
     };
   }
 
