@@ -127,6 +127,12 @@ export class Atraccion {
   @Column({ type: 'boolean', default: true })
   activo: boolean;
 
+  @Column({ name: 'proveedor_id', type: 'varchar', length: 60, nullable: true, default: 'NODE_ATR_DILAN' })
+  proveedorId?: string;
+
+  @Column({ name: 'proveedor_codigo', type: 'varchar', length: 50, nullable: true, default: 'NODE_ATR_DILAN' })
+  proveedorCodigo?: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

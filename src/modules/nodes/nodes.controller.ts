@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Param, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth, ApiHeader, ApiBody } from '@nestjs/swagger';
 import { NodesService } from './nodes.service';
 import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
@@ -16,6 +16,50 @@ export class NodesController {
   @ApiResponse({ status: 200, description: 'Listado de nodos con semáforo LED (🟢/🟡/🔴), latencia y kill-switch.' })
   async listarNodos() {
     return this.nodesService.listarNodos();
+  }
+
+  @Post('nodes')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Registrar nuevo socio / proveedor en el Gateway de Integración (RDA2)' })
+  @ApiResponse({ status: 201, description: 'Proveedor registrado exitosamente en schema_proveedores.' })
+  async crearNodoPublic(@Body() body: any) {
+    return this.nodesService.crearNodo(body);
+  }
+
+  @Put('nodes/:codigoNodo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Actualizar parámetros de conexión de un nodo socio' })
+  @ApiParam({ name: 'codigoNodo', description: 'Código o ID del nodo' })
+  async actualizarNodoPublic(
+    @Param('codigoNodo') codigoNodo: string,
+    @Body() body: any,
+  ) {
+    return this.nodesService.actualizarNodo(codigoNodo, body);
+  }
+
+  @Delete('nodes/:codigoNodo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Eliminar un nodo proveedor' })
+  @ApiParam({ name: 'codigoNodo', description: 'Código o ID del nodo' })
+  async eliminarNodoPublic(@Param('codigoNodo') codigoNodo: string) {
+    return this.nodesService.eliminarNodo(codigoNodo);
+  }
+
+  @Post('nodes/:codigoNodo/ping')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Disparar ping de diagnóstico HTTP a la URL del socio y medir latencia' })
+  @ApiParam({ name: 'codigoNodo', description: 'Código o ID del nodo' })
+  async pingNodoPublic(@Param('codigoNodo') codigoNodo: string) {
+    return this.nodesService.pingNodo(codigoNodo);
+  }
+
+  @Post('nodes/:codigoNodo/sync')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sincronizar e importar catálogo de atracciones desde el microservicio socio (OpenAPI v2)' })
+  @ApiParam({ name: 'codigoNodo', description: 'Código o ID del nodo socio de atracciones' })
+  @ApiResponse({ status: 200, description: 'Catálogo sincronizado exitosamente.' })
+  async sincronizarCatalogoPublic(@Param('codigoNodo') codigoNodo: string) {
+    return this.nodesService.sincronizarCatalogo(codigoNodo);
   }
 
   @Post('nodes/:codigoNodo/toggle')
