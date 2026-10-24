@@ -76,7 +76,18 @@ export async function createAutoLocal(autoData) {
   return data;
 }
 
-export async function deleteAutoLocal(id) {
-  const { data } = await api.post(`/autos/${id}/delete`);
+export async function getFlota() {
+  const { data } = await api.get('/autos/flota');
   return data;
 }
+
+export async function getPromocionesContratoAutos() {
+  const { data } = await api.get('/autos/promociones/contrato');
+  return data;
+}
+
+export async function updatePromocionesContratoAutos(contratoData) {
+  const { data } = await api.put('/autos/promociones/contrato', contratoData);
+  return data;
+}
+

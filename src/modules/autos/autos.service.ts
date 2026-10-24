@@ -202,6 +202,13 @@ export class AutosService implements OnModuleInit {
 
   async onModuleInit() {
     this.logger.log('Módulo de Autos V2 inicializado con Máquina de Estados, Cooldown 2h y Rol de Mantenimiento.');
+    // Evaluador periódico de cooldown cada 30 segundos (§5 Consideraciones)
+    const timer = setInterval(() => {
+      this.evaluateCleaningCooldowns();
+    }, 30000);
+    if (timer.unref) {
+      timer.unref();
+    }
   }
 
   /**
@@ -439,11 +446,29 @@ export class AutosService implements OnModuleInit {
       }, HttpStatus.CONFLICT);
     }
 
-    const dias = parseInt(orderData.dias || 3, 10);
-    const tipoCobertura = (orderData.tipo_cobertura || 'BASICA').toUpperCase();
+    // Calcular días de alquiler dinámicamente si no se enviaron explícitamente
+    const pickupDateStr = orderData.pickup_date || orderData.fecha_recogida;
+    const dropoffDateStr = orderData.dropoff_date || orderData.fecha_devolucion;
+    let dias = orderData.dias ? parseInt(orderData.dias, 10) : 0;
+    if (!dias && pickupDateStr && dropoffDateStr) {
+      const diffTime = Math.abs(new Date(dropoffDateStr).getTime() - new Date(pickupDateStr).getTime());
+      dias = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+    }
+    if (!dias || dias < 1) {
+      dias = 3;
+    }
+
+    const tipoCobertura = (orderData.tipo_cobertura || orderData.cobertura || 'BASICA').toUpperCase();
     const costoCoberturaDiaria = tipoCobertura === 'TOTAL' ? 18.00 : 0.00;
     const precioBaseDiario = auto.precio_diario;
-    const driverAge = orderData.driver?.age || orderData.conductor?.edad || 30;
+
+    const cond = orderData.conductor || orderData.driver || {};
+    const driverName = cond.nombre || cond.nombre_completo || cond.full_name || orderData.booker?.name || 'Cliente Verificado';
+    const driverEmail = cond.email || cond.correo || orderData.booker?.email || 'cliente@booking.com';
+    const driverPhone = cond.telefono || cond.phone || orderData.booker?.phone || '+593999999999';
+    const driverLicense = cond.licencia_conducir || cond.licencia || cond.license || '1723456789';
+    const driverAge = cond.edad !== undefined ? cond.edad : (cond.edad_conductor || cond.driver_age || orderData.driver?.age || 30);
+    const flightNum = cond.numero_vuelo || 'N/A';
     const recargoEdad = (driverAge < 25 || driverAge > 70) ? 15.00 : 0.00;
 
     const precioDiarioFinal = precioBaseDiario + costoCoberturaDiaria + recargoEdad;
@@ -456,8 +481,8 @@ export class AutosService implements OnModuleInit {
     // Procesar pago síncrono simulado
     await this.pagoService.procesarPago({
       cantidadTickets: 1,
-      metodoPago: orderData.payment_method || 'TARJETA',
-      userEmail: orderData.booker?.email || orderData.conductor?.email || 'cliente@booking.com'
+      metodoPago: orderData.payment_method || orderData.metodo_pago || 'TARJETA',
+      userEmail: driverEmail
     });
 
     // Cambiar estado del auto a RESERVADO
@@ -468,8 +493,10 @@ export class AutosService implements OnModuleInit {
     const orderResponse = {
       order_id: pnr,
       pnr: pnr,
+      codigo_reserva: pnr,
       idempotency_key: idempotencyKey,
       status: 'CONFIRMED',
+      estado: 'CONFIRMED',
       auto_id: auto.id,
       vehiculo: {
         marca: auto.marca,
@@ -481,6 +508,8 @@ export class AutosService implements OnModuleInit {
       dias_renta: dias,
       tipo_cobertura: tipoCobertura,
       deposito_garantia: depositoGarantia,
+      moneda: 'USD',
+      precio_total_monto: totalPagar,
       total_price: {
         currency: 'USD',
         total: totalPagar,
@@ -492,12 +521,12 @@ export class AutosService implements OnModuleInit {
         }
       },
       conductor: {
-        nombre: orderData.conductor?.nombre || orderData.booker?.name || 'Cliente Verificado',
-        email: orderData.conductor?.email || orderData.booker?.email || 'cliente@booking.com',
-        telefono: orderData.conductor?.telefono || '+593999999999',
-        licencia: orderData.conductor?.licencia || '1723456789',
+        nombre: driverName,
+        email: driverEmail,
+        telefono: driverPhone,
+        licencia: driverLicense,
         edad: driverAge,
-        numero_vuelo: orderData.conductor?.numero_vuelo || 'N/A'
+        numero_vuelo: flightNum
       },
       politica_combustible: 'Lleno a lleno',
       voucher_qr_data: qrData,
@@ -777,20 +806,23 @@ export class AutosService implements OnModuleInit {
       throw new HttpException('Vehículo no encontrado', HttpStatus.NOT_FOUND);
     }
 
+    const cooldownMinutes = process.env.CLEANING_COOLDOWN_MINUTES
+      ? parseInt(process.env.CLEANING_COOLDOWN_MINUTES, 10)
+      : 120;
     const now = new Date();
-    const cooldownEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000); // +2 horas
+    const cooldownEnd = new Date(now.getTime() + cooldownMinutes * 60 * 1000);
 
     auto.estado = EstadoVehiculo.EN_LIMPIEZA;
     auto.disponible_desde = cooldownEnd;
 
-    this.logger.log(`[Máquina de Estados] Vehículo ${auto.marca} ${auto.modelo} (${auto.id}) pasa a EN_LIMPIEZA. Cooldown de 2 horas hasta: ${cooldownEnd.toISOString()}`);
+    this.logger.log(`[Máquina de Estados] Vehículo ${auto.marca} ${auto.modelo} (${auto.id}) pasa a EN_LIMPIEZA. Cooldown de ${cooldownMinutes} minutos hasta: ${cooldownEnd.toISOString()}`);
 
     // Observabilidad Winston
     this.winstonLogger.logAudit('VEHICULO_EN_LIMPIEZA_COOLDOWN', {
       auto_id: auto.id,
       estado: EstadoVehiculo.EN_LIMPIEZA,
       disponible_desde: cooldownEnd.toISOString(),
-      duracion_cooldown_minutos: 120
+      duracion_cooldown_minutos: cooldownMinutes
     });
 
     return {
@@ -798,8 +830,9 @@ export class AutosService implements OnModuleInit {
       vehiculo: `${auto.marca} ${auto.modelo}`,
       estado: EstadoVehiculo.EN_LIMPIEZA,
       cooldown_horas: 2,
+      cooldown_minutos: cooldownMinutes,
       disponible_desde: cooldownEnd.toISOString(),
-      mensaje: 'Vehículo recibido. Se ha iniciado el ciclo obligatorio de limpieza y desinfección de 2 horas. Durante este tiempo no estará disponible en el catálogo de búsqueda.'
+      mensaje: `Vehículo recibido. Se ha iniciado el ciclo obligatorio de limpieza y desinfección (${cooldownMinutes} minutos). Durante este tiempo no estará disponible en el catálogo de búsqueda.`
     };
   }
 
@@ -883,12 +916,17 @@ export class AutosService implements OnModuleInit {
     return {
       status: 'HEALTHY',
       nodo_id: 'NODE_AUT_LOCAL',
+      node_id: 'NODE_AUT_LOCAL',
+      node_code: 'NODE_AUT_LOCAL',
       nombre_proveedor: 'Renta Autos Ecuador (Flota Partner)',
       vertical: 'AUTOS',
       version: '2.0.0',
       uptime_seconds: Math.floor(process.uptime()),
       latencia_ms: 25,
+      latency_ms: 25,
+      database_connected: true,
       circuit_breaker_estado: 'CLOSED',
+      circuit_breaker: 'CLOSED',
       cooldown_activo_count: enLimpiezaCount,
       total_vehiculos: this.memoryFleet.length,
       timestamp: now.toISOString(),
@@ -983,6 +1021,7 @@ export class AutosService implements OnModuleInit {
   // FEED OUTBOX DE EVENTOS ASÍNCRONOS (EDA - RabbitMQ / Kafka)
   // ============================================================================
   async getEventos(query?: any): Promise<any> {
+    const now = new Date().toISOString();
     return {
       events: [
         {
@@ -990,7 +1029,7 @@ export class AutosService implements OnModuleInit {
           type: 'ec.edu.epn.booking.autos.order.confirmed',
           source: '/microservices/ms-autos',
           id: `evt-car-${Date.now()}`,
-          time: new Date().toISOString(),
+          time: now,
           correlation_id: `corr-autos-${Date.now()}`,
           datacontenttype: 'application/json',
           data: {
@@ -1000,11 +1039,57 @@ export class AutosService implements OnModuleInit {
             total_price: 160.50,
             nuevo_estado_auto: 'RESERVADO'
           }
+        },
+        {
+          specversion: '1.0',
+          type: 'ec.edu.epn.booking.autos.cleaning.started',
+          source: '/microservices/ms-autos',
+          id: `evt-clean-${Date.now()}`,
+          time: now,
+          correlation_id: `corr-autos-${Date.now()}`,
+          datacontenttype: 'application/json',
+          data: {
+            auto_id: 'auto-van-05',
+            cooldown_horas: 2,
+            disponible_desde: new Date(Date.now() + 2 * 3600000).toISOString(),
+            nuevo_estado_auto: 'EN_LIMPIEZA'
+          }
+        },
+        {
+          specversion: '1.0',
+          type: 'ec.edu.epn.booking.autos.mantenimiento.alerta',
+          source: '/microservices/ms-autos',
+          id: `evt-maint-${Date.now()}`,
+          time: now,
+          correlation_id: `corr-autos-${Date.now()}`,
+          datacontenttype: 'application/json',
+          data: {
+            auto_id: 'auto-tracker-03',
+            kilometraje_actual: 10250,
+            proximo_mantenimiento_km: 10000,
+            alerta_mantenimiento: true
+          }
+        },
+        {
+          specversion: '1.0',
+          type: 'ec.edu.epn.booking.autos.order.cancelled',
+          source: '/microservices/ms-autos',
+          id: `evt-cancel-${Date.now()}`,
+          time: now,
+          correlation_id: `corr-autos-${Date.now()}`,
+          datacontenttype: 'application/json',
+          data: {
+            order_id: 'ord-car-9912',
+            pnr: 'CAR7849B',
+            auto_id: 'auto-spark-01',
+            monto_reembolsado: 160.50,
+            nuevo_estado_auto: 'DISPONIBLE'
+          }
         }
       ],
       metadata: {
-        total: 1,
-        timestamp: new Date().toISOString()
+        total: 4,
+        timestamp: now
       }
     };
   }
@@ -1107,7 +1192,7 @@ export class AutosService implements OnModuleInit {
     this.winstonLogger.logAudit('RESERVA_AUTO_CANCELADA_COMPENSADA', {
       orderId,
       auto_id: autoId,
-      razon: cancelData?.reason || 'Cancelación solicitada por cliente',
+      razon: cancelData?.reason || cancelData?.motivo || 'Cancelación solicitada por cliente',
       monto_reembolsado: totalReembolso,
       refund_id: refundId,
       idempotencyKey
@@ -1116,10 +1201,14 @@ export class AutosService implements OnModuleInit {
     return {
       order_id: order?.order_id || orderId,
       pnr: order?.pnr || orderId.substring(0, 6).toUpperCase(),
+      codigo_reserva: order?.pnr || orderId.substring(0, 6).toUpperCase(),
       status: 'CANCELLED',
+      estado: 'CANCELLED',
       auto_id: autoId,
       total_price: { currency: moneda, total: totalReembolso },
       refund,
+      reembolso_id: refundId,
+      monto_reembolsado: Number(totalReembolso),
       inventory_restoration: {
         status: 'RESTORED',
         vehicle_id: autoId,

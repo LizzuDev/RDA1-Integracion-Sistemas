@@ -102,20 +102,33 @@ export class InventoryService {
       `[gRPC Inbound] Stock actualizado para ${itemId} (${date} ${timeSlot}): ${prevUnits ?? 'N/A'} -> ${availableUnits} cupos [Origen: ${serviceId}]`
     );
 
-    // Actualizar tabla relacional en PostgreSQL si la base está conectada (UPSERT atómico)
+    // Actualizar tabla relacional en PostgreSQL si la base está conectada
     if (this.dataSource && this.dataSource.isInitialized) {
-      const estado = availableUnits <= 0 ? 'AGOTADO' : (availableUnits <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE');
-      const capacidad = Math.max(20, availableUnits);
-      this.dataSource.query(
-        `INSERT INTO schema_atracciones.atracciones_turnos_aforo 
-           (atraccion_id, fecha, hora_inicio, capacidad_total, cupos_disponibles, estado)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (atraccion_id, fecha, hora_inicio) 
-         DO UPDATE SET cupos_disponibles = EXCLUDED.cupos_disponibles, estado = EXCLUDED.estado`,
-        [itemId, date, timeSlot, capacidad, availableUnits, estado]
-      ).catch((e: any) => {
-        this.logger.debug?.(`No se pudo sincronizar turnos_aforo en BD para ${itemId}: ${e.message}`);
-      });
+      const isAuto = (serviceId && serviceId.toLowerCase().includes('auto')) || (itemId && itemId.toLowerCase().startsWith('auto-')) || serviceId === 'NODE_AUT_LOCAL';
+      if (isAuto) {
+        const estadoAuto = availableUnits <= 0 ? 'RESERVADO' : 'DISPONIBLE';
+        this.dataSource.query(
+          `UPDATE schema_autos.autos_catalogo 
+           SET estado_operativo = $1, updated_at = NOW() 
+           WHERE id = $2`,
+          [estadoAuto, itemId]
+        ).catch((e: any) => {
+          this.logger.debug?.(`No se pudo sincronizar autos_catalogo en BD para ${itemId}: ${e.message}`);
+        });
+      } else {
+        const estado = availableUnits <= 0 ? 'AGOTADO' : (availableUnits <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE');
+        const capacidad = Math.max(20, availableUnits);
+        this.dataSource.query(
+          `INSERT INTO schema_atracciones.atracciones_turnos_aforo 
+             (atraccion_id, fecha, hora_inicio, capacidad_total, cupos_disponibles, estado)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (atraccion_id, fecha, hora_inicio) 
+           DO UPDATE SET cupos_disponibles = EXCLUDED.cupos_disponibles, estado = EXCLUDED.estado`,
+          [itemId, date, timeSlot, capacidad, availableUnits, estado]
+        ).catch((e: any) => {
+          this.logger.debug?.(`No se pudo sincronizar turnos_aforo en BD para ${itemId}: ${e.message}`);
+        });
+      }
     }
 
     // Auditoría física en archivo .log rotativo (Consideraciones RDA2 §2)
@@ -178,18 +191,31 @@ export class InventoryService {
 
     // Actualizar tabla relacional en PostgreSQL
     if (this.dataSource && this.dataSource.isInitialized) {
-      const estado = newUnits <= 0 ? 'AGOTADO' : (newUnits <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE');
-      const capacidad = Math.max(20, newUnits);
-      this.dataSource.query(
-        `INSERT INTO schema_atracciones.atracciones_turnos_aforo 
-           (atraccion_id, fecha, hora_inicio, capacidad_total, cupos_disponibles, estado)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (atraccion_id, fecha, hora_inicio) 
-         DO UPDATE SET cupos_disponibles = EXCLUDED.cupos_disponibles, estado = EXCLUDED.estado`,
-        [itemId, date, timeSlot, capacidad, newUnits, estado]
-      ).catch((e: any) => {
-        this.logger.debug?.(`No se pudo sincronizar turnos_aforo en BD para delta ${itemId}: ${e.message}`);
-      });
+      const isAuto = (serviceId && serviceId.toLowerCase().includes('auto')) || (itemId && itemId.toLowerCase().startsWith('auto-')) || serviceId === 'NODE_AUT_LOCAL';
+      if (isAuto) {
+        const estadoAuto = newUnits <= 0 ? 'RESERVADO' : 'DISPONIBLE';
+        this.dataSource.query(
+          `UPDATE schema_autos.autos_catalogo 
+           SET estado_operativo = $1, updated_at = NOW() 
+           WHERE id = $2`,
+          [estadoAuto, itemId]
+        ).catch((e: any) => {
+          this.logger.debug?.(`No se pudo sincronizar autos_catalogo en BD para delta ${itemId}: ${e.message}`);
+        });
+      } else {
+        const estado = newUnits <= 0 ? 'AGOTADO' : (newUnits <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE');
+        const capacidad = Math.max(20, newUnits);
+        this.dataSource.query(
+          `INSERT INTO schema_atracciones.atracciones_turnos_aforo 
+             (atraccion_id, fecha, hora_inicio, capacidad_total, cupos_disponibles, estado)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (atraccion_id, fecha, hora_inicio) 
+           DO UPDATE SET cupos_disponibles = EXCLUDED.cupos_disponibles, estado = EXCLUDED.estado`,
+          [itemId, date, timeSlot, capacidad, newUnits, estado]
+        ).catch((e: any) => {
+          this.logger.debug?.(`No se pudo sincronizar turnos_aforo en BD para delta ${itemId}: ${e.message}`);
+        });
+      }
     }
 
     this.winstonLogger.logAudit('GRPC_STOCK_DELTA_STREAMED', {

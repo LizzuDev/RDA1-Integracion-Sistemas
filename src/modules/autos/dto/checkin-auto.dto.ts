@@ -24,4 +24,10 @@ export class CheckinAutoDto {
   @MaxLength(25, { message: 'El número de licencia no puede exceder 25 caracteres.' })
   @Transform(({ value }) => sanitizeString(value))
   numero_licencia?: string;
+
+  @ApiProperty({ description: 'Fecha de vencimiento de la licencia física (YYYY-MM-DD)', example: '2028-12-31', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  fecha_vencimiento_licencia?: string;
 }

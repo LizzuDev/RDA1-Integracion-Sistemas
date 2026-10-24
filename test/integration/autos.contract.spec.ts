@@ -339,6 +339,58 @@ describe('Autos OpenAPI v2 Contract Tests & Cooldown 2h (Cátedra RDA2 §5)', ()
     expect(response.body.data.length).toBeGreaterThan(0);
   });
 
+  it('POST /api/v2/autos/reservas y cancel alias debe crear y cancelar reserva con cálculo dinámico de días', async () => {
+    const resCreate = await request(app.getHttpServer())
+      .post('/api/v2/autos/reservas')
+      .set('Idempotency-Key', 'idem-alias-reserva-001')
+      .send({
+        vehicle_id: 'auto-audi-04',
+        pickup_date: '2026-11-15',
+        dropoff_date: '2026-11-18',
+        tipo_cobertura: 'BASICA',
+        conductor: {
+          nombre: 'Elena Castro',
+          email: 'elena.castro@epn.edu.ec',
+          telefono: '+593987111333',
+          licencia: '1788899900',
+          edad: 26,
+        },
+      })
+      .expect(HttpStatus.CREATED);
+
+    expect(resCreate.body).toHaveProperty('pnr');
+    expect(resCreate.body).toHaveProperty('codigo_reserva');
+    expect(resCreate.body).toHaveProperty('dias_renta', 3);
+    expect(resCreate.body).toHaveProperty('estado', 'CONFIRMED');
+
+    const orderId = resCreate.body.pnr;
+
+    const resCancel = await request(app.getHttpServer())
+      .post(`/api/v2/autos/reservas/${orderId}/cancel`)
+      .set('Idempotency-Key', 'idem-alias-cancel-001')
+      .send({
+        motivo: 'Compensación Saga por fallo en tramo hotelero',
+        solicitante: 'SAGA_ORCHESTRATOR',
+      })
+      .expect(HttpStatus.OK);
+
+    expect(resCancel.body).toHaveProperty('status', 'CANCELLED');
+    expect(resCancel.body).toHaveProperty('reembolso_id');
+    expect(resCancel.body).toHaveProperty('monto_reembolsado');
+    expect(resCancel.body.inventory_restoration).toHaveProperty('new_state', 'DISPONIBLE');
+  });
+
+  it('POST /api/v2/autos/:id/devolucion debe iniciar cooldown de limpieza de 2 horas', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v2/autos/auto-rio-02/devolucion')
+      .expect(HttpStatus.OK);
+
+    expect(response.body).toHaveProperty('auto_id', 'auto-rio-02');
+    expect(response.body).toHaveProperty('estado', 'EN_LIMPIEZA');
+    expect(response.body).toHaveProperty('cooldown_horas', 2);
+    expect(response.body).toHaveProperty('disponible_desde');
+  });
+
   it('GET /api/v2/autos/eventos debe retornar feed Outbox de eventos CloudEvents', async () => {
     const response = await request(app.getHttpServer())
       .get('/api/v2/autos/eventos')
@@ -346,5 +398,11 @@ describe('Autos OpenAPI v2 Contract Tests & Cooldown 2h (Cátedra RDA2 §5)', ()
 
     expect(response.body).toHaveProperty('events');
     expect(Array.isArray(response.body.events)).toBe(true);
+    expect(response.body.events.length).toBeGreaterThanOrEqual(4);
+    const types = response.body.events.map((e: any) => e.type);
+    expect(types).toContain('ec.edu.epn.booking.autos.order.confirmed');
+    expect(types).toContain('ec.edu.epn.booking.autos.cleaning.started');
+    expect(types).toContain('ec.edu.epn.booking.autos.mantenimiento.alerta');
+    expect(types).toContain('ec.edu.epn.booking.autos.order.cancelled');
   });
 });

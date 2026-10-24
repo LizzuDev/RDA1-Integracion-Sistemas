@@ -2,6 +2,10 @@ import { Controller, Get, Post, Put, Body, Param, Query, Headers, UseInterceptor
 import { AutosService, SearchAutosDto } from './autos.service';
 import { CreateAutoOrderDto } from './dto/create-auto-order.dto';
 import { CheckinAutoDto } from './dto/checkin-auto.dto';
+import { CheckinEntregaDto } from './dto/checkin-entrega.dto';
+import { CheckinDevolucionDto } from './dto/checkin-devolucion.dto';
+import { CancelAutoOrderDto } from './dto/cancel-auto-order.dto';
+import { UpdateContratoPromocionesAutosDto } from './dto/contrato-promociones.dto';
 import { RegistroMantenimientoDto } from './dto/registro-mantenimiento.dto';
 import { ApiTags, ApiOperation, ApiHeader, ApiParam, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CacheInterceptor } from '@nestjs/cache-manager';
@@ -15,6 +19,7 @@ import { Rol } from '../../core/auth/roles.enum';
 export class AutosController {
   constructor(private readonly autosService: AutosService) {}
 
+  // 1. Healthcheck y Telemetría de Nodo (CE01)
   @Get('health')
   @ApiOperation({ summary: 'Healthcheck y telemetría de nodo de Autos (Semáforo 🟢/🔴 RDA2 CE01)' })
   @ApiResponse({ status: 200, description: 'Estado de salud operativo y telemetría de nodo' })
@@ -22,6 +27,7 @@ export class AutosController {
     return this.autosService.getHealth();
   }
 
+  // 2. Acuerdo Comercial B2B Promociones y Combos (RDA2 §9)
   @Get('promociones/contrato')
   @ApiOperation({ summary: 'Consultar acuerdo comercial B2B para combos y promociones (Cátedra RDA2 §9)' })
   @ApiResponse({ status: 200, description: 'Acuerdo comercial vigente de promociones y combos' })
@@ -33,10 +39,11 @@ export class AutosController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Actualizar o formalizar acuerdo B2B de promociones y combos (Cátedra RDA2 §9)' })
   @ApiResponse({ status: 200, description: 'Acuerdo de promociones actualizado exitosamente' })
-  updatePromocionesContrato(@Body() dto: any) {
+  updatePromocionesContrato(@Body() dto: UpdateContratoPromocionesAutosDto) {
     return this.autosService.updatePromocionesContrato(dto);
   }
 
+  // 3. Feed Outbox de Eventos Asíncronos (EDA)
   @Get('eventos')
   @ApiOperation({ summary: 'Feed Outbox de eventos asíncronos para streaming EDA (RabbitMQ / Kafka)' })
   @ApiResponse({ status: 200, description: 'Lista de eventos asíncronos CloudEvents' })
@@ -44,6 +51,7 @@ export class AutosController {
     return this.autosService.getEventos({ limit });
   }
 
+  // 4. Catálogo y Búsqueda
   @Get()
   @ApiOperation({ summary: 'Listar catálogo general de vehículos disponibles' })
   @ApiResponse({ status: 200, description: 'Catálogo de vehículos disponibles (excluye autos en limpieza)' })
@@ -62,31 +70,7 @@ export class AutosController {
     return this.autosService.search(dto, correlationId);
   }
 
-  @Get('orders')
-  @ApiOperation({ summary: 'Obtener historial de órdenes (Admin)' })
-  getOrders() {
-    return this.autosService.getOrders();
-  }
-
-  @Get('orders/:orderId')
-  @ApiOperation({ summary: 'Obtener detalles de la orden' })
-  @ApiParam({ name: 'orderId', description: 'ID o PNR de la orden' })
-  getOrderById(@Param('orderId') orderId: string) {
-    return this.autosService.getOrderById(orderId);
-  }
-
-  @Post('orders/:orderId/cancel')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancelar una orden de renta' })
-  @ApiHeader({ name: 'Idempotency-Key', required: true })
-  cancelOrder(
-    @Param('orderId') orderId: string,
-    @Headers('Idempotency-Key') idempotencyKey: string,
-    @Body() cancelData: any
-  ) {
-    return this.autosService.cancelOrder(orderId, cancelData, idempotencyKey);
-  }
-
+  // 5. Estado de la Flota (Panel 2 - Cooldown 2h y Alertas de Odómetro)
   @Get('flota')
   @ApiOperation({ summary: 'Consultar estado operativo de toda la flota con cronómetro de cooldown en vivo (Panel 2)' })
   @ApiResponse({ status: 200, description: 'Flota completa con conteo regresivo de 2 horas y alertas de kilometraje.' })
@@ -94,22 +78,53 @@ export class AutosController {
     return this.autosService.getFlota();
   }
 
-  @Get(':id/coberturas')
-  @ApiOperation({ summary: 'Consultar opciones de cobertura (Protección Básica vs Cobertura Total RDA2)' })
-  @ApiParam({ name: 'id', description: 'ID del vehículo' })
-  @ApiResponse({ status: 200, description: 'Desglose de franquicias, depósitos y coberturas' })
-  getCoberturas(@Param('id') id: string) {
-    return this.autosService.getCoberturas(id);
+  // 6. Órdenes y Reservas (Gestión Admin)
+  @Get('orders')
+  @ApiOperation({ summary: 'Obtener historial de órdenes (Admin)' })
+  getOrders() {
+    return this.autosService.getOrders();
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Consultar detalle técnico de un vehículo por ID' })
-  @ApiParam({ name: 'id', description: 'ID del vehículo' })
-  @ApiResponse({ status: 200, description: 'Detalle técnico y especificaciones del vehículo' })
-  getAutoById(@Param('id') id: string) {
-    return this.autosService.getAutoById(id);
+  @Get('orders/:orderId')
+  @ApiOperation({ summary: 'Obtener detalles de la orden por ID o PNR' })
+  @ApiParam({ name: 'orderId', description: 'ID o PNR de la orden' })
+  getOrderById(@Param('orderId') orderId: string) {
+    return this.autosService.getOrderById(orderId);
   }
 
+  @Get('reservas/:orderId')
+  @ApiOperation({ summary: 'Obtener detalles de la reserva por ID o PNR (Alias canónico v2)' })
+  @ApiParam({ name: 'orderId', description: 'ID o PNR de la reserva' })
+  getReservaById(@Param('orderId') orderId: string) {
+    return this.autosService.getOrderById(orderId);
+  }
+
+  // 7. Cancelación y Compensación Saga LIFO con Reembolso 100%
+  @Post('orders/:orderId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancelar una orden de renta (Compensación Saga LIFO con Reembolso 100%)' })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  cancelOrder(
+    @Param('orderId') orderId: string,
+    @Headers('Idempotency-Key') idempotencyKey: string,
+    @Body() cancelData: CancelAutoOrderDto
+  ) {
+    return this.autosService.cancelOrder(orderId, cancelData, idempotencyKey);
+  }
+
+  @Post('reservas/:orderId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancelar una reserva de auto (Alias v2 para orquestador Saga)' })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  cancelReserva(
+    @Param('orderId') orderId: string,
+    @Headers('Idempotency-Key') idempotencyKey: string,
+    @Body() cancelData: CancelAutoOrderDto
+  ) {
+    return this.autosService.cancelOrder(orderId, cancelData, idempotencyKey);
+  }
+
+  // 8. Creación de Reservas (Transacción Saga)
   @Post('orders/create')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Crear orden/reserva de vehículo con Idempotency-Key y Voucher Digital QR' })
@@ -126,7 +141,7 @@ export class AutosController {
 
   @Post('reservas')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Crear reserva de vehículo (Alias v2)' })
+  @ApiOperation({ summary: 'Crear reserva de vehículo (Alias canónico v2)' })
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   createReserva(
     @Headers('Idempotency-Key') idempotencyKey: string,
@@ -137,6 +152,7 @@ export class AutosController {
     return this.autosService.createOrder(orderData, key, correlationId);
   }
 
+  // 9. Check-in Digital Anticipado (Fast-Track)
   @Post('reservas/:id/checkin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Check-in digital anticipado para retiro express de llaves (RDA2)' })
@@ -149,26 +165,40 @@ export class AutosController {
     return this.autosService.checkin(id, dto);
   }
 
+  @Post('orders/:id/checkin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check-in digital anticipado (Alias de compatibilidad v2)' })
+  @ApiParam({ name: 'id', description: 'ID o PNR de la orden' })
+  checkinOrder(
+    @Param('id') id: string,
+    @Body() dto: CheckinAutoDto
+  ) {
+    return this.autosService.checkin(id, dto);
+  }
+
+  // 10. Check-in de Entrega en Mostrador (Licencia física y Odómetro Inicial)
   @Post('orders/:id/checkin-entrega')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Check-in de Entrega en mostrador (Licencia y Odómetro Inicial) (Cátedra RDA2 §5)' })
   checkinEntrega(
     @Param('id') id: string,
-    @Body() dto: { licencia_conducir: string; km_salida: number; tecnico_entrega?: string }
+    @Body() dto: CheckinEntregaDto
   ) {
     return this.autosService.checkinEntrega(id, dto);
   }
 
+  // 11. Check-in de Devolución en Mostrador (Retorno, Odómetro Final y Activación Cooldown 2h)
   @Post('orders/:id/checkin-devolucion')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Check-in de Retorno y activación inmediata de Cooldown de Limpieza de 2h (Cátedra RDA2 §5)' })
   checkinDevolucion(
     @Param('id') id: string,
-    @Body() dto: { km_retorno: number; nivel_combustible?: number; observaciones?: string }
+    @Body() dto: CheckinDevolucionDto
   ) {
     return this.autosService.checkinDevolucion(id, dto);
   }
 
+  // 12. Devolución Directa del Vehículo
   @Post(':id/devolucion')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Registrar devolución del auto e iniciar Cooldown de Limpieza de 2 Horas (RDA2 §5)' })
@@ -178,6 +208,7 @@ export class AutosController {
     return this.autosService.registrarDevolucion(id);
   }
 
+  // 13. Registro Técnico de Mantenimiento y Odómetro (Rol MANTENIMIENTO / ADMIN)
   @Post(':id/mantenimiento/registro')
   @HttpCode(HttpStatus.OK)
   @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -194,6 +225,24 @@ export class AutosController {
     @Body() dto: RegistroMantenimientoDto
   ) {
     return this.autosService.registrarMantenimiento(id, dto);
+  }
+
+  // 14. Opciones de Cobertura (Protección Básica vs Cobertura Total)
+  @Get(':id/coberturas')
+  @ApiOperation({ summary: 'Consultar opciones de cobertura (Protección Básica vs Cobertura Total RDA2)' })
+  @ApiParam({ name: 'id', description: 'ID del vehículo' })
+  @ApiResponse({ status: 200, description: 'Desglose de franquicias, depósitos y coberturas' })
+  getCoberturas(@Param('id') id: string) {
+    return this.autosService.getCoberturas(id);
+  }
+
+  // 15. Detalle Técnico de Vehículo por ID
+  @Get(':id')
+  @ApiOperation({ summary: 'Consultar detalle técnico de un vehículo por ID' })
+  @ApiParam({ name: 'id', description: 'ID del vehículo' })
+  @ApiResponse({ status: 200, description: 'Detalle técnico y especificaciones del vehículo' })
+  getAutoById(@Param('id') id: string) {
+    return this.autosService.getAutoById(id);
   }
 
   // --- Endpoints de Catálogo y Compatibilidad Legacy --- //
@@ -218,7 +267,6 @@ export class AutosController {
   getSuppliers() {
     return this.autosService.getSuppliers();
   }
-
 
   // --- Endpoints Administrativos para CRUD de Autos Locales --- //
   
