@@ -19,10 +19,13 @@ import {
 import { DilanAtraccionesAdapter } from './acl/dilan-atracciones.adapter';
 import { WinstonPhysicalLoggerService } from '../../core/logger/winston-logger.service';
 
+import { InventoryModule } from '../inventory/inventory.module';
+
 @Module({
   imports: [
     CommonModule, 
     HttpModule,
+    InventoryModule,
     TypeOrmModule.forFeature([
       Atraccion,
       CategoriaRecursiva,

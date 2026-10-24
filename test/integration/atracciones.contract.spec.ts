@@ -178,4 +178,72 @@ describe('Atracciones OpenAPI v2 Contract Tests (Cátedra RDA2 CE07)', () => {
       expect(res.body).toHaveProperty('code', 'OUT_OF_STOCK');
     }
   });
+
+  it('GET /api/v2/atracciones/categorias debe retornar el listado plano con banderas de inclusión (RDA2)', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v2/atracciones/categorias')
+      .expect(HttpStatus.OK);
+
+    expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body.length).toBeGreaterThan(0);
+    const cat = response.body[0];
+    expect(cat).toHaveProperty('id');
+    expect(cat).toHaveProperty('nombre');
+    expect(cat).toHaveProperty('incluye_comida');
+    expect(cat).toHaveProperty('incluye_transporte');
+    expect(cat).toHaveProperty('incluye_guia');
+  });
+
+  it('GET /api/v2/atracciones/:id/disponibilidad debe retornar turnos y cupos', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v2/atracciones/PRhu4UBTWPBC/disponibilidad?date=2026-10-25')
+      .expect(HttpStatus.OK);
+
+    expect(response.body).toHaveProperty('atraccion_id', 'PRhu4UBTWPBC');
+    expect(response.body).toHaveProperty('time_slots');
+    expect(Array.isArray(response.body.time_slots)).toBe(true);
+  });
+
+  it('POST /api/v2/atracciones/reservas/:id/checkin debe procesar checkin presencial con guía', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v2/atracciones/reservas/res-test-01/checkin')
+      .send({
+        documento_identidad: '1723456789',
+        guia_asignado: 'Carlos Villacís (Licencia MINTUR-441)',
+      })
+      .expect(HttpStatus.OK);
+
+    expect(response.body).toHaveProperty('reserva_id');
+    expect(response.body).toHaveProperty('estado', 'CHECKED_IN');
+    expect(response.body).toHaveProperty('guia_asignado');
+    expect(response.body).toHaveProperty('voucher_digital_qr');
+  });
+
+  it('POST /api/v2/atracciones/reservas/:id/cancel debe ejecutar compensación Saga con reembolso 100%', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v2/atracciones/reservas/res-test-01/cancel')
+      .set('idempotency-key', 'idem-cancel-test-123')
+      .set('x-correlation-id', 'corr-cancel-test-123')
+      .send({
+        reason: 'Cancelación voluntaria por el usuario',
+      })
+      .expect(HttpStatus.OK);
+
+    expect(response.body).toHaveProperty('reservation_id');
+    expect(response.body).toHaveProperty('status', 'CANCELLED');
+    expect(response.body).toHaveProperty('cancel_code');
+    expect(response.body).toHaveProperty('refund');
+    expect(response.body.refund).toHaveProperty('status', 'PROCESSED');
+  });
+
+  it('GET /api/v2/atracciones/promociones/contrato debe retornar el acuerdo B2B de combos (Cátedra RDA2 §9)', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v2/atracciones/promociones/contrato')
+      .expect(HttpStatus.OK);
+
+    expect(response.body).toHaveProperty('proveedor_codigo');
+    expect(response.body).toHaveProperty('vertical', 'ATRACCIONES');
+    expect(response.body).toHaveProperty('permite_promociones');
+    expect(response.body).toHaveProperty('porcentaje_descuento_maximo');
+  });
 });

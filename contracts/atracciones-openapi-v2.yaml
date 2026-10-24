@@ -2214,8 +2214,7 @@ components:
           description: Carga útil con los datos minimizados del evento.
         data:
           type: object
-          description: Alias oficial CloudEvents v1.0 para el payload del evento.
-          description: Datos minimizados del evento según el estándar canónico de eventos EDA.
+          description: Alias oficial CloudEvents v1.0 para el payload del evento y datos minimizados del evento según el estándar canónico de eventos EDA.
 
     NodeHealthResponse:
       type: object

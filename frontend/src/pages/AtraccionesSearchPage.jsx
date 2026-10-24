@@ -32,7 +32,7 @@ export function AtraccionesSearchPage() {
   useEffect(() => {
     async function fetchArbol() {
       try {
-        const res = await api.get('/v2/atracciones/categorias/arbol');
+        const res = await api.get('/atracciones/categorias/arbol');
         setArbolCategorias(Array.isArray(res) ? res : res.data || []);
       } catch (e) {
         setArbolCategorias([

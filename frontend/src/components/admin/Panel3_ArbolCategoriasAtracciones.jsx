@@ -16,7 +16,7 @@ export function Panel3_ArbolCategoriasAtracciones() {
   const fetchArbol = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/v2/atracciones/categorias/arbol');
+      const res = await api.get('/atracciones/categorias/arbol');
       setArbol(Array.isArray(res) ? res : res.data || []);
     } catch (e) {
       // Mock inicial si el endpoint remoto no está disponible
@@ -79,7 +79,7 @@ export function Panel3_ArbolCategoriasAtracciones() {
 
     setGuardando(true);
     try {
-      await api.post('/v2/atracciones/categorias', {
+      await api.post('/atracciones/categorias', {
         nombre: nuevaCat.nombre.trim(),
         parent_id: nuevaCat.parentId || null,
         incluye_comida: nuevaCat.incluye_comida,
