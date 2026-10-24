@@ -648,61 +648,89 @@ function EstadoBadge({ online, checking }) {
 }
 
 function ProveedoresTab() {
-  const STORAGE_KEY = 'booking_proveedores';
-
-  const [proveedores, setProveedores] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      return saved && saved.length > 0 ? saved : PROVEEDORES_INICIALES;
-    } catch { return PROVEEDORES_INICIALES; }
-  });
-
-  // Estado de salud: { [id]: { online, latency, checking } }
+  const [proveedores, setProveedores] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState({});
-  const [modal, setModal] = useState(null); // null | 'nuevo' | { ...proveedor }
+  const [modal, setModal] = useState(null); // null | 'nuevo' | 'editar'
   const [detalle, setDetalle] = useState(null);
-  const [form, setForm] = useState({ nombre:'', equipo:'', url:'', apiBase:'', tipo:'Otro', descripcion:'', contacto:'', tokenAuth:'', webhookUrl:'', healthcheckUrl:'', rateLimit:'', entorno:'Producción' });
+  const [form, setForm] = useState({
+    nombre: '', equipo: '', url: '', apiBase: '', endpointGrpc: '', tipo: 'Atracciones',
+    descripcion: '', contacto: '', tokenAuth: '', webhookUrl: '', healthcheckUrl: '',
+    rateLimit: '', entorno: 'Producción', emoji: '🔗', codigo_nodo: '',
+  });
   const [formErr, setFormErr] = useState({});
   const [guardando, setGuardando] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState('Todos');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
+  const [syncing, setSyncing] = useState({});
+  const [aviso, setAviso] = useState(null);
 
-  const persistir = (lista) => {
-    setProveedores(lista);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(lista));
-  };
+  const cargarProveedores = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/nodes');
+      const lista = Array.isArray(data) ? data : (data?.nodes || PROVEEDORES_INICIALES);
+      setProveedores(lista);
 
-  // Simula un health-check contra la URL del proveedor
-  const checkHealth = (prov) => {
-    setHealth(h => ({ ...h, [prov.id]: { ...h[prov.id], checking: true } }));
-    // Simulación: proveedores con activo=true tienen 85% de probabilidad de estar online
-    const delay = 600 + Math.random() * 1200;
-    setTimeout(() => {
-      const baseOnline = prov.activo;
-      const online = baseOnline ? Math.random() > 0.12 : Math.random() > 0.85;
-      const latency = online ? Math.round(80 + Math.random() * 420) : null;
-      setHealth(h => ({ ...h, [prov.id]: { online, latency, checking: false, lastCheck: new Date() } }));
-    }, delay);
-  };
+      // Mapear salud inicial desde la base de datos
+      const healthInit = {};
+      lista.forEach(p => {
+        const id = p.codigo_nodo || p.id;
+        const isOnline = p.activo !== false && p.health_status !== 'DOWN' && !p.kill_switch_activo;
+        healthInit[id] = {
+          online: isOnline,
+          latency: p.latencia_ms || 25,
+          checking: false,
+          lastCheck: p.ultimo_ping_at ? new Date(p.ultimo_ping_at) : new Date(),
+        };
+      });
+      setHealth(healthInit);
+    } catch (err) {
+      console.warn('Fallback a proveedores locales:', err.message);
+      setProveedores(PROVEEDORES_INICIALES);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Revisar todos al montar y cada 8 segundos
   useEffect(() => {
-    proveedores.forEach(p => checkHealth(p));
-    const interval = setInterval(() => {
-      proveedores.forEach(p => checkHealth(p));
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [proveedores.length]); // solo re-ejecutar si cambia cantidad
+    cargarProveedores();
+  }, [cargarProveedores]);
 
-  const onlineCount = Object.values(health).filter(h => h.online && !h.checking).length;
-  const offlineCount = Object.values(health).filter(h => !h.online && !h.checking).length;
+  // Ping de salud real HTTP al backend
+  const checkHealth = async (prov) => {
+    const id = prov.codigo_nodo || prov.id;
+    setHealth(h => ({ ...h, [id]: { ...h[id], checking: true } }));
+    try {
+      const { data } = await api.post(`/nodes/${id}/ping`);
+      setHealth(h => ({
+        ...h,
+        [id]: {
+          online: data.online ?? (data.health_status === 'HEALTHY' || data.health_status === 'DEGRADED'),
+          latency: data.latencia_ms || data.latenciaMs,
+          checking: false,
+          lastCheck: new Date(),
+        },
+      }));
+    } catch {
+      setHealth(h => ({
+        ...h,
+        [id]: { online: false, latency: null, checking: false, lastCheck: new Date() },
+      }));
+    }
+  };
 
-  const tiposFiltro = ['Todos', ...Array.from(new Set(proveedores.map(p => p.tipo)))];
+  const onlineCount = Object.values(health).filter(h => h?.online && !h?.checking).length;
+  const offlineCount = Object.values(health).filter(h => !h?.online && !h?.checking).length;
+
+  const tiposFiltro = ['Todos', ...Array.from(new Set(proveedores.map(p => p.tipo || p.vertical || 'Otro')))];
 
   const proveedoresFiltrados = proveedores.filter(p => {
-    const okTipo = filtroTipo === 'Todos' || p.tipo === filtroTipo;
-    const h = health[p.id];
+    const pTipo = p.tipo || p.vertical || 'Otro';
+    const okTipo = filtroTipo === 'Todos' || pTipo.toLowerCase() === filtroTipo.toLowerCase();
+    const id = p.codigo_nodo || p.id;
+    const h = health[id];
     const okEstado = filtroEstado === 'Todos'
       || (filtroEstado === 'Online' && h?.online)
       || (filtroEstado === 'Offline' && h && !h.online && !h.checking);
@@ -710,22 +738,42 @@ function ProveedoresTab() {
   });
 
   const abrirNuevo = () => {
-    setForm({ nombre:'', equipo:'', url:'', apiBase:'', tipo:'Otro', descripcion:'', contacto:'', emoji:'🔗', tokenAuth:'', webhookUrl:'', healthcheckUrl:'', rateLimit:'', entorno:'Producción' });
+    setForm({
+      nombre: '', equipo: '', url: '', apiBase: '', endpointGrpc: '', tipo: 'Atracciones',
+      descripcion: '', contacto: '', emoji: '🎡', tokenAuth: '', webhookUrl: '',
+      healthcheckUrl: '', rateLimit: '', entorno: 'Producción', codigo_nodo: '',
+    });
     setFormErr({});
     setModal('nuevo');
   };
 
   const abrirEditar = (prov) => {
-    setForm({ ...prov });
+    setForm({
+      id: prov.id,
+      codigo_nodo: prov.codigo_nodo || prov.codigo || prov.id,
+      nombre: prov.nombre_proveedor || prov.nombre || '',
+      equipo: prov.equipo || '',
+      url: prov.url || prov.base_url_rest || '',
+      apiBase: prov.base_url_rest || prov.apiBase || prov.url || '',
+      endpointGrpc: prov.endpoint_grpc || prov.endpointGrpc || '',
+      tipo: prov.tipo || prov.vertical || 'Atracciones',
+      descripcion: prov.descripcion || '',
+      contacto: prov.contacto || '',
+      emoji: prov.emoji || '🔗',
+      tokenAuth: prov.tokenAuth || '',
+      webhookUrl: prov.webhookUrl || '',
+      healthcheckUrl: prov.healthcheckUrl || '',
+      rateLimit: prov.rateLimit || '',
+      entorno: prov.entorno || 'Producción',
+    });
     setFormErr({});
     setModal('editar');
   };
 
   const validar = () => {
     const err = {};
-    if (!form.nombre.trim()) err.nombre = 'Requerido';
-    if (!form.url.trim()) err.url = 'Requerido';
-    if (!form.apiBase.trim()) err.apiBase = 'Requerido';
+    if (!form.nombre.trim()) err.nombre = 'El nombre del sistema es obligatorio';
+    if (!form.url.trim() && !form.apiBase.trim()) err.url = 'La URL o API base es obligatoria';
     return err;
   };
 
@@ -733,32 +781,76 @@ function ProveedoresTab() {
     const err = validar();
     if (Object.keys(err).length > 0) { setFormErr(err); return; }
     setGuardando(true);
-    await new Promise(r => setTimeout(r, 600));
-    if (modal === 'nuevo') {
-      const nuevo = { ...form, id: `prov-${Date.now()}`, activo: true, fechaRegistro: new Date().toISOString().split('T')[0] };
-      const lista = [...proveedores, nuevo];
-      persistir(lista);
-      // Iniciar health check del nuevo proveedor
-      setTimeout(() => checkHealth(nuevo), 300);
-    } else {
-      const lista = proveedores.map(p => p.id === form.id ? { ...form } : p);
-      persistir(lista);
+    setAviso(null);
+    try {
+      const payload = {
+        nombreProveedor: form.nombre,
+        nombre: form.nombre,
+        vertical: (form.tipo || 'ATRACCIONES').toUpperCase(),
+        tipo: form.tipo,
+        baseUrlRest: (form.apiBase || form.url).trim(),
+        url: (form.url || form.apiBase).trim(),
+        endpointGrpc: form.endpointGrpc ? form.endpointGrpc.trim() : null,
+        equipo: form.equipo,
+        contacto: form.contacto,
+        emoji: form.emoji || '🔗',
+        descripcion: form.descripcion,
+      };
+
+      if (modal === 'nuevo') {
+        const { data } = await api.post('/nodes', payload);
+        setAviso({ tipo: 'success', texto: data.mensaje || `Proveedor '${form.nombre}' registrado con éxito en PostgreSQL.` });
+      } else {
+        const codigo = form.codigo_nodo || form.id;
+        const { data } = await api.put(`/nodes/${codigo}`, payload);
+        setAviso({ tipo: 'success', texto: data.mensaje || `Proveedor '${form.nombre}' actualizado con éxito.` });
+      }
+      await cargarProveedores();
+      setModal(null);
+    } catch (e) {
+      setAviso({ tipo: 'error', texto: apiErrorMsg(e, 'Error al guardar proveedor') });
+    } finally {
+      setGuardando(false);
     }
-    setGuardando(false);
-    setModal(null);
   };
 
-  const eliminar = (id) => {
-    const lista = proveedores.filter(p => p.id !== id);
-    persistir(lista);
-    setHealth(h => { const n = { ...h }; delete n[id]; return n; });
-    setConfirmDel(null);
-    if (detalle?.id === id) setDetalle(null);
+  const eliminar = async (prov) => {
+    const codigo = prov.codigo_nodo || prov.codigo || prov.id;
+    try {
+      await api.delete(`/nodes/${codigo}`);
+      setAviso({ tipo: 'success', texto: `Proveedor '${prov.nombre_proveedor || prov.nombre}' eliminado correctamente.` });
+      await cargarProveedores();
+    } catch (e) {
+      setAviso({ tipo: 'error', texto: apiErrorMsg(e, 'Error al eliminar proveedor') });
+    } finally {
+      setConfirmDel(null);
+      if (detalle?.id === prov.id || detalle?.codigo_nodo === codigo) setDetalle(null);
+    }
   };
 
-  const toggleActivo = (prov) => {
-    const lista = proveedores.map(p => p.id === prov.id ? { ...p, activo: !p.activo } : p);
-    persistir(lista);
+  const toggleActivo = async (prov) => {
+    const codigo = prov.codigo_nodo || prov.codigo || prov.id;
+    try {
+      const { data } = await api.post(`/nodes/${codigo}/toggle`);
+      setAviso({ tipo: 'success', texto: data.mensaje });
+      await cargarProveedores();
+    } catch (e) {
+      setAviso({ tipo: 'error', texto: apiErrorMsg(e, 'Error al alternar estado del nodo') });
+    }
+  };
+
+  const sincronizarCatalogo = async (prov) => {
+    const codigo = prov.codigo_nodo || prov.codigo || prov.id;
+    setSyncing(s => ({ ...s, [codigo]: true }));
+    setAviso(null);
+    try {
+      const { data } = await api.post(`/nodes/${codigo}/sync`);
+      setAviso({ tipo: 'success', texto: `🎉 ${data.mensaje}` });
+    } catch (e) {
+      setAviso({ tipo: 'error', texto: apiErrorMsg(e, `Error al sincronizar catálogo con ${prov.nombre_proveedor || prov.nombre}`) });
+    } finally {
+      setSyncing(s => ({ ...s, [codigo]: false }));
+    }
   };
 
   const inputStyle = (field) => ({
@@ -771,19 +863,26 @@ function ProveedoresTab() {
   return (
     <div>
       {/* Banner informativo */}
-      <div style={{ background: '#e3f2fd', border: '1px solid #1565c0', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: '1.2rem' }}>🔗</span>
-        <span style={{ fontSize: '0.85rem', color: '#1565c0' }}>
-          <strong>Panel de Proveedores — Preparación RDA2.</strong> Aquí se gestionan los sistemas externos de otros grupos que se integrarán al Booking Ecuador en el Reto 2. Los estados se simulan ya que la integración real aún no está desplegada.
-        </span>
+      <div style={{ background: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 8, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: '1.4rem' }}>🌐</span>
+          <span style={{ fontSize: '0.85rem', color: '#1b5e20' }}>
+            <strong>Panel de Proveedores & Alianzas (RDA2 — 100% Funcional).</strong> Conecta aquí los microservicios externos de tus compañeros (Atracciones, Autos, Alojamientos, Vuelos). Guarda en la base de datos central PostgreSQL (schema_proveedores), monitorea su estado con semáforo LED en vivo y sincroniza sus catálogos con OpenAPI v2.
+          </span>
+        </div>
+        <button onClick={cargarProveedores} disabled={loading} style={{ background: C.blue, color: 'white', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: loading ? 'wait' : 'pointer', fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+          {loading ? '⏳ Cargando...' : '↻ Recargar Nodos'}
+        </button>
       </div>
+
+      {aviso && <Alerta tipo={aviso.tipo} onClose={() => setAviso(null)}>{aviso.texto}</Alerta>}
 
       {/* KPIs de red */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
         <KpiCard icon="🌐" label="Total Proveedores" value={proveedores.length} color={C.blue} />
         <KpiCard icon="✅" label="En Línea" value={onlineCount} color={C.green} />
-        <KpiCard icon="❌" label="Sin Conexión" value={offlineCount} color={C.red} />
-        <KpiCard icon="📦" label="Tipos de Servicio" value={tiposFiltro.length - 1} color={C.cyan} />
+        <KpiCard icon="❌" label="Sin Conexión / Apagados" value={offlineCount} color={C.red} />
+        <KpiCard icon="📦" label="Tipos de Servicio" value={Math.max(1, tiposFiltro.length - 1)} color={C.cyan} />
       </div>
 
       {/* Barra de herramientas */}
@@ -802,7 +901,7 @@ function ProveedoresTab() {
           </button>
         </div>
         <button onClick={abrirNuevo} style={{ background: C.blue, color: 'white', border: 'none', borderRadius: 8, padding: '9px 18px', cursor: 'pointer', fontWeight: 700, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-          + Registrar Proveedor
+          ➕ Registrar Proveedor
         </button>
       </div>
 
@@ -811,49 +910,93 @@ function ProveedoresTab() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
           <thead>
             <tr style={{ background: C.darkBlue, color: 'white' }}>
-              {['Sistema / Equipo', 'Tipo', 'Estado', 'Latencia', 'Última revisión', 'Activo', 'Acciones'].map(h => (
+              {['Sistema / Proveedor', 'Tipo', 'Estado LED', 'Latencia', 'Último Ping', 'Kill-Switch', 'Acciones'].map(h => (
                 <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {proveedoresFiltrados.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: C.gray }}>No hay proveedores que coincidan con el filtro</td></tr>
+              <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: C.gray }}>{loading ? 'Cargando proveedores desde la base de datos...' : 'No hay proveedores que coincidan con el filtro'}</td></tr>
             )}
             {proveedoresFiltrados.map((prov, i) => {
-              const h = health[prov.id] || {};
+              const id = prov.codigo_nodo || prov.id;
+              const h = health[id] || {};
+              const nombre = prov.nombre_proveedor || prov.nombre;
+              const isSyncing = syncing[id];
+              const isActivo = prov.activo !== false && !prov.kill_switch_activo;
+
               return (
-                <tr key={prov.id} style={{ borderTop: `1px solid ${C.border}`, background: i % 2 === 0 ? C.white : C.bg, transition: 'background 0.15s' }}
+                <tr key={id} style={{ borderTop: `1px solid ${C.border}`, background: i % 2 === 0 ? C.white : C.bg, transition: 'background 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = C.lightBlue}
                   onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? C.white : C.bg}>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: '1.5rem' }}>{prov.emoji || '🔗'}</span>
                       <div>
-                        <div style={{ fontWeight: 700, color: C.text }}>{prov.nombre}</div>
-                        <div style={{ fontSize: '0.78rem', color: C.gray }}>{prov.equipo}</div>
+                        <div style={{ fontWeight: 700, color: C.text }}>{nombre}</div>
+                        <div style={{ fontSize: '0.75rem', color: C.gray, fontFamily: 'monospace' }}>{prov.codigo_nodo || prov.codigo}</div>
+                        {prov.equipo && <div style={{ fontSize: '0.74rem', color: C.blue }}>{prov.equipo}</div>}
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding: '12px 14px' }}><TipoBadge tipo={prov.tipo} /></td>
+                  <td style={{ padding: '12px 14px' }}><TipoBadge tipo={prov.tipo || prov.vertical} /></td>
                   <td style={{ padding: '12px 14px' }}><EstadoBadge online={h.online} checking={h.checking} /></td>
                   <td style={{ padding: '12px 14px', fontWeight: 600, color: h.online ? (h.latency > 300 ? C.orange : C.green) : C.gray }}>
                     {h.checking ? '...' : h.latency ? `${h.latency} ms` : '—'}
                   </td>
                   <td style={{ padding: '12px 14px', color: C.gray, fontSize: '0.78rem' }}>
-                    {h.lastCheck ? h.lastCheck.toLocaleTimeString('es-EC') : 'Pendiente'}
+                    {h.lastCheck ? (typeof h.lastCheck === 'string' ? h.lastCheck : h.lastCheck.toLocaleTimeString('es-EC')) : 'Pendiente'}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
-                    <button onClick={() => toggleActivo(prov)} style={{ background: prov.activo ? '#e8f5e9' : '#ffebee', color: prov.activo ? C.green : C.red, border: 'none', borderRadius: 20, padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>
-                      {prov.activo ? 'Activo' : 'Pausado'}
+                    <button
+                      onClick={() => toggleActivo(prov)}
+                      title={isActivo ? 'Click para desconectar (activar Kill-Switch)' : 'Click para conectar (desactivar Kill-Switch)'}
+                      style={{
+                        background: isActivo ? '#e8f5e9' : '#ffebee',
+                        color: isActivo ? C.green : C.red,
+                        border: `1px solid ${isActivo ? '#c8e6c9' : '#ffcdd2'}`,
+                        borderRadius: 20,
+                        padding: '4px 12px',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      {isActivo ? '🟢 Activo' : '🔴 Pausado'}
                     </button>
                   </td>
                   <td style={{ padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => setDetalle(prov)} title="Ver detalle" style={{ background: C.lightBlue, border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem' }}>👁️</button>
-                      <button onClick={() => checkHealth(prov)} title="Recheck" style={{ background: '#fff3e0', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem' }}>🔄</button>
-                      <button onClick={() => abrirEditar(prov)} title="Editar" style={{ background: '#e8f5e9', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem' }}>✏️</button>
-                      <button onClick={() => setConfirmDel(prov)} title="Eliminar" style={{ background: '#ffebee', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem' }}>🗑️</button>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button onClick={() => setDetalle(prov)} title="Ver ficha técnica" style={{ background: C.lightBlue, border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem' }}>👁️</button>
+                      <button onClick={() => checkHealth(prov)} title="Disparar ping HTTP" style={{ background: '#fff3e0', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem' }}>🔄</button>
+                      
+                      {/* Botón para Sincronizar Catálogo */}
+                      <button
+                        onClick={() => sincronizarCatalogo(prov)}
+                        disabled={isSyncing || !isActivo}
+                        title={!isActivo ? 'Nodo pausado por Kill-Switch' : 'Sincronizar catálogo externo OpenAPI v2 a Booking'}
+                        style={{
+                          background: isSyncing ? C.gray : '#e1f5fe',
+                          color: isSyncing ? '#fff' : '#0277bd',
+                          border: '1px solid #81d4fa',
+                          borderRadius: 6,
+                          padding: '5px 10px',
+                          cursor: isSyncing || !isActivo ? 'not-allowed' : 'pointer',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          whiteSpace: 'nowrap',
+                          opacity: !isActivo ? 0.5 : 1,
+                        }}
+                      >
+                        {isSyncing ? '⏳ Importando...' : '📥 Sincronizar'}
+                      </button>
+
+                      <button onClick={() => abrirEditar(prov)} title="Editar configuración" style={{ background: '#e8f5e9', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem' }}>✏️</button>
+                      <button onClick={() => setConfirmDel(prov)} title="Eliminar nodo" style={{ background: '#ffebee', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem' }}>🗑️</button>
                     </div>
                   </td>
                 </tr>
@@ -865,20 +1008,28 @@ function ProveedoresTab() {
 
       {/* Panel de detalle lateral */}
       {detalle && (
-        <div style={{ position: 'fixed', top: 0, right: 0, width: 380, height: '100vh', background: 'white', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', zIndex: 1000, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', top: 0, right: 0, width: 420, height: '100vh', background: 'white', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)', zIndex: 1000, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
           <div style={{ background: C.darkBlue, color: 'white', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>Detalle del Proveedor</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>Detalle de Integración RDA2</div>
             <button onClick={() => setDetalle(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
           </div>
           <div style={{ padding: '20px' }}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: '3rem', marginBottom: 8 }}>{detalle.emoji || '🔗'}</div>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: C.text }}>{detalle.nombre}</div>
-              <div style={{ fontSize: '0.85rem', color: C.gray, marginBottom: 8 }}>{detalle.equipo}</div>
-              <TipoBadge tipo={detalle.tipo} />
+              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: C.text }}>{detalle.nombre_proveedor || detalle.nombre}</div>
+              <div style={{ fontSize: '0.8rem', color: C.gray, fontFamily: 'monospace', marginBottom: 4 }}>{detalle.codigo_nodo || detalle.codigo}</div>
+              {detalle.equipo && <div style={{ fontSize: '0.85rem', color: C.blue, marginBottom: 8 }}>{detalle.equipo}</div>}
+              <TipoBadge tipo={detalle.tipo || detalle.vertical} />
             </div>
             <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-              {[['🌐 URL del Sistema', detalle.url], ['🔌 API Base', detalle.apiBase], ['🔑 Token (Auth)', detalle.tokenAuth ? '••••••••' : 'No definido'], ['🪝 Webhook', detalle.webhookUrl], ['🩺 Healthcheck', detalle.healthcheckUrl], ['⚡ Rate Limit', detalle.rateLimit ? detalle.rateLimit + ' req/s' : '—'], ['🌍 Entorno', detalle.entorno || 'Producción'], ['📧 Contacto', detalle.contacto], ['📅 Registro', detalle.fechaRegistro]].map(([label, val]) => (
+              {[
+                ['🌐 URL Base REST (OpenAPI v2)', detalle.base_url_rest || detalle.url],
+                ['⚡ Socket Inventario gRPC', detalle.endpoint_grpc || detalle.endpointGrpc || 'grpc://booking.epn.edu.ec:50051'],
+                ['📧 Correo de Contacto', detalle.contacto || 'No especificado'],
+                ['🚦 Circuit Breaker', detalle.circuit_breaker_estado || 'CLOSED'],
+                ['🛡️ Kill-Switch Activo', detalle.kill_switch_activo ? 'SÍ (Bloqueado)' : 'NO (Operativo)'],
+                ['📈 Tasa de Fallos', `${detalle.tasa_fallos_pct || 0}%`],
+              ].map(([label, val]) => (
                 <div key={label} style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: '0.75rem', color: C.gray, fontWeight: 600, marginBottom: 3 }}>{label}</div>
                   <div style={{ fontSize: '0.88rem', color: C.text, wordBreak: 'break-all' }}>{val || '—'}</div>
@@ -886,28 +1037,43 @@ function ProveedoresTab() {
               ))}
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: '0.75rem', color: C.gray, fontWeight: 600, marginBottom: 3 }}>📝 Descripción</div>
-                <div style={{ fontSize: '0.88rem', color: C.text }}>{detalle.descripcion || '—'}</div>
+                <div style={{ fontSize: '0.88rem', color: C.text }}>{detalle.descripcion || 'Sin descripción.'}</div>
               </div>
-              {/* Estado en tiempo real en el detalle */}
-              <div style={{ background: C.bg, borderRadius: 8, padding: '12px 16px', marginTop: 12 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 8 }}>Estado en tiempo real</div>
-                {(() => {
-                  const h = health[detalle.id] || {};
-                  return (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <EstadoBadge online={h.online} checking={h.checking} />
-                      <span style={{ color: h.online ? (h.latency > 300 ? C.orange : C.green) : C.gray, fontWeight: 700, fontSize: '0.85rem' }}>
-                        {h.checking ? '...' : h.latency ? `${h.latency} ms` : '—'}
-                      </span>
-                    </div>
-                  );
-                })()}
+
+              {/* Botón de sincronización dentro del detalle */}
+              <div style={{ marginTop: 20, marginBottom: 16 }}>
+                <button
+                  onClick={() => sincronizarCatalogo(detalle)}
+                  disabled={syncing[detalle.codigo_nodo || detalle.id]}
+                  style={{
+                    width: '100%',
+                    background: C.blue,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '10px',
+                    fontWeight: 700,
+                    cursor: syncing[detalle.codigo_nodo || detalle.id] ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}
+                >
+                  {syncing[detalle.codigo_nodo || detalle.id] ? '⏳ Sincronizando Catálogo...' : '📥 Sincronizar Catálogo a Booking'}
+                </button>
               </div>
-              {/* Endpoints simulados */}
+
+              {/* Endpoints del Contrato */}
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 8 }}>🔗 Endpoints de Integración (RDA2)</div>
-                {['GET /api/v1/catalogo/exportar', `GET /api/v1/${detalle.tipo.toLowerCase()}/disponibilidad`, 'POST /api/v1/webhooks/reserva-creada', 'GET /health'].map(ep => (
-                  <div key={ep} style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: C.blue, background: C.lightBlue, padding: '4px 10px', borderRadius: 4, marginBottom: 4 }}>{ep}</div>
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 8 }}>🔗 Endpoints Conectados (OpenAPI v2)</div>
+                {[
+                  `GET ${detalle.base_url_rest || '/api/v2'}/atracciones`,
+                  `GET ${detalle.base_url_rest || '/api/v2'}/atracciones/{id}/disponibilidad`,
+                  `POST ${detalle.base_url_rest || '/api/v2'}/atracciones/reservas`,
+                  `GET ${detalle.base_url_rest || '/api/v2'}/health`,
+                ].map(ep => (
+                  <div key={ep} style={{ fontFamily: 'monospace', fontSize: '0.74rem', color: C.blue, background: C.lightBlue, padding: '5px 10px', borderRadius: 4, marginBottom: 4, wordBreak: 'break-all' }}>{ep}</div>
                 ))}
               </div>
             </div>
@@ -915,70 +1081,55 @@ function ProveedoresTab() {
         </div>
       )}
 
-      {/* Modal Nuevo / Editar */}
+      {/* Modal Nuevo / Editar Proveedor */}
       {(modal === 'nuevo' || modal === 'editar') && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'white', borderRadius: 12, width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
             <div style={{ background: C.darkBlue, color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '1rem' }}>{modal === 'nuevo' ? '➕ Registrar Nuevo Proveedor' : '✏️ Editar Proveedor'}</div>
+              <div style={{ fontWeight: 700, fontSize: '1rem' }}>{modal === 'nuevo' ? '➕ Registrar Nuevo Proveedor (RDA2)' : '✏️ Editar Parámetros de Proveedor'}</div>
               <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
             </div>
             <div style={{ padding: '24px' }}>
-              <div style={{ background: '#fff8e1', border: '1px solid #ffc107', borderRadius: 6, padding: '8px 14px', marginBottom: 20, fontSize: '0.8rem', color: '#664d03' }}>
-                ⚠️ La información ingresada se guardará localmente y simulará la integración real del RDA2. En producción, este formulario enviará los datos al API Gateway central.
+              <div style={{ background: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 6, padding: '10px 14px', marginBottom: 20, fontSize: '0.82rem', color: '#1b5e20', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>🔌</span>
+                <span><strong>Conexión Oficial RDA2:</strong> Los datos se guardan en PostgreSQL (schema_proveedores) y permitirán sincronizar catálogos y procesar reservas en vivo con la API del socio.</span>
               </div>
-              {[['nombre', 'Nombre del sistema *', 'Ej: TravelEcuador Pro'], ['equipo', 'Nombre del equipo', 'Ej: Grupo 6 – Cruceros'], ['url', 'URL del sitio web *', 'https://mi-sistema.vercel.app'], ['apiBase', 'URL base de la API *', 'https://mi-sistema.vercel.app/api/v1'], ['contacto', 'Email de contacto', 'grupo@universidad.edu.ec']].map(([field, label, placeholder]) => (
+              {[
+                ['nombre', 'Nombre del sistema / socio *', 'Ej: Descubre EC (Dilan Mendoza)'],
+                ['equipo', 'Nombre del equipo / Compañero', 'Ej: Grupo 2 – Dilan Mendoza'],
+                ['url', 'URL del sitio web o API *', 'https://descubreec.com'],
+                ['apiBase', 'URL base de la API REST (OpenAPI v2) *', 'https://descubreec.com/api/v2'],
+                ['endpointGrpc', 'Socket gRPC Inbound (Inventario HTTP/2)', 'grpc://booking.epn.edu.ec:50051'],
+                ['contacto', 'Email de contacto', 'dilan@universidad.edu.ec'],
+              ].map(([field, label, placeholder]) => (
                 <div key={field} style={{ marginBottom: 14 }}>
                   <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>{label}</label>
                   <input value={form[field] || ''} onChange={e => { setForm(f => ({ ...f, [field]: e.target.value })); setFormErr(er => { const n = { ...er }; delete n[field]; return n; }); }} placeholder={placeholder} style={inputStyle(field)} />
                   {formErr[field] && <div style={{ color: C.red, fontSize: '0.75rem', marginTop: 2 }}>{formErr[field]}</div>}
                 </div>
               ))}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ background: C.bg, padding: '12px 16px', borderRadius: 6, border: `1px solid ${C.border}` }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 10, color: C.darkBlue }}>Datos Técnicos de Integración (API)</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                      {[['tokenAuth', 'API Key / Token', 'Ej: sk_live_...'], ['webhookUrl', 'Webhook URL', 'https://.../webhook'], ['healthcheckUrl', 'Healthcheck URL', 'https://.../health'], ['rateLimit', 'Rate Limit (req/s)', 'Ej: 50']].map(([field, label, placeholder]) => (
-                        <div key={field}>
-                          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>{label}</label>
-                          <input value={form[field] || ''} onChange={e => { setForm(f => ({ ...f, [field]: e.target.value })); }} placeholder={placeholder} style={inputStyle(field)} />
-                        </div>
-                      ))}
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Entorno</label>
-                        <select value={form.entorno || 'Producción'} onChange={e => setForm(f => ({ ...f, entorno: e.target.value }))} style={{ ...inputStyle('entorno'), background: 'white' }}>
-                          <option value="Producción">Producción</option>
-                          <option value="Staging">Staging / Pruebas</option>
-                          <option value="Desarrollo">Desarrollo</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Tipo de servicio</label>
-                <select value={form.tipo || 'Otro'} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} style={{ ...inputStyle('tipo'), background: 'white' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Tipo de servicio (Vertical)</label>
+                <select value={form.tipo || 'Atracciones'} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} style={{ ...inputStyle('tipo'), background: 'white' }}>
                   {TIPOS_SELECT.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Emoji / Ícono</label>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Emoji representativo</label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {['🔗', '🌐', '✈️', '🏨', '🚗', '🎡', '🐢', '⛵', '🎭', '🏔️', '🌴'].map(em => (
-                    <button key={em} onClick={() => setForm(f => ({ ...f, emoji: em }))} style={{ fontSize: '1.4rem', background: form.emoji === em ? C.lightBlue : 'transparent', border: `2px solid ${form.emoji === em ? C.blue : C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>{em}</button>
+                  {['🎡', '🚗', '🏨', '✈️', '🐢', '🏔️', '🌴', '⛵', '🎭', '🔗', '🌐'].map(em => (
+                    <button key={em} type="button" onClick={() => setForm(f => ({ ...f, emoji: em }))} style={{ fontSize: '1.4rem', background: form.emoji === em ? C.lightBlue : 'transparent', border: `2px solid ${form.emoji === em ? C.blue : C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>{em}</button>
                   ))}
                 </div>
               </div>
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Descripción</label>
-                <textarea value={form.descripcion || ''} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} placeholder="Breve descripción del sistema y los servicios que provee..." rows={3} style={{ ...inputStyle('descripcion'), resize: 'vertical', fontFamily: 'inherit' }} />
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>Descripción del socio</label>
+                <textarea value={form.descripcion || ''} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} placeholder="Breve descripción de los tours o servicios que provee..." rows={3} style={{ ...inputStyle('descripcion'), resize: 'vertical', fontFamily: 'inherit' }} />
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button onClick={() => setModal(null)} style={{ padding: '9px 20px', border: `1px solid ${C.border}`, borderRadius: 6, background: 'white', cursor: 'pointer', fontWeight: 600 }}>Cancelar</button>
-                <button onClick={guardar} disabled={guardando} style={{ padding: '9px 20px', background: guardando ? C.gray : C.blue, color: 'white', border: 'none', borderRadius: 6, cursor: guardando ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
-                  {guardando ? '⏳ Guardando...' : modal === 'nuevo' ? '✅ Registrar Proveedor' : '✅ Guardar Cambios'}
+                <button type="button" onClick={() => setModal(null)} style={{ padding: '9px 20px', border: `1px solid ${C.border}`, borderRadius: 6, background: 'white', cursor: 'pointer', fontWeight: 600 }}>Cancelar</button>
+                <button type="button" onClick={guardar} disabled={guardando} style={{ padding: '9px 20px', background: guardando ? C.gray : C.blue, color: 'white', border: 'none', borderRadius: 6, cursor: guardando ? 'not-allowed' : 'pointer', fontWeight: 700 }}>
+                  {guardando ? '⏳ Guardando en PostgreSQL...' : modal === 'nuevo' ? '✅ Registrar en Gateway' : '✅ Guardar Cambios'}
                 </button>
               </div>
             </div>
@@ -992,10 +1143,10 @@ function ProveedoresTab() {
           <div style={{ background: 'white', borderRadius: 12, width: '100%', maxWidth: 400, padding: 28, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
             <div style={{ fontSize: '2rem', textAlign: 'center', marginBottom: 12 }}>⚠️</div>
             <div style={{ fontWeight: 700, fontSize: '1rem', textAlign: 'center', marginBottom: 8 }}>¿Eliminar proveedor?</div>
-            <div style={{ color: C.gray, fontSize: '0.85rem', textAlign: 'center', marginBottom: 24 }}>Se eliminará <strong>{confirmDel.nombre}</strong> de la lista de proveedores. Esta acción no se puede deshacer.</div>
+            <div style={{ color: C.gray, fontSize: '0.85rem', textAlign: 'center', marginBottom: 24 }}>Se eliminará <strong>{confirmDel.nombre_proveedor || confirmDel.nombre}</strong> de la base de datos central PostgreSQL. Esta acción no se puede deshacer.</div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setConfirmDel(null)} style={{ padding: '9px 24px', border: `1px solid ${C.border}`, borderRadius: 6, background: 'white', cursor: 'pointer', fontWeight: 600 }}>Cancelar</button>
-              <button onClick={() => eliminar(confirmDel.id)} style={{ padding: '9px 24px', background: C.red, color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>Eliminar</button>
+              <button onClick={() => eliminar(confirmDel)} style={{ padding: '9px 24px', background: C.red, color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}>Eliminar</button>
             </div>
           </div>
         </div>

@@ -45,6 +45,18 @@ export class ConfigProveedor {
   })
   tasaFallosPct: number;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  equipo?: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  contacto?: string;
+
+  @Column({ type: 'varchar', length: 20, default: '🔗' })
+  emoji?: string;
+
+  @Column({ type: 'text', nullable: true })
+  descripcion?: string;
+
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }
