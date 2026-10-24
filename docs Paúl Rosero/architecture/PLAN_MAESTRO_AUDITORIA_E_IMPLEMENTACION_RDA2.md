@@ -1010,6 +1010,34 @@ En esta segunda auditoría formal sobre [contracts/atracciones-openapi-v2.yaml](
 | **Telemetría y Observabilidad** | Semáforo de salud verde/rojo para monitoreo de nodos. | Endpoint `/atracciones/health` con estados `UP / DEGRADED / DOWN`, latencia en milisegundos, estado de conexión a base de datos y memoria. | 🟢 100% Blindado |
 | **Sincronización Híbrida gRPC vs REST** | Consistencia transaccional entre ingesta gRPC (puerto 50051) y consulta REST. | Sección 2.1 documenta que cada mensaje gRPC (`PushStockUpdate` / `StreamInventoryChanges`) actualiza atómicamente `schema_atracciones.turnos_aforo`, consultada en tiempo real bajo aislamiento `READ COMMITTED` por `GET /disponibilidad`. | 🟢 100% Blindado |
 
+---
+
+### 11.9. Auditoría Integral, Corrección de Errores Críticos y Blindaje del Contrato de Renta de Autos (`autos-openapi-v2.yaml`)
+
+Tras el blindaje del contrato de atracciones, se realizó una auditoría forense sobre [contracts/autos-openapi-v2.yaml](file:///c:/Users/ASUS/Documents/6to%20Semestre/Integraci%C3%B3n%20Sistemas/proyecto/plantilla%20inicial/contracts/autos-openapi-v2.yaml) para identificar errores análogos a los reportados en [Revisión_Contrato.docx](file:///c:/Users/ASUS/Documents/6to%20Semestre/Integraci%C3%B3n%20Sistemas/proyecto/plantilla%20inicial/Faltantes%20RDA2/docs/Revisi%C3%B3n_Contrato.docx) y verificar el cumplimiento de los mandatos del RDA2 ([README_REQUERIMIENTOS_AUTOS.md](file:///c:/Users/ASUS/Documents/6to%20Semestre/Integraci%C3%B3n%20Sistemas/proyecto/plantilla%20inicial/Pendientes/README_REQUERIMIENTOS_AUTOS.md), [modulo_renta_autos.md](file:///c:/Users/ASUS/Documents/6to%20Semestre/Integraci%C3%B3n%20Sistemas/proyecto/plantilla%20inicial/Pendientes/modulo_renta_autos.md), Consideraciones RDA2 §5 y Rúbrica CE01).
+
+#### 1. Hallazgos Críticos Identificados y Resueltos:
+1. **8 Referencias Rotas ($ref) en `components/responses` (CRÍTICO 🔴):**
+   - **Causa:** Las respuestas `ProblemDetails400`, `ProblemDetails401`, `ProblemDetails403`, `ProblemDetails404`, `ProblemDetails409`, `ProblemDetails422`, `ProblemDetails500` y `ProblemDetails503` apuntaban a `#/components/schemas/ProblemDetails`, pero el esquema `ProblemDetails` no existía en `components.schemas` (había sido ubicado erróneamente como una respuesta vacía en `components.responses`).
+   - **Solución:** Se creó formalmente el esquema canónico `ProblemDetails` (RFC 7807) en `components.schemas` con todos sus atributos (`type`, `title`, `status`, `detail`, `instance`, `code`, `correlation_id`, `timestamp`, `invalid_params`), eliminando la entrada anómala en `components.responses`. **Total de referencias rotas resultante: 0**.
+2. **Seguridad Huérfana y Desconectada (CRÍTICO 🔴 - Análogo a 1.1):**
+   - **Causa:** No existía bloque `security:` en la raíz del contrato, faltaba el esquema `ApiKeyAuth` en `components.securitySchemes`, y 11 endpoints protegidos carecían de respuestas `401` y `403`.
+   - **Solución:** Se definió `security: [{BearerAuth: []}, {ApiKeyAuth: []}]` a nivel raíz; se incorporó `ApiKeyAuth` (header `X-API-Key`); se marcó explícitamente `security: []` en los 6 endpoints públicos (`/health`, `/autos`, `/search`, `/flota`, `/autos/{id}`, `/coberturas`); y se enlazaron `ProblemDetails401` y `ProblemDetails403` a todas las operaciones transaccionales.
+3. **Ausencia de Idempotencia en Check-in de Mostrador (MODERADO 🟡 - Análogo a 2.3):**
+   - **Causa:** Los endpoints de check-in (`/checkin-entrega`, `/checkin-devolucion`, `/checkin`, `/devolucion`) no declaraban la cabecera `Idempotency-Key`.
+   - **Solución:** Se crearon parámetros reutilizables `IdempotencyKeyHeader`, `XCorrelationIdHeader`, `XNodeIdHeader` y `XRoleHeader` en `components.parameters`, inyectando la cabecera obligatoria `Idempotency-Key` en todas las mutaciones transaccionales y de patio.
+4. **Armonización de Idioma ("Spanglish") y DTOs Bilingües (Análogo a 2.2):**
+   - **Solución:** Se enriqueció `CreateAutoOrderRequestV2` y `AutoOrderResponseV2` con campos canónicos en español (`auto_id`, `fecha_recogida`, `fecha_devolucion`, `hora_recogida`, `hora_devolucion`, `lugar_recogida`, `lugar_devolucion`, `cobertura`, `codigo_reserva`, `estado`, `precio_total`, `moneda`, `deposito_reembolsable`) y se marcó `idempotency_key` en el cuerpo como `deprecated: true`.
+5. **Máquina de Estados de 6 Fases y Cooldown de 2 Horas (Mandato RDA2 §5):**
+   - **Solución:** Se creó el esquema formal `CooldownStatusDto` documentando el bloqueo preventivo de 120 minutos en estado `EN_LIMPIEZA` con HTTP 409 Conflict (`VEHICLE_IN_CLEANING_COOLDOWN`), y se enriqueció la respuesta de cancelación con `reembolso_id: "REF-AUTO-XXXX"` y `monto_reembolsado: 100%`.
+6. **Simetría en Alias de Rutas (Análogo a 2.1):**
+   - **Solución:** Se homogeneizó `/autos/reservas` para tener idéntica especificación de request/responses que `/autos/orders/create` (201, 400, 401, 403, 409, 422, 500, 503).
+
+#### 2. Evidencia de Validación:
+- **Validación OpenAPI 3.0.3:** 18 rutas, 26 esquemas, 8 respuestas estándar RFC 7807, 4 parámetros globales, 2 esquemas de seguridad. **0 referencias rotas, 0 advertencias**.
+- **Pruebas Automatizadas:** `npx jest --config jest-contracts.config.js` ejecutado con éxito: **27 / 27 pruebas aprobadas (100% green)**.
+- **Compilación de Código:** `nest build` y `vite build` finalizados con código de salida 0.
+
 
 
 
