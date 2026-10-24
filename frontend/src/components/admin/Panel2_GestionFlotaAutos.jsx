@@ -9,7 +9,7 @@ export function Panel2_GestionFlotaAutos() {
   const fetchFlota = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/v2/autos/flota');
+      const res = await api.get('/autos/flota');
       setFlota(Array.isArray(res) ? res : res.data || []);
     } catch (e) {
       // Mock con demostración del Cooldown de 2 horas y Alerta de kilometraje (Cátedra RDA2 §5)

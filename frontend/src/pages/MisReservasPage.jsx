@@ -98,10 +98,10 @@ export function MisReservasPage() {
     setCheckinStepResult(null);
     try {
       if (reserva.tipo === 'atraccion') {
-        const res = await api.post(`/v2/atracciones/reservas/${reserva.id}/checkin`, {
+        const res = await api.post(`/atracciones/reservas/${reserva.id}/checkin`, {
           documento_identidad: user?.user_metadata?.cedula || '1720000000',
           guia_asignado: 'Carlos Villacís (Licencia MINTUR-441)',
-        }).catch(() => ({
+        }).then(r => r.data).catch(() => ({
           mensaje: '¡Check-in presencial validado exitosamente por el guía!',
           guia_asignado: 'Carlos Villacís (Licencia MINTUR-441)',
           voucher_digital_qr: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=BOOKING-ATR:${reserva.pnr}`,
@@ -115,10 +115,10 @@ export function MisReservasPage() {
         });
       } else if (reserva.tipo === 'auto') {
         if (tipoOperacion === 'DEVOLUCION') {
-          const res = await api.post(`/v2/autos/orders/${reserva.id}/checkin-devolucion`, {
+          const res = await api.post(`/autos/orders/${reserva.id}/checkin-devolucion`, {
             km_retorno: Number(checkinKmRetorno),
             nivel_combustible: 100,
-          }).catch(() => ({
+          }).then(r => r.data).catch(() => ({
             mensaje: 'Vehículo devuelto. Odómetro final registrado e ingresado a Cooldown de Limpieza de 2 Horas.',
           }));
           setCheckinStepResult({
@@ -128,10 +128,10 @@ export function MisReservasPage() {
             mensaje: res.mensaje,
           });
         } else {
-          const res = await api.post(`/v2/autos/orders/${reserva.id}/checkin-entrega`, {
+          const res = await api.post(`/autos/orders/${reserva.id}/checkin-entrega`, {
             licencia_conducir: checkinLicencia,
             km_salida: Number(checkinKmSalida),
-          }).catch(() => ({
+          }).then(r => r.data).catch(() => ({
             mensaje: 'Llaves entregadas. Licencia verificada y vehículo en tránsito.',
           }));
           setCheckinStepResult({

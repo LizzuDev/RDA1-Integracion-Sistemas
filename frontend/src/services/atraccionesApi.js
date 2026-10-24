@@ -53,6 +53,15 @@ export async function getCategoriasArbol() {
   }
 }
 
+export async function getCategoriasPlanas(padreId) {
+  try {
+    const { data } = await api.get('/atracciones/categorias', { params: { padre_id: padreId } });
+    return data;
+  } catch (err) {
+    return [];
+  }
+}
+
 export async function getDisponibilidadAtraccion(id, date) {
   try {
     const { data } = await api.get(`/atracciones/${id}/disponibilidad`, { params: { date } });
