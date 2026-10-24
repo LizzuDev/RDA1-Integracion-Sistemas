@@ -189,7 +189,7 @@ paths:
         '500': &id004
           $ref: '#/components/responses/ProblemDetails500'
       parameters:
-      - &id005
+      - &id006
         $ref: '#/components/parameters/IdempotencyKeyHeader'
       - *id003
   /autos/eventos:
@@ -320,7 +320,9 @@ paths:
           $ref: '#/components/responses/ProblemDetails422'
         '503':
           $ref: '#/components/responses/ProblemDetails503'
-      parameters: []
+      parameters:
+      - &id005
+        $ref: '#/components/parameters/XCorrelationIdHeader'
       security: []
   /autos/flota:
     get:
@@ -344,7 +346,8 @@ paths:
                   $ref: '#/components/schemas/AutoFlotaItemV2'
         '500':
           $ref: '#/components/responses/ProblemDetails500'
-      parameters: []
+      parameters:
+      - *id005
       security: []
   /autos/{id}/coberturas:
     get:
@@ -366,6 +369,7 @@ paths:
         schema:
           type: string
         example: auto-spark-01
+      - *id005
       responses:
         '200':
           description: Opciones de cobertura desglosadas con franquicias y depósitos
@@ -391,6 +395,7 @@ paths:
         schema:
           type: string
         example: auto-spark-01
+      - *id005
       responses:
         '200':
           description: Detalle del vehículo recuperado exitosamente
@@ -436,7 +441,7 @@ paths:
 
         '
       parameters:
-      - *id005
+      - *id006
       - *id003
       requestBody:
         required: true
@@ -469,7 +474,7 @@ paths:
       summary: Crear reserva de vehículo (Alias de compatibilidad v2)
       description: Endpoint alternativo equivalente a `/autos/orders/create` para compatibilidad de clientes.
       parameters:
-      - *id005
+      - *id006
       - *id003
       requestBody:
         required: true
@@ -484,7 +489,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AutoOrderResponseV2'
-        '409': &id006
+        '409': &id009
           $ref: '#/components/responses/ProblemDetails409'
         '401': *id001
         '403': *id002
@@ -505,7 +510,7 @@ paths:
 
         '
       parameters:
-      - *id005
+      - *id006
       - name: id
         in: path
         required: true
@@ -545,6 +550,10 @@ paths:
         '401': *id001
         '403': *id002
         '500': *id004
+        '400': &id007
+          $ref: '#/components/responses/ProblemDetails400'
+        '409': &id008
+          $ref: '#/components/responses/ProblemDetails409'
   /autos/orders/{id}/checkin-entrega:
     post:
       tags:
@@ -557,7 +566,7 @@ paths:
 
         '
       parameters:
-      - *id005
+      - *id006
       - name: id
         in: path
         required: true
@@ -584,6 +593,8 @@ paths:
         '401': *id001
         '403': *id002
         '500': *id004
+        '400': *id007
+        '409': *id008
   /autos/orders/{id}/checkin-devolucion:
     post:
       tags:
@@ -598,7 +609,7 @@ paths:
 
         '
       parameters:
-      - *id005
+      - *id006
       - name: id
         in: path
         required: true
@@ -625,6 +636,8 @@ paths:
         '401': *id001
         '403': *id002
         '500': *id004
+        '400': *id007
+        '409': *id008
   /autos/orders/{orderId}:
     get:
       tags:
@@ -664,7 +677,7 @@ paths:
 
         '
       parameters:
-      - *id005
+      - *id006
       - name: orderId
         in: path
         required: true
@@ -754,7 +767,7 @@ paths:
         '401': *id001
         '403': *id002
         '500': *id004
-        '409': *id006
+        '409': *id009
   /autos/{id}/devolucion:
     post:
       tags:
@@ -766,7 +779,7 @@ paths:
 
         '
       parameters:
-      - *id005
+      - *id006
       - name: id
         in: path
         required: true
@@ -786,6 +799,8 @@ paths:
         '401': *id001
         '403': *id002
         '500': *id004
+        '400': *id007
+        '409': *id008
   /autos/{id}/mantenimiento/registro:
     post:
       tags:
@@ -800,7 +815,7 @@ paths:
 
         '
       parameters:
-      - *id005
+      - *id006
       - name: id
         in: path
         required: true
