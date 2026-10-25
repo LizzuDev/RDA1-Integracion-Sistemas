@@ -51,6 +51,8 @@ Este documento consolida las **28 operaciones planificadas** identificadas a lo 
 | `PATCH`| `/clientes/{id}` | `clientes-openapi-v2.yaml` | `MS_CLI` | Actualización de perfil y datos fiscales (RUC/cédula, dirección, razón social) en base de datos relacional. | Media | M | RF-CLI-02 / Blueprint §5.2 |
 | `PATCH`| `/clientes/{id}/rol` | `clientes-openapi-v2.yaml` | `MS_CLI` | Asignación y revocación formal de roles administrativos en la base de datos sin bypass de cabeceras inseguras. | **Alta** | S | RF-CLI-03 / H-P06-02 / H-P06-03 |
 | `GET` | `/pagos/{paymentReference}` | `pagos-openapi-v2.yaml` | `MS_PAG` | Validación síncrona de pagos para aerolíneas y socios externos mediante referencia única antes de emisión de PNRs/vouchers. | **Alta** | S | RF-PAG-03 / H-P02-05 |
+
+> `GET /pagos/{paymentReference}` fue implementado en I06 como operación v2; requiere ADMIN/SERVICE o `X-Api-Key` limitada al `carrito_id` asociado.
 | `PUT` | `/paquetes/contratos/{proveedorCodigo}` | `paquetes-openapi-v2.yaml` | `MS_PKG` | Endpoint B2B para actualizar y sincronizar en Booking los acuerdos comerciales y porcentajes de descuento combo de los socios. | Media | S | RF-PKG-02 / H-P03-03 |
 | `POST` | `/webhooks/{vertical}` | `webhooks-inbound-openapi-v2.yaml` | `MS_AUD` | Receptor HTTP inbound para absorber eventos CloudEvents firmados con HMAC-SHA256 emitidos por las tiendas satélites. | **Alta** | M | RF-WH-01 / H-P09-01 / H-P09-02 |
 | `GET` | `/webhooks/{vertical}/entregas` | `webhooks-inbound-openapi-v2.yaml` | `MS_AUD` | Consola administrativa para inspeccionar el historial de entregas de webhooks, reintentos y fallos de firma criptográfica. | Baja | S | RF-WH-02 / H-P09-01 |
