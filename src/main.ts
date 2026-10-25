@@ -8,6 +8,8 @@ import { crearValidationPipeGlobal } from './core/validation/validation-pipe';
 import { HateoasInterceptor } from './core/interceptors/hateoas.interceptor';
 import { WinstonPhysicalLoggerService } from './core/logger/winston-logger.service';
 import { StructuredHttpRequestMiddleware } from './core/logger/structured-http-request.middleware';
+import { TraceContextInterceptor } from './core/tracing/trace-context.interceptor';
+import { TraceContextService } from './core/tracing/trace-context.service';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import * as path from 'path';
 import * as fs from 'fs';
