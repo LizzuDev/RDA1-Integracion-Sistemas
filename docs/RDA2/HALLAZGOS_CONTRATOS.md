@@ -224,3 +224,10 @@ H-P06-03 queda resuelto en I01: los headers de evaluación `X-Role` y `X-Admin-K
 | ID | Severidad | Hallazgo | Evidencia | Sugerencia |
 |---|---|---|---|---|
 | H-P15-01 | Alta | Las rutas implementadas de vuelos no aplican un guard de autenticación, aunque el contrato documenta OAuth2 de partner para proteger las operaciones privadas. El contrato conserva las dos capas de seguridad solicitadas; el backend actual no impone la capa de servicio a servicio. | `src/modules/vuelos/vuelos.controller.ts` línea 120 y métodos 137-790; no hay uso de `@UseGuards` en el controlador | Aplicar validación de token de partner en el gateway o controlador antes de exponer las rutas privadas, manteniendo la capa de identidad del usuario en Booking. |
+
+## Seguimiento I03 — Logs JSON Lines
+
+| Hallazgo / Estado | Evidencia | Resultado |
+|---|---|---|
+| No existía una implementación de logging HTTP por petición registrada en `src/` o `database/`. | Búsqueda de `api_request_logs`, `request_log` y `RequestLog`: sin escrituras; los únicos matches son `DROP TABLE` históricos de la tabla. | Resuelto por I03: middleware escribe cada respuesta HTTP en archivos JSONL con correlación; no se agregó persistencia de logs a base de datos. |
+| H-P17-01..04 | Auditoría transaccional `MS_AUD` y snapshots administrativos son distintos de logs técnicos de petición. | Permanecen sin cambios y no se marcan resueltos por I03. |

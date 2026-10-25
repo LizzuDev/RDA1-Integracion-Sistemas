@@ -13,7 +13,7 @@
 
 Este documento transforma formalmente el diagnóstico técnico de la plataforma en un **Backlog Ejecutable y Priorizado**. Consolida el 100% de los **hallazgos de severidad Alta y Media** ([`docs/RDA2/HALLAZGOS_CONTRATOS.md`](file:///c:/Users/aleji/Desktop/Semestre%206/Integracion%20de%20sistemas/Contratos/RDA1/docs/RDA2/HALLAZGOS_CONTRATOS.md)), la totalidad de los **28 endpoints planificados** ([`docs/RDA2/PLANNED_ENDPOINTS.md`](file:///c:/Users/aleji/Desktop/Semestre%206/Integracion%20de%20sistemas/Contratos/RDA1/docs/RDA2/PLANNED_ENDPOINTS.md)), las **8 brechas de arquitectura** ([`docs/RDA2/MATRIZ_TRAZABILIDAD.md`](file:///c:/Users/aleji/Desktop/Semestre%206/Integracion%20de%20sistemas/Contratos/RDA1/docs/RDA2/MATRIZ_TRAZABILIDAD.md)), las restricciones operativas de despliegue ([`docs/RDA2/PLAN_DE_DESPLIEGUE.md`](file:///c:/Users/aleji/Desktop/Semestre%206/Integracion%20de%20sistemas/Contratos/RDA1/docs/RDA2/PLAN_DE_DESPLIEGUE.md)) y los requisitos no funcionales ([`docs/RDA2/REQUISITOS_NO_FUNCIONALES.md`](file:///c:/Users/aleji/Desktop/Semestre%206/Integracion%20de%20sistemas/Contratos/RDA1/docs/RDA2/REQUISITOS_NO_FUNCIONALES.md)).
 
-El backlog se compone de **55 ítems de trabajo (`BL-001` a `BL-055`)** organizados rigurosamente bajo el orden normativo de la cátedra:
+El backlog se compone de **56 ítems de trabajo (`BL-001` a `BL-056`)** organizados rigurosamente bajo el orden normativo de la cátedra:
 1. **Seguridad Alta:** Mitigación de accesos perimetrales no autenticados, bypass de roles y blindaje de endpoints con efectos colaterales financieros.
 2. **Cumplimiento de Cátedra y Blueprint:** Event Bus dual (RabbitMQ/Kafka), propagación de W3C Trace Context, observabilidad de grafos, deduplicación e idempotencia.
 3. **Funcionalidades Planificadas para la Defensa:** Microservicios faltantes (`MS_CAR`, `MS_FAC`, `MS_AUD`, `MS_CLI`), recepción de webhooks HMAC y verificación síncrona B2B.
@@ -22,7 +22,7 @@ El backlog se compone de **55 ítems de trabajo (`BL-001` a `BL-055`)** organiza
 
 ---
 
-## 2. Tabla Maestra del Backlog Priorizado (`BL-001` a `BL-055`)
+## 2. Tabla Maestra del Backlog Priorizado (`BL-001` a `BL-056`)
 
 | ID | Título del Ítem | Tipo | Origen | Criterios / RF / RNF | Severidad / Prioridad | Esfuerzo | Dependencias | Criterio de Hecho (DoD) | Archivos Probables (`src/...`) | Responsable Sugerido |
 |:---:|---|:---:|:---:|:---:|:---:|:---:|:---:|---|---|:---:|
@@ -81,6 +81,13 @@ El backlog se compone de **55 ítems de trabajo (`BL-001` a `BL-055`)** organiza
 | **BL-053** | Validación de idempotencia en pago de liquidaciones (`POST /finanzas/.../pagar`) | Funcionalidad | `H-P04-03` | **CE06** | 🟢 **Baja** | **S** (1-2h) | BL-019 | Si la liquidación ya tiene estado `PAGADO`, devuelve comprobante existente sin alterar la marca de tiempo histórica. | `src/modules/finanzas/finanzas.service.ts` | Booking Gateway |
 | **BL-054** | Despacho real de correos electrónicos en reenvío administrativo de comprobantes | Funcionalidad | `H-P07-04` | **CE05** | 🟢 **Baja** | **S** (1-2h) | BL-031 | Conectar `AdminService.reenviarComprobante` con `FacturasService` para despachar el correo transaccional real. | `src/modules/admin/admin.service.ts` | Booking Gateway |
 | **BL-055** | Tipado estricto de esquemas Input en GraphQL BFF reemplazando JSON Strings | Funcionalidad | `H-P13-03` | **CE04** | 🟡 **Media** | **M** (3-5h) | BL-007 | Modelar `InputType` específicos por vertical para checkout en GraphQL eliminando `JSON.parse` manuales. | `src/modules/graphql/models/` | Booking Gateway |
+| **BL-056** | Logging HTTP JSON Lines por servicio con redacción, retención y consulta por correlación | Observabilidad | `ADR-003`<br>`I03` | **CE05**<br>RNF-OBS | 🟡 **Media** | **S** (1-2h) | Ninguna | Cada petición queda en archivo diario JSONL, sin secretos ni escritura técnica en BD; trace.js imprime la correlación. | `src/core/logger/`<br>`scripts/logs/trace.js` | Booking Gateway |
+
+### Estado I03
+
+| ID | Estado |
+|---|---|
+| BL-056 | Resuelto en I03 |
 
 ---
 
