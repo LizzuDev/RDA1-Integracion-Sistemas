@@ -5,6 +5,43 @@
 
 ---
 
+## Resumen Ejecutivo de Hallazgos Consolidados (RDA2)
+
+Durante la fase de análisis de código fuente y formalización de contratos v2 (P00–P17), se registraron un total de **62 hallazgos técnicos y de arquitectura**, categorizados según su severidad e impacto en el ecosistema distribuido de Booking:
+
+### 1. Balance Global por Nivel de Severidad
+
+| Nivel de Severidad | Total de Hallazgos | Porcentaje | Criterio de Clasificación |
+|---|:---:|:---:|---|
+| 🔴 **Alta** | **17** | 27.4 % | Vulnerabilidades de seguridad críticas (rutas administrativas sin autenticación ni RBAC, bypass de roles por cabeceras HTTP no firmadas, falta de validación de firma en webhooks o gRPC abierto sin credenciales) o ausencia de módulos core de persistencia (`MS_CAR`, `MS_AUD`). |
+| 🟡 **Media** | **30** | 48.4 % | Desviaciones de cátedra y blueprint (persistencia síncrona en PostgreSQL en lugar de Kafka streaming, desconexión del Event Bus con el orquestador de Sagas, DTOs sin tipado con `any`, falta de sincronización en liquidaciones financieras o contratos v1 ficticios). |
+| 🟢 **Baja** | **15** | 24.2 % | Inconsistencias menores de interfaz, parámetros de paginación no acotados en el gateway, omisión de metadatos W3C en cabeceras de frames AMQP, o ausencia de la cabecera `Idempotent-Replayed`. |
+| **TOTAL CONSOLIDADO** | **62** | **100 %** | **Base autoritativa de remediación para la fase de implementación (I01–I12).** |
+
+### 2. Desglose de Hallazgos por Tarea y Módulo
+
+| Tarea | Dominio / Módulo Evaluado | 🔴 Alta | 🟡 Media | 🟢 Baja | Subtotal | Secciones Relacionadas |
+|:---:|---|:---:|:---:|:---:|:---:|:---:|
+| **P00** | Componentes Comunes & RFC 7807 | 0 | 0 | 3 | **3** | [Ver P00](#p00--componentes-comunes) |
+| **P01** | ESB y Orquestador de Sagas LIFO | 1 | 3 | 1 | **5** | [Ver P01](#p01--esb-y-sagas) |
+| **P02** | Pasarela de Simulación de Pagos SOA | 1 | 4 | 0 | **5** | [Ver P02](#p02--pagos) |
+| **P03** | Paquetes Dinámicos y Promociones B2B | 1 | 2 | 1 | **4** | [Ver P03](#p03--paquetes-y-promociones) |
+| **P04** | Finanzas & Liquidaciones Quincenales | 0 | 2 | 1 | **3** | [Ver P04](#p04--finanzas) |
+| **P05** | Facturación Fiscal y Comprobantes | 1 | 2 | 1 | **4** | [Ver P05](#p05--facturación) |
+| **P06** | Clientes, Identidad y Gestión de Sesión | 2 | 1 | 0 | **3** | [Ver P06](#p06--clientes-identidad-y-sesión) |
+| **P07** | Administración Central y Nodos | 0 | 2 | 2 | **4** | [Ver P07](#p07--administración) |
+| **P08** | Nodos, Telemetría e Inventario REST | 2 | 2 | 2 | **6** | [Ver P08](#p08--nodos-telemetría-e-inventario) |
+| **P09** | Receptor de Webhooks de Tiendas | 2 | 1 | 1 | **4** | [Ver P09](#p09--receptor-de-webhooks-de-las-tiendas) |
+| **P11** | Event Bus Dual (RabbitMQ + Kafka) | 0 | 2 | 2 | **4** | [Ver P11](#p11--eventos-asíncronos) |
+| **P12** | Ingesta de Inventario gRPC (Puerto 50051) | 1 | 3 | 0 | **4** | [Ver P12](#p12--grpc-de-inventario) |
+| **P13** | API Gateway BFF GraphQL Cliente | 1 | 2 | 1 | **4** | [Ver P13](#p13--graphql-gateway-cliente) |
+| **P15** | Contrato de Tienda de Vuelos (v2.0.1) | 1 | 0 | 0 | **1** | [Ver P15](#p15--vuelos-v201) |
+| **P16** | Carrito de Compras Multivertical (`MS_CAR`) | 2 | 2 | 0 | **4** | [Ver P16](#p16--carrito-de-compras-ms_car) |
+| **P17** | Auditoría Transaccional y Forense (`MS_AUD`) | 2 | 2 | 0 | **4** | [Ver P17](#p17--auditoría-transaccional-ms_aud) |
+| **TOTAL** | | **17** | **30** | **15** | **62** | |
+
+---
+
 ## P00 — Componentes comunes
 
 | ID | Severidad | Hallazgo | Evidencia | Sugerencia |
