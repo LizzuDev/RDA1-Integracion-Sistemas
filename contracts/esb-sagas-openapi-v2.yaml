@@ -203,6 +203,11 @@ paths:
           headers:
             X-Correlation-Id:
               $ref: './common/components-v2.yaml#/components/headers/X-Correlation-Id'
+            Idempotent-Replayed:
+              description: 'Indica si la respuesta fue reproducida desde la caché de idempotencia por reintento de cliente'
+              schema:
+                type: boolean
+                example: true
           content:
             application/json:
               schema:

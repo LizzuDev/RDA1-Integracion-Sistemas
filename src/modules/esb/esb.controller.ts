@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Headers, HttpCode, HttpStatus, Query } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Headers, HttpCode, HttpStatus, Query, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiHeader } from '@nestjs/swagger';
 import { SagaOrchestratorService, CheckoutSagaInput } from './interna/saga-orchestrator.service';
 import { EsbInternalRouterService } from './interna/esb-internal-router.service';
@@ -6,6 +6,8 @@ import { EsbInternalRouterService } from './interna/esb-internal-router.service'
 @ApiTags('Enterprise Service Bus & Sagas LIFO (Capa 3 ESB)')
 @Controller('esb')
 export class EsbController {
+  private readonly idempotencyStore = new Map<string, any>();
+
   constructor(
     private readonly sagaOrchestrator: SagaOrchestratorService,
     private readonly internalRouter: EsbInternalRouterService,
@@ -19,10 +21,24 @@ export class EsbController {
   @ApiResponse({ status: 409, description: 'Fallo transaccional: Compensación LIFO ejecutada (código REF-SAGA-...).' })
   async checkoutSaga(
     @Body() dto: CheckoutSagaInput,
-    @Headers('idempotency-key') idempotencyKey: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
+    @Res({ passthrough: true }) res?: any,
   ) {
+    if (idempotencyKey && this.idempotencyStore.has(idempotencyKey)) {
+      if (res && typeof res.setHeader === 'function') {
+        res.setHeader('Idempotent-Replayed', 'true');
+      }
+      return this.idempotencyStore.get(idempotencyKey);
+    }
+
     const key = idempotencyKey || `idem-saga-${Date.now()}`;
-    return this.sagaOrchestrator.ejecutarCheckoutCompuesto(dto, key);
+    const result = await this.sagaOrchestrator.ejecutarCheckoutCompuesto(dto, key);
+
+    if (idempotencyKey) {
+      this.idempotencyStore.set(idempotencyKey, result);
+    }
+
+    return result;
   }
 
   @Get('sagas/:correlationId')
