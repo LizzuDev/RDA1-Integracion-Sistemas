@@ -26,7 +26,13 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
-    await this.conectarRabbitMQ();
+    const mode = (process.env.EVENT_BUS_MODE || 'memory').toLowerCase();
+    if (mode === 'rabbitmq') {
+      await this.conectarRabbitMQ();
+    } else {
+      this.logger.log('ℹ️ [RabbitMQ] Modo EVENT_BUS_MODE=memory: operando bus en memoria sin broker externo.');
+      this.isConnected = false;
+    }
   }
 
   async onModuleDestroy() {
@@ -46,23 +52,32 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
       // Declarar Topic Exchange
       await this.channel.assertExchange(this.EXCHANGE_NAME, 'topic', { durable: true });
 
-      // Declarar colas y bindings
-      await this.channel.assertQueue(this.QUEUES.BUSQUEDAS_MASIVAS, { durable: true });
-      await this.channel.bindQueue(this.QUEUES.BUSQUEDAS_MASIVAS, this.EXCHANGE_NAME, 'search.*');
-
-      await this.channel.assertQueue(this.QUEUES.ORDENES_CONFIRMADAS, { durable: true });
-      await this.channel.bindQueue(this.QUEUES.ORDENES_CONFIRMADAS, this.EXCHANGE_NAME, 'order.confirmed');
-
-      await this.channel.assertQueue(this.QUEUES.SAGAS_COMPENSACION, { durable: true });
-      await this.channel.bindQueue(this.QUEUES.SAGAS_COMPENSACION, this.EXCHANGE_NAME, 'saga.compensate');
-
-      await this.channel.assertQueue(this.QUEUES.STOCK_ACTUALIZADO, { durable: true });
-      await this.channel.bindQueue(this.QUEUES.STOCK_ACTUALIZADO, this.EXCHANGE_NAME, 'stock.updated');
-
+      // Declarar Dead Letter Queue (DLQ)
       await this.channel.assertQueue(this.QUEUES.DEAD_LETTER, { durable: true });
 
+      // Declarar colas y bindings con configuración de DLQ
+      const queueOptions = {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': '',
+          'x-dead-letter-routing-key': this.QUEUES.DEAD_LETTER,
+        },
+      };
+
+      await this.channel.assertQueue(this.QUEUES.BUSQUEDAS_MASIVAS, queueOptions);
+      await this.channel.bindQueue(this.QUEUES.BUSQUEDAS_MASIVAS, this.EXCHANGE_NAME, 'search.*');
+
+      await this.channel.assertQueue(this.QUEUES.ORDENES_CONFIRMADAS, queueOptions);
+      await this.channel.bindQueue(this.QUEUES.ORDENES_CONFIRMADAS, this.EXCHANGE_NAME, 'order.confirmed');
+
+      await this.channel.assertQueue(this.QUEUES.SAGAS_COMPENSACION, queueOptions);
+      await this.channel.bindQueue(this.QUEUES.SAGAS_COMPENSACION, this.EXCHANGE_NAME, 'saga.compensate');
+
+      await this.channel.assertQueue(this.QUEUES.STOCK_ACTUALIZADO, queueOptions);
+      await this.channel.bindQueue(this.QUEUES.STOCK_ACTUALIZADO, this.EXCHANGE_NAME, 'stock.updated');
+
       this.isConnected = true;
-      this.logger.log('✅ [RabbitMQ] Conectado exitosamente y topologías declaradas (Topic Exchange: booking.events).');
+      this.logger.log('✅ [RabbitMQ] Conectado exitosamente y topologías declaradas (Topic Exchange: booking.events + DLQ).');
     } catch (err) {
       this.isConnected = false;
       this.logger.warn(`⚠️ [RabbitMQ] Broker no disponible en ${url} (${err.message}). Operando en modo Fallback en memoria.`);
@@ -70,11 +85,21 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
   }
 
   async publish(routingKey: string, payload: any): Promise<boolean> {
-    const event = this.traceContext.createCloudEvent(
-      `com.booking.${routingKey}`,
-      'booking-prototipo',
-      payload,
-    );
+    const event = this.traceContext?.createCloudEvent
+      ? this.traceContext.createCloudEvent(`com.booking.${routingKey}`, 'booking-prototipo', payload)
+      : {
+          specversion: '1.0',
+          id: 'gen-rb-' + Date.now(),
+          type: `com.booking.${routingKey}`,
+          source: 'booking-prototipo',
+          time: new Date().toISOString(),
+          datacontenttype: 'application/json',
+          data: payload,
+          correlationid: payload?.correlation_id || 'corr-default',
+          traceparent: '00-00000000000000000000000000000000-0000000000000000-01',
+          node_id: 'BOOKING_CENTRAL',
+        };
+
     const messageBuffer = Buffer.from(JSON.stringify({
       ...event,
       payload,
@@ -104,7 +129,7 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Fallback de observabilidad si el broker externo no está encendido
+    // Fallback de observabilidad si el broker externo no está encendido o EVENT_BUS_MODE=memory
     this.winstonLogger.logAudit('RABBITMQ_EVENTO_EMITIDO_IN_MEMORY', {
       routing_key: routingKey,
       payload,

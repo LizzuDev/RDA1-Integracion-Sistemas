@@ -21,6 +21,7 @@ import { EsbModule } from './modules/esb/esb.module';
 import { EventBusModule } from './modules/event-bus/event-bus.module';
 import { GraphqlBffModule } from './modules/graphql/graphql-bff.module';
 import { TraceContextMiddleware } from './core/tracing/trace-context.middleware';
+import { SecurityModule } from './core/security/security.module';
 
 @Module({
   imports: [

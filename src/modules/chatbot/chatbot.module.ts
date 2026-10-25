@@ -8,6 +8,7 @@ import { ChatbotConversationStore } from './chatbot.conversation.store';
 import { ChatbotConcurrencyGate } from './chatbot.concurrency';
 import { GroqService } from './groq.service';
 import { CoreModule } from '../../core/core.module';
+import { ChatbotRateLimitGuard } from './chatbot-rate-limit.guard';
 
 /**
  * Módulo del chatbot informativo.
