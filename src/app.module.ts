@@ -51,6 +51,7 @@ import { TraceContextMiddleware } from './core/tracing/trace-context.middleware'
     // Módulo Core del Integrador (Booking Prototipo)
     // =========================================================================
     CoreModule,
+    SecurityModule,
     
     // =========================================================================
     // Módulos de Integración (Tus endpoints BFF)

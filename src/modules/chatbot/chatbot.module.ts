@@ -53,6 +53,7 @@ import { CoreModule } from '../../core/core.module';
     ChatbotToolsExecutorService,
     ChatbotConversationStore,
     ChatbotConcurrencyGate,
+    ChatbotRateLimitGuard,
   ],
   exports: [ChatbotService],
 })
