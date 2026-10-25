@@ -3,6 +3,21 @@ import { RabbitMqEventBusService } from './rabbitmq/rabbitmq-event-bus.service';
 import { KafkaEventBusService } from './kafka/kafka-event-bus.service';
 
 describe('event tracing metadata', () => {
+  it('does not log event payloads when RabbitMQ is unavailable', async () => {
+    const traceContext = new TraceContextService();
+    const logger = { logAudit: jest.fn() };
+    const rabbit = new RabbitMqEventBusService(logger as any, traceContext);
+    const payload = { webhook_secret: 'secret-value-that-must-not-be-logged' };
+
+    await rabbit.publish('booking.webhooks.inbound.vuelos', payload);
+
+    expect(logger.logAudit).toHaveBeenCalledWith(
+      'RABBITMQ_EVENTO_EMITIDO_IN_MEMORY',
+      expect.objectContaining({ routing_key: 'booking.webhooks.inbound.vuelos' }),
+    );
+    expect(JSON.stringify(logger.logAudit.mock.calls)).not.toContain('secret-value-that-must-not-be-logged');
+  });
+
   it('publishes CloudEvents tracing attributes to RabbitMQ and Kafka', async () => {
     const traceContext = new TraceContextService();
     const logger = { logAudit: jest.fn() };

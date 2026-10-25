@@ -20,6 +20,7 @@ import { NodesModule } from './modules/nodes/nodes.module';
 import { EsbModule } from './modules/esb/esb.module';
 import { EventBusModule } from './modules/event-bus/event-bus.module';
 import { GraphqlBffModule } from './modules/graphql/graphql-bff.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TraceContextMiddleware } from './core/tracing/trace-context.middleware';
 import { SecurityModule } from './core/security/security.module';
 
@@ -93,6 +94,8 @@ import { SecurityModule } from './core/security/security.module';
 
     // Capa 4: Broker Dual de Mensajería (RabbitMQ Topic Exchange + Apache Kafka B2B)
     EventBusModule,
+
+    WebhooksModule,
 
     // Capa 6: Capa de Agregación GraphQL BFF (/graphql con Apollo Server y DataLoaders)
     GraphqlBffModule,

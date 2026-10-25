@@ -9,9 +9,9 @@ info:
     sobre hechos ocurridos en sus dominios (emisión de tickets, confirmaciones, cancelaciones, cambios
     de itinerario, activación de cooldowns y alertas técnicas).
 
-    > **Estado de Implementación:** Todas las operaciones de este contrato son **planificadas**
-    > (`x-status: planned`, `x-source: n/a`). Actualmente el backend de Booking carece de un receptor
-    > HTTP para la ingesta de webhooks de las tiendas (Hallazgo H-P09-01).
+    > **Estado de Implementación:** El receptor y la consulta de entregas se implementaron en
+    > `src/modules/webhooks/` (I07). Las reacciones de negocio específicas de cada vertical permanecen
+    > pendientes y los eventos recibidos se publican en RabbitMQ.
 
     ---
 
@@ -47,8 +47,8 @@ info:
     2. **Algoritmo:** HMAC con función hash SHA-256 sobre el cuerpo **crudo** (raw body en bytes UTF-8)
        de la petición HTTP.
     3. **Formato:** `X-Webhook-Signature: sha256=<hex_digest_64_caracteres>`.
-    4. **Secreto Compartido:** Cada proveedor socio posee un secreto criptográfico exclusivo (`webhook_secret`),
-       pactado durante el registro de la suscripción (mínimo 16 caracteres de alta entropía).
+    4. **Secreto Compartido:** Cada vertical configura su secreto con `WEBHOOK_SECRET_{VERTICAL}`,
+       referenciado desde el entorno (mínimo 16 caracteres); el secreto nunca se almacena en la bitácora.
     5. **Validación:**
        ```javascript
        const hashEsperado = 'sha256=' + crypto.createHmac('sha256', secretProveedor)
@@ -149,6 +149,10 @@ info:
       - `webhook_url`: URL de callback registrada.
       - `webhook_activo`: Booleano para control de recepción.
 
+      **Implementación I07:** Los secretos no se guardan en `ConfigProveedor`; se referencian desde
+      `WEBHOOK_SECRET_VUELOS`, `WEBHOOK_SECRET_AUTOS`, `WEBHOOK_SECRET_ATRACCIONES` y
+      `WEBHOOK_SECRET_ALOJAMIENTOS`. La migración de I07 crea únicamente la bitácora durable de entregas.
+
   contact:
     name: Equipo Booking Prototipo — Integración de Sistemas EPN
     email: alejandro.floreslu@outlook.com
@@ -185,14 +189,16 @@ paths:
 
         ### Flujo de Ejecución del Receptor:
         1. **Validación de Vertical:** Verifica que `{vertical}` pertenezca al catálogo permitido (404 si no existe).
-        2. **Verificación Criptográfica:** Recupera el `webhook_secret` del socio desde `schema_proveedores.config_proveedor`
+        2. **Verificación Criptográfica:** Obtiene el secreto de proveedor desde `WEBHOOK_SECRET_{VERTICAL}`
            y valida la cabecera `X-Webhook-Signature` con HMAC-SHA256 en tiempo constante (401 si no coincide).
-        3. **Control de Idempotencia:** Consulta en memoria / Redis si el atributo `id` del CloudEvent ya fue procesado:
+        3. **Control de Idempotencia:** Consulta la bitácora durable `schema_auditoria.webhook_entregas` por `event_id`:
            - Si ya fue procesado: Responde **200 OK** con cabecera `Idempotent-Replayed: true`.
-           - Si es nuevo: Encola el evento en el bus de RabbitMQ (`booking.webhooks.inbound`) y responde **202 Accepted** en < 1s.
+           - Si es nuevo: Persiste la entrega, publica el evento asíncronamente a RabbitMQ
+             (`booking.webhooks.inbound.{vertical}`) y responde **202 Accepted**.
+        4. Rechaza cuerpos mayores de 1 MB (413) y limita cada IP a 60 solicitudes por minuto (429).
       operationId: recibirWebhookVertical
-      x-source: 'n/a'
-      x-status: planned
+      x-source: 'src/modules/webhooks/webhooks.controller.ts'
+      x-status: implemented
       x-microservice: MS_AUD
       security:
         - WebhookHmacSignature: []
@@ -299,11 +305,6 @@ paths:
           headers:
             X-Correlation-Id:
               $ref: './common/components-v2.yaml#/components/headers/X-Correlation-Id'
-            Location:
-              description: URI para consultar el estado del procesamiento del evento en la bitácora administrativa.
-              schema:
-                type: string
-                example: '/api/v2/webhooks/vuelos/entregas/7b8c9d0e-1f2a-4b3c-9d0e-1f2a3b4c5d6e'
           content:
             application/json:
               schema:
@@ -389,15 +390,15 @@ paths:
       summary: Consultar historial y estado de entregas de webhooks recibidos (Admin)
       description: |
         Permite a los administradores del sistema auditar los eventos recibidos desde una tienda socia,
-        monitorear el estado de validación (`PROCESADO`, `DUPLICADO`, `FIRMA_INVALIDA`, `ERROR`, `EN_COLA`)
-        y verificar los identificadores de correlación y marcas de tiempo.
+        monitorear los estados persistidos (`PROCESADO`, `ERROR`, `EN_COLA`) y verificar los identificadores
+        de correlación y marcas de tiempo. Firmas inválidas se registran en la auditoría de seguridad y
+        los duplicados se reconocen en la respuesta, sin crear una segunda entrega.
       operationId: listarEntregasWebhooksAdmin
-      x-source: 'n/a'
-      x-status: planned
+      x-source: 'src/modules/webhooks/webhooks.controller.ts'
+      x-status: implemented
       x-microservice: MS_AUD
       security:
         - SupabaseBearer: []
-        - AdminKey: []
       parameters:
         - name: vertical
           in: path
@@ -410,10 +411,10 @@ paths:
         - name: status
           in: query
           required: false
-          description: Filtrar por estado de recepción del webhook.
+          description: Filtrar por estado persistido de recepción.
           schema:
             type: string
-            enum: [PROCESADO, DUPLICADO, FIRMA_INVALIDA, ERROR, EN_COLA]
+            enum: [PROCESADO, ERROR, EN_COLA]
             example: PROCESADO
         - name: correlationid
           in: query
@@ -615,7 +616,7 @@ components:
           example: 'https://vuelos.booking.epn.edu.ec'
         status:
           type: string
-          enum: [PROCESADO, DUPLICADO, FIRMA_INVALIDA, ERROR, EN_COLA]
+          enum: [PROCESADO, ERROR, EN_COLA]
           example: 'PROCESADO'
         signature_valid:
           type: boolean

@@ -64,6 +64,12 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
       await this.channel.assertQueue(this.QUEUES.STOCK_ACTUALIZADO, { durable: true });
       await this.channel.bindQueue(this.QUEUES.STOCK_ACTUALIZADO, this.EXCHANGE_NAME, 'stock.updated');
 
+      for (const vertical of ['vuelos', 'autos', 'atracciones', 'alojamientos']) {
+        const queue = `booking.webhooks.inbound.${vertical}`;
+        await this.channel.assertQueue(queue, { durable: true });
+        await this.channel.bindQueue(queue, this.EXCHANGE_NAME, queue);
+      }
+
       await this.channel.assertQueue(this.QUEUES.DEAD_LETTER, { durable: true });
 
       this.isConnected = true;
@@ -112,8 +118,9 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
     // Fallback de observabilidad si el broker externo no está encendido
     this.winstonLogger.logAudit('RABBITMQ_EVENTO_EMITIDO_IN_MEMORY', {
       routing_key: routingKey,
-      payload,
-      cloud_event: event,
+      event_id: event.id,
+      event_type: event.type,
+      source: event.source,
     });
     return true;
   }
