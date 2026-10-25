@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Kafka, Producer, logLevel, Partitioners } from 'kafkajs';
 import { WinstonPhysicalLoggerService } from '../../../core/logger/winston-logger.service';
+import { TraceContextService } from '../../../core/tracing/trace-context.service';
 
 @Injectable()
 export class KafkaEventBusService implements OnModuleInit, OnModuleDestroy {
@@ -15,7 +16,10 @@ export class KafkaEventBusService implements OnModuleInit, OnModuleDestroy {
     AUDITORIA_SAGAS: 'topic-auditoria-sagas',
   };
 
-  constructor(private readonly winstonLogger: WinstonPhysicalLoggerService) {}
+  constructor(
+    private readonly winstonLogger: WinstonPhysicalLoggerService,
+    private readonly traceContext: TraceContextService,
+  ) {}
 
   async onModuleInit() {
     process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
@@ -55,17 +59,31 @@ export class KafkaEventBusService implements OnModuleInit, OnModuleDestroy {
   }
 
   async emitB2BEvent(topic: string, key: string, payload: any): Promise<boolean> {
-    const value = JSON.stringify({
+    const event = this.traceContext.createCloudEvent(
+      `com.booking.${topic}`,
+      'booking-prototipo-central',
       payload,
-      emitted_at: new Date().toISOString(),
-      source: 'booking-prototipo-central',
+    );
+    const value = JSON.stringify({
+      ...event,
+      payload,
+      emitted_at: event.time,
     });
 
     if (this.isConnected && this.producer) {
       try {
         await this.producer.send({
           topic,
-          messages: [{ key, value }],
+          messages: [{
+            key,
+            value,
+            headers: {
+              correlationid: event.correlationid,
+              'x-correlation-id': event.correlationid,
+              traceparent: event.traceparent,
+              node_id: event.node_id,
+            },
+          }],
         });
         this.winstonLogger.logAudit('KAFKA_EVENTO_B2B_ENVIADO', {
           topic,
@@ -82,6 +100,7 @@ export class KafkaEventBusService implements OnModuleInit, OnModuleDestroy {
       topic,
       key,
       payload,
+      cloud_event: event,
     });
     return true;
   }

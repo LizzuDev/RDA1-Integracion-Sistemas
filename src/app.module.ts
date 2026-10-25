@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
@@ -20,7 +20,7 @@ import { NodesModule } from './modules/nodes/nodes.module';
 import { EsbModule } from './modules/esb/esb.module';
 import { EventBusModule } from './modules/event-bus/event-bus.module';
 import { GraphqlBffModule } from './modules/graphql/graphql-bff.module';
-import { SecurityModule } from './core/security/security.module';
+import { TraceContextMiddleware } from './core/tracing/trace-context.middleware';
 
 @Module({
   imports: [
@@ -97,6 +97,12 @@ import { SecurityModule } from './core/security/security.module';
     GraphqlBffModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [TraceContextMiddleware],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(TraceContextMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+  }
+}
