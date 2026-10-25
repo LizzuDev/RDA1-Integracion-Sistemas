@@ -6,6 +6,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Rfc7807ExceptionFilter } from './core/filters/rfc7807-exception.filter';
 import { crearValidationPipeGlobal } from './core/validation/validation-pipe';
 import { HateoasInterceptor } from './core/interceptors/hateoas.interceptor';
+import { WinstonPhysicalLoggerService } from './core/logger/winston-logger.service';
+import { StructuredHttpRequestMiddleware } from './core/logger/structured-http-request.middleware';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -50,6 +52,19 @@ async function bootstrap() {
     { bodyParser: false },
   );
 
+  app.use((req: any, res: any, next: any) => {
+    const correlationId =
+      req.headers['x-correlation-id'] ||
+      `corr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    req.headers['x-correlation-id'] = correlationId;
+    res.setHeader('X-Correlation-Id', correlationId);
+    next();
+  });
+  const requestLogger = new StructuredHttpRequestMiddleware(
+    app.get(WinstonPhysicalLoggerService),
+  );
+  app.use(requestLogger.use.bind(requestLogger));
+
   app.useBodyParser('json', { limit: LIMITE_CUERPO });
   app.useBodyParser('urlencoded', { limit: LIMITE_CUERPO, extended: true });
 
@@ -86,14 +101,6 @@ async function bootstrap() {
       'X-Api-Key',
     ],
     credentials: true,
-  });
-
-  // Trazabilidad distribuida: Correlation-ID (Consideraciones RDA2 §2)
-  app.use((req: any, res: any, next: any) => {
-    const correlationId = req.headers['x-correlation-id'] || `corr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    req.headers['x-correlation-id'] = correlationId;
-    res.setHeader('X-Correlation-Id', correlationId);
-    next();
   });
 
   app.setGlobalPrefix('api');
@@ -166,7 +173,8 @@ async function bootstrap() {
   await app.startAllMicroservices();
   const httpPort = process.env.PORT || 3000;
   await app.listen(httpPort);
-  console.log(`[Booking Gateway] Servidor HTTP/REST listo en puerto ${httpPort}`);
-  console.log(`[Booking Gateway] Servidor gRPC Inbound listo en puerto ${grpcPort} (proto: ${protoPath})`);
+  const logger = app.get(WinstonPhysicalLoggerService);
+  logger.log(`Servidor HTTP/REST listo en puerto ${httpPort}`);
+  logger.log(`Servidor gRPC Inbound listo en puerto ${grpcPort} (proto: ${protoPath})`);
 }
 bootstrap();

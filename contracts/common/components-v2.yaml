@@ -486,17 +486,26 @@ components:
         Se agregan `trace_id`, `span_id` y `node_id` para trazabilidad distribuida completa.
       required:
         - timestamp
+        - level
         - service
+        - event
         - event_received
         - correlation_id
         - status
         - duration_ms
+        - message
+        - http
       properties:
         timestamp:
           type: string
           format: date-time
           description: Momento del log en UTC ISO 8601.
           example: '2026-10-24T23:00:00.000Z'
+        level:
+          type: string
+          enum: [debug, info, warn, error]
+          description: Severidad del registro.
+          example: info
         service:
           type: string
           description: Nombre del servicio o módulo que generó el log.
@@ -505,6 +514,10 @@ components:
           type: string
           description: Nombre del evento o acción recibida que disparó el log.
           example: PagoSolicitado
+        event:
+          type: string
+          description: Identificador estable del evento de logging.
+          example: http.request.completed
         correlation_id:
           type: string
           description: Identificador de correlación de negocio (columna vertebral de trazabilidad).
@@ -518,6 +531,35 @@ components:
           type: integer
           description: Tiempo de procesamiento en milisegundos.
           example: 42
+        message:
+          type: string
+          description: Mensaje breve sin credenciales ni cuerpos de petición.
+          example: GET /api/v1/health
+        http:
+          type: object
+          required: [method, path, status]
+          properties:
+            method:
+              type: string
+              example: GET
+            path:
+              type: string
+              description: Ruta sin query string.
+              example: /api/v1/health
+            status:
+              type: integer
+              example: 200
+        error:
+          type: object
+          description: Detalle sanitizado presente cuando la petición falla.
+          required: [name, message]
+          properties:
+            name:
+              type: string
+              example: HttpRequestError
+            message:
+              type: string
+              example: HTTP 500
         trace_id:
           type: string
           description: Identificador de traza W3C (32 hex chars del `traceparent`).
@@ -532,11 +574,18 @@ components:
           example: booking-node-01
       example:
         timestamp: '2026-10-24T23:00:00.000Z'
+        level: info
         service: PagosService
+        event: http.request.completed
         event_received: PagoSolicitado
         correlation_id: corr-1729810400000-a3f7b2c
         status: processed
         duration_ms: 42
+        message: POST /api/v1/pagos/procesar
+        http:
+          method: POST
+          path: /api/v1/pagos/procesar
+          status: 200
         trace_id: 0af7651916cd43dd8448eb211c80319c
         span_id: b7ad6b7169203331
         node_id: booking-node-01
