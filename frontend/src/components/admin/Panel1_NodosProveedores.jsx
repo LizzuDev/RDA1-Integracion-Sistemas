@@ -5,6 +5,7 @@ export function Panel1_NodosProveedores() {
   const [nodos, setNodos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
+  const [toggleError, setToggleError] = useState('');
 
   const fetchNodos = async () => {
     try {
@@ -33,13 +34,24 @@ export function Panel1_NodosProveedores() {
   }, []);
 
   const handleToggle = async (nodoId) => {
+    const nodo = nodos.find((item) => item.id === nodoId);
+    const codigoNodo = nodo?.codigo_nodo || nodo?.codigo;
+    if (!codigoNodo) {
+      setToggleError('No se pudo identificar el nodo para cambiar su Kill-Switch.');
+      return;
+    }
+
     setTogglingId(nodoId);
+    setToggleError('');
     try {
-      await api.post(`/nodes/${nodoId}/toggle`);
+      await api.post(`/admin/nodes/${codigoNodo}/toggle-killswitch`);
       await fetchNodos();
-    } catch (e) {
-      // Toggle local reactivo
-      setNodos(prev => prev.map(n => n.id === nodoId ? { ...n, killSwitchActivo: !n.killSwitchActivo, estado: !n.killSwitchActivo ? 'APAGADO' : 'OPERATIVO' } : n));
+    } catch (error) {
+      setToggleError(
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        'No se pudo cambiar el Kill-Switch. Verifica tu sesión y permisos.',
+      );
     } finally {
       setTogglingId(null);
     }
@@ -74,6 +86,11 @@ export function Panel1_NodosProveedores() {
         <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>Sondeando topología de nodos...</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+          {toggleError && (
+            <div role="alert" style={{ gridColumn: '1 / -1', color: '#991b1b', background: '#fef2f2', padding: '10px 12px', borderRadius: '6px' }}>
+              {toggleError}
+            </div>
+          )}
           {nodos.map((nodo) => {
             const led = getLedColor(nodo);
             const isOff = nodo.killSwitchActivo || nodo.estado === 'APAGADO';

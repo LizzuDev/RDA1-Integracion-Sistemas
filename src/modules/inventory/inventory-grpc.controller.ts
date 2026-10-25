@@ -1,7 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { GrpcMethod, GrpcStreamMethod } from '@nestjs/microservices';
 import { Observable } from 'rxjs';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
+import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
+import { RolesGuard } from '../../core/guards/roles.guard';
+import { Roles } from '../../core/decorators/roles.decorator';
+import { Rol } from '../../core/auth/roles.enum';
 import {
   InventoryService,
   StockUpdateMessage,
@@ -71,14 +75,27 @@ export class InventoryGrpcController {
   // =========================================================================
 
   @Get('status')
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Roles(Rol.ADMIN, Rol.MANTENIMIENTO)
+  @ApiBearerAuth()
+  @ApiHeader({ name: 'X-Admin-Key', description: 'Clave de administración solo para pruebas no productivas', required: false })
   @ApiOperation({ summary: 'Consultar estado y telemetría del servidor gRPC Inbound' })
   @ApiResponse({ status: 200, description: 'Estado operativo del socket gRPC en puerto 50051' })
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({ status: 403, description: 'Acceso restringido (requiere rol ADMIN o MANTENIMIENTO)' })
   getStatus() {
     return this.inventoryService.getStatus();
   }
 
   @Get()
+  @UseGuards(SupabaseAuthGuard, RolesGuard)
+  @Roles(Rol.ADMIN, Rol.MANTENIMIENTO)
+  @ApiBearerAuth()
+  @ApiHeader({ name: 'X-Admin-Key', description: 'Clave de administración solo para pruebas no productivas', required: false })
   @ApiOperation({ summary: 'Consultar inventario sincronizado recibido mediante gRPC' })
+  @ApiResponse({ status: 200, description: 'Inventario sincronizado consultado' })
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({ status: 403, description: 'Acceso restringido (requiere rol ADMIN o MANTENIMIENTO)' })
   getInventory(
     @Query('item_id') itemId?: string,
     @Query('date') date?: string
