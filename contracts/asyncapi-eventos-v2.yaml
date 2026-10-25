@@ -48,18 +48,18 @@ info:
     ## 2. Preservación Invariable de Contexto en el Puente Dual (`KafkaRabbitBridgeService`)
 
     El servicio de enlace `src/modules/event-bus/bridge/kafka-rabbit-bridge.service.ts`
-    orquesta la bifurcación de eventos:
-    1. **Publicación Transaccional:** Envía el evento al Topic Exchange `booking.events` de RabbitMQ
-       con persistencia de mensaje (`delivery_mode: 2`) y enrutamiento por routing key semántica.
-    2. **Replicación B2B:** Emite el evento hacia el tópico correspondiente de Apache Kafka
-       con particionamiento por `key` (`aggregateId` / `cliente_id`).
+    orquesta el bus asíncrono respetando la especialización de brokers (Semana 8 / I04):
+    1. **Publicación Transaccional Autoritativa (RabbitMQ):** Envía eventos de órdenes, reservas,
+       pagos, stock y compensaciones al Topic Exchange `booking.events` de RabbitMQ con persistencia
+       (`delivery_mode: 2`), enrutamiento semántico y garantías de reintentos + DLQ (`q.dead_letter`).
+    2. **Streaming Analítico Masivo (Apache Kafka):** Los eventos de telemetría de navegación del frontend
+       (`POST /telemetry/events`) y sincronización de catálogo se emiten hacia tópicos de Kafka
+       (`booking.telemetry.events` y `topic-catalogo-sync`) sin bloquear el flujo transaccional.
     3. **Trazabilidad Ininterrumpida:** Propaga de forma idéntica e invariable el `correlation_id`,
-       `trace_id` (W3C `traceparent`) y `span_id` a través de las cabeceras AMQP y los `RecordHeaders`
-       de Kafka, permitiendo al monitor tipo grafo reconstruir la traza end-to-end sin discontinuidades.
-    4. **Modo Resiliente / Fallback en Memoria:** Si los brokers externos no están disponibles
-       (despliegues de prueba o degradación de red), ambos servicios (`RabbitMqEventBusService`
-       y `KafkaEventBusService`) capturan el fallo y preservan el evento en la bitácora física forense
-       (`WinstonPhysicalLoggerService`) con estado auditado `IN_MEMORY`.
+       `trace_id` (W3C `traceparent`) y `node_id` a través de cabeceras AMQP y Kafka RecordHeaders.
+    4. **Modo Resiliente / Desarrollo Sin Brokers:** Mediante `EVENT_BUS_MODE=memory|rabbitmq` y
+       `TELEMETRY_SINK=kafka|file|none` (por defecto `memory` y `none`), el sistema opera
+       completamente en memoria para pruebas y desarrollo local.
 
     ---
 
@@ -76,7 +76,7 @@ info:
     | **Tópico Kafka Catálogo** | `topic-catalogo-sync` | `booking.catalogo.stream` (4 particiones por vertical) | Particionar por `vertical` (`vuelos`, `autos`, etc.) |
     | **Tópico Kafka Órdenes** | `topic-ordenes-b2b` | `booking.compras.audit` (6 particiones por `cliente_id`) | Estandarizar retención de 7 días con compactación |
     | **Tópico Kafka Auditoría** | `topic-auditoria-sagas` | `booking.compras.audit` / `schema_auditoria` | Integrar journal de pasos de `SagaOrchestratorService` |
-    | **Telemetría Frontend** | Tabla PostgreSQL `telemetry_events` | Tópico Kafka `booking.telemetria.nodes` | Migrar `TelemetryService` para emitir a Kafka (H-P08-03) |
+    | **Telemetría Frontend** | Tópico Kafka `booking.telemetry.events` | Tópico Kafka `booking.telemetria.nodes` | Implementado en `TelemetryService` con emisión a Kafka (H-P08-03 / I04) |
 
     ---
 
@@ -320,8 +320,8 @@ channels:
       kafka:
         topic: booking.telemetry.events
         partitions: 6
-    x-source: 'n/a'
-    x-status: planned
+    x-source: 'src/modules/telemetry/telemetry.service.ts#trackEvent'
+    x-status: implemented
     x-microservice: MS_AUD
 
 operations:
