@@ -20,6 +20,7 @@ import { NodesModule } from './modules/nodes/nodes.module';
 import { EsbModule } from './modules/esb/esb.module';
 import { EventBusModule } from './modules/event-bus/event-bus.module';
 import { GraphqlBffModule } from './modules/graphql/graphql-bff.module';
+import { SecurityModule } from './core/security/security.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { GraphqlBffModule } from './modules/graphql/graphql-bff.module';
     // Módulo Core del Integrador (Booking Prototipo)
     // =========================================================================
     CoreModule,
+    SecurityModule,
     
     // =========================================================================
     // Módulos de Integración (Tus endpoints BFF)

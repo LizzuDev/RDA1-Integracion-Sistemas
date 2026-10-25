@@ -7,6 +7,8 @@ import { ChatbotToolsExecutorService } from './chatbot.tools-executor.service';
 import { ChatbotConversationStore } from './chatbot.conversation.store';
 import { ChatbotConcurrencyGate } from './chatbot.concurrency';
 import { GroqService } from './groq.service';
+import { ChatbotRateLimitGuard } from './chatbot-rate-limit.guard';
+import { SecurityModule } from '../../core/security/security.module';
 
 /**
  * Módulo del chatbot informativo.
@@ -44,7 +46,7 @@ import { GroqService } from './groq.service';
  * orden de magnitud más lenta.
  */
 @Module({
-  imports: [CacheModule.register({ ttl: 5 })],
+  imports: [CacheModule.register({ ttl: 5 }), SecurityModule],
   controllers: [ChatbotController],
   providers: [
     ChatbotService,
@@ -52,6 +54,7 @@ import { GroqService } from './groq.service';
     ChatbotToolsExecutorService,
     ChatbotConversationStore,
     ChatbotConcurrencyGate,
+    ChatbotRateLimitGuard,
   ],
   exports: [ChatbotService],
 })

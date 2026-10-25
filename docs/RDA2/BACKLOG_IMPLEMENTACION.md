@@ -84,6 +84,15 @@ El backlog se compone de **55 ítems de trabajo (`BL-001` a `BL-055`)** organiza
 
 ---
 
+### Estado de implementación I01
+
+| ID | Estado | Nota |
+|---|---|---|
+| BL-001 | Resuelto | Rutas de mutación y acciones de nodos protegidas; toggle de Panel 1 usa la ruta canónica. |
+| BL-002 | Resuelto | Bypass `X-Role`/`X-Admin-Key` deshabilitado en producción y restringido localmente. |
+| BL-012 | Parcial | El DTO estricto de telemetría quedó implementado; Pagos y Paquetes siguen pendientes. |
+| BL-018 | Pendiente | La ruta canónica ya se usa en Panel 1, pero no se unificaron los stores de todos los kill-switches. |
+
 ## 3. Matriz de Trazabilidad y Verificación de Cobertura
 
 ### 3.1 Cobertura de Hallazgos Alta y Media (`docs/RDA2/HALLAZGOS_CONTRATOS.md`)
