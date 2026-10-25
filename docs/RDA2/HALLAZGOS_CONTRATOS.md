@@ -169,6 +169,9 @@
 | H-P17-03 | Media | Desconexión del consumidor de Apache Kafka (`cg-audit-analytics`): El flujo previsto en el Blueprint §7.4 donde el consumidor de Kafka lee `booking.compras.audit` / `topic-ordenes-b2b` y persiste asíncronamente en `schema_auditoria.auditoria_transaccional` no está implementado en `src/modules/event-bus/`. | `src/modules/event-bus/kafka/kafka-event-bus.service.ts` líneas 1-80 (solo productor, sin consumidor) | Implementar el grupo de consumidores Kafka `cg-audit-analytics` para escuchar los tópicos de compras y alimentar la tabla de auditoría en background. |
 | H-P17-04 | Media | Ausencia de snapshots estructurados de cambios administrativos en base de datos: Cuando un administrador cambia configuraciones (`updateConfig`) o commuta kill-switches (`toggleNode`), los cambios se asientan solo en archivos físicos `.log` mediante `WinstonPhysicalLoggerService`, pero no en `schema_auditoria` con comparativas tipadas `antes/despues` para trazabilidad forense por SQL. | `src/modules/admin/admin.controller.ts` l. 46-52 y l. 226 | Modificar `AdminAuditService.registrar` para persistir también en `schema_auditoria.auditoria_transaccional` cuando la acción provenga de un operador `ADMIN`. |
 
+## P15 — Vuelos v2.0.1
 
-
+| ID | Severidad | Hallazgo | Evidencia | Sugerencia |
+|---|---|---|---|---|
+| H-P15-01 | Alta | Las rutas implementadas de vuelos no aplican un guard de autenticación, aunque el contrato documenta OAuth2 de partner para proteger las operaciones privadas. El contrato conserva las dos capas de seguridad solicitadas; el backend actual no impone la capa de servicio a servicio. | `src/modules/vuelos/vuelos.controller.ts` línea 120 y métodos 137-790; no hay uso de `@UseGuards` en el controlador | Aplicar validación de token de partner en el gateway o controlador antes de exponer las rutas privadas, manteniendo la capa de identidad del usuario en Booking. |
 
