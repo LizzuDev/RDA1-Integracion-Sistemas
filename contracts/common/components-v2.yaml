@@ -85,8 +85,9 @@ components:
         - `ADMIN` — administrador del sistema.
         - `MANTENIMIENTO` — técnico de mantenimiento.
 
-        Para evaluación de cátedra también se acepta la cabecera `X-Role`
-        sin token (bypass de cátedra implementado en el guard).
+        Las cabeceras de evaluación `X-Role` y `X-Admin-Key` solo se aceptan
+        en entorno de pruebas, o si `SECURITY_ALLOW_TEST_AUTH=true` y la petición
+        procede de loopback en un entorno no productivo. Nunca se aceptan en producción.
 
     AdminKey:
       type: apiKey
@@ -747,6 +748,22 @@ components:
             code: RATE_LIMIT_EXCEEDED
             correlation_id: corr-1729810400000-a3f7b2c
             timestamp: '2026-10-24T23:00:00.000Z'
+
+    Problem413:
+      description: El cuerpo de la petición supera el tamaño máximo permitido.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: 'https://httpstatuses.com/413'
+            title: Payload Too Large
+            status: 413
+            detail: El cuerpo de telemetría supera el máximo de 16 KiB.
+            instance: /telemetry/events
 
     Problem500:
       description: Error interno del servidor.

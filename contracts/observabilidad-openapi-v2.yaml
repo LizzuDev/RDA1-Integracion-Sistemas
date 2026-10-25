@@ -137,13 +137,13 @@ paths:
         Crea un nuevo registro de conector proveedor en `schema_proveedores.config_proveedor`.
         Genera automáticamente un código único de nodo (`NODE_{VERTICAL}_{SLUG}`) si no se provee.
 
-        > **Alerta de Seguridad (Hallazgo H-P08-02):** Este endpoint carece de guards de autenticación
-        > en `NodesController`, permitiendo a clientes anónimos registrar proveedores en la plataforma.
+        Requiere sesión Supabase válida y rol `ADMIN`.
       operationId: crearNodoPublic
       x-source: 'src/modules/nodes/nodes.controller.ts#crearNodoPublic'
       x-status: implemented
       x-microservice: MS_PROV
-      security: []
+      security:
+        - SupabaseBearer: []
       parameters:
         - $ref: './common/components-v2.yaml#/components/parameters/CorrelationId'
       requestBody:
@@ -174,6 +174,10 @@ paths:
                 $ref: '#/components/schemas/CrearNodoResponse'
         '400':
           $ref: './common/components-v2.yaml#/components/responses/Problem400'
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '500':
           $ref: './common/components-v2.yaml#/components/responses/Problem500'
 
@@ -181,17 +185,18 @@ paths:
     put:
       tags:
         - Nodos y Proveedores - Consulta Pública y Conexión
-      summary: Actualizar parámetros de conexión de un nodo socio (Público)
+      summary: Actualizar parámetros de conexión de un nodo socio (ADMIN)
       description: |
         Actualiza los parámetros de red (URL base REST, endpoint gRPC, nombre y contacto)
         del nodo especificado por su código o UUID en `schema_proveedores.config_proveedor`.
 
-        > **Alerta de Seguridad (Hallazgo H-P08-02):** Ruta sin guard de autenticación expuesta públicamente.
+        Requiere sesión Supabase válida y rol `ADMIN`.
       operationId: actualizarNodoPublic
       x-source: 'src/modules/nodes/nodes.controller.ts#actualizarNodoPublic'
       x-status: implemented
       x-microservice: MS_PROV
-      security: []
+      security:
+        - SupabaseBearer: []
       parameters:
         - name: codigoNodo
           in: path
@@ -219,6 +224,10 @@ paths:
                 $ref: '#/components/schemas/ActualizarNodoResponse'
         '400':
           $ref: './common/components-v2.yaml#/components/responses/Problem400'
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '404':
           $ref: './common/components-v2.yaml#/components/responses/Problem404'
         '500':
@@ -227,17 +236,18 @@ paths:
     delete:
       tags:
         - Nodos y Proveedores - Consulta Pública y Conexión
-      summary: Eliminar un nodo proveedor (Público)
+      summary: Eliminar un nodo proveedor (ADMIN)
       description: |
         Elimina permanentemente el registro del nodo de `schema_proveedores.config_proveedor`
         y registra el evento en la auditoría física forense.
 
-        > **Alerta de Seguridad (Hallazgo H-P08-02):** Ruta mutante destructiva sin protección RBAC.
+        Requiere sesión Supabase válida y rol `ADMIN`.
       operationId: eliminarNodoPublic
       x-source: 'src/modules/nodes/nodes.controller.ts#eliminarNodoPublic'
       x-status: implemented
       x-microservice: MS_PROV
-      security: []
+      security:
+        - SupabaseBearer: []
       parameters:
         - name: codigoNodo
           in: path
@@ -264,6 +274,10 @@ paths:
                   mensaje:
                     type: string
                     example: "Proveedor 'Autos Ecuador' (NODE_AUT_LOCAL) eliminado correctamente."
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '404':
           $ref: './common/components-v2.yaml#/components/responses/Problem404'
         '500':
@@ -283,7 +297,8 @@ paths:
       x-source: 'src/modules/nodes/nodes.controller.ts#pingNodoPublic'
       x-status: implemented
       x-microservice: MS_PROV
-      security: []
+      security:
+        - SupabaseBearer: []
       parameters:
         - name: codigoNodo
           in: path
@@ -303,6 +318,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PingNodoResponse'
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '404':
           $ref: './common/components-v2.yaml#/components/responses/Problem404'
         '500':
@@ -321,7 +340,8 @@ paths:
       x-source: 'src/modules/nodes/nodes.controller.ts#sincronizarCatalogoPublic'
       x-status: implemented
       x-microservice: MS_PROV
-      security: []
+      security:
+        - SupabaseBearer: []
       parameters:
         - name: codigoNodo
           in: path
@@ -341,6 +361,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SyncCatalogoResponse'
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '400':
           $ref: './common/components-v2.yaml#/components/responses/Problem400'
         '404':
@@ -359,14 +383,15 @@ paths:
           Sincroniza en memoria con `ConnectorHealthService` para interceptar llamadas y activar contingencias.
         - Si se desactiva: Restablece el tráfico normal hacia el microservicio socio.
 
-        > **Vulnerabilidad Crítica (Hallazgo H-P08-01):** Este endpoint no posee guard de autenticación
-        > `@UseGuards(SupabaseAuthGuard, RolesGuard)` en `NodesController`, permitiendo que cualquier
-        > usuario anónimo desconecte o reactive una tienda socia del ecosistema.
+        Requiere sesión Supabase válida y rol `ADMIN` o `MANTENIMIENTO`. La ruta se conserva
+        para compatibilidad y el frontend administrativo usa la ruta canónica protegida
+        `/admin/nodes/{codigoNodo}/toggle-killswitch`.
       operationId: toggleNodePublic
       x-source: 'src/modules/nodes/nodes.controller.ts#toggleNodePublic'
       x-status: implemented
       x-microservice: MS_PROV
-      security: []
+      security:
+        - SupabaseBearer: []
       parameters:
         - name: codigoNodo
           in: path
@@ -398,6 +423,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ToggleKillSwitchResponse'
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '404':
           $ref: './common/components-v2.yaml#/components/responses/Problem404'
         '500':
@@ -663,7 +692,7 @@ paths:
         - `payment_started`, `payment_succeeded`, `payment_failed`: Pasarela de pagos.
         - `booking_confirmed`: Confirmación final de la orden.
 
-        > **Alerta Arquitectónica (Hallazgo H-P08-03):** El backend almacena estos eventos
+        > **Pendiente arquitectónico (H-P08-03):** El backend almacena estos eventos
         > directamente en la tabla `telemetry_events` de PostgreSQL en lugar de transmitirlos
         > mediante Apache Kafka, contradiciendo el diseño de la cátedra para tráfico de alto volumen.
       operationId: trackEvent
@@ -706,6 +735,8 @@ paths:
                     example: true
         '400':
           $ref: './common/components-v2.yaml#/components/responses/Problem400'
+        '413':
+          $ref: './common/components-v2.yaml#/components/responses/Problem413'
         '429':
           $ref: './common/components-v2.yaml#/components/responses/Problem429'
         '500':
@@ -727,7 +758,8 @@ paths:
       x-source: 'src/modules/inventory/inventory-grpc.controller.ts#getStatus'
       x-status: implemented
       x-microservice: MS_STK
-      security: []
+      security:
+        - SupabaseBearer: []
       parameters:
         - $ref: './common/components-v2.yaml#/components/parameters/CorrelationId'
       responses:
@@ -740,6 +772,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InventoryStatusResponse'
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '429':
           $ref: './common/components-v2.yaml#/components/responses/Problem429'
         '500':
@@ -759,7 +795,8 @@ paths:
       x-source: 'src/modules/inventory/inventory-grpc.controller.ts#getInventory'
       x-status: implemented
       x-microservice: MS_STK
-      security: []
+      security:
+        - SupabaseBearer: []
       parameters:
         - name: item_id
           in: query
@@ -787,6 +824,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InventoryListResponse'
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '429':
           $ref: './common/components-v2.yaml#/components/responses/Problem429'
         '500':
@@ -1241,7 +1282,8 @@ components:
           example: 'search_submitted'
         session_id:
           type: string
-          description: UUID de la sesión del navegador generado en sessionStorage.
+          maxLength: 80
+          description: Identificador de sesión generado en sessionStorage (máximo 80 caracteres).
           example: '48f7d9a1-52e4-4a2e-8c3b-7a1b5c9d3e5f'
         user_id:
           type: string
@@ -1260,7 +1302,7 @@ components:
           example: 'desktop'
         properties:
           type: object
-          description: Metadatos libres contextuales de la acción del cliente.
+          description: Metadatos libres contextuales de la acción del cliente; máximo 8 KiB serializados.
           additionalProperties: true
           example:
             origen: 'UIO'

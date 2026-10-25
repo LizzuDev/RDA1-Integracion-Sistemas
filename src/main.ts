@@ -94,12 +94,15 @@ async function bootstrap() {
       'Idempotency-Key',
       'x-correlation-id',
       'X-Correlation-Id',
+      'traceparent',
+      'node_id',
       'x-device-fingerprint',
       'X-Device-Fingerprint',
       // API key de los sistemas de proveedores (sincronización de alojamientos).
       'x-api-key',
       'X-Api-Key',
     ],
+    exposedHeaders: ['X-Correlation-Id', 'traceparent', 'node_id'],
     credentials: true,
   });
 
@@ -118,6 +121,9 @@ async function bootstrap() {
 
   // Registrar el filtro global de excepciones para cumplir con la RFC 7807
   app.useGlobalFilters(new Rfc7807ExceptionFilter());
+
+  // Captura la identidad validada por los guards antes de llamadas salientes.
+  app.useGlobalInterceptors(new TraceContextInterceptor(app.get(TraceContextService)));
 
   // HATEOAS: inyectar enlaces en las respuestas (Richardson Nivel 3)
   app.useGlobalInterceptors(new HateoasInterceptor());
