@@ -494,8 +494,57 @@ components:
 
   schemas:
 
+    CloudEventAttributes:
+      type: object
+      description: |
+        Atributos CloudEvents v1.0 y extensiones de trazabilidad añadidos al
+        envelope existente. `payload` se conserva como alias compatible para
+        consumidores previos; `data` es el dato canónico del CloudEvent.
+      required:
+        - specversion
+        - id
+        - source
+        - type
+        - time
+        - datacontenttype
+        - correlationid
+        - traceparent
+        - node_id
+        - data
+      properties:
+        specversion:
+          type: string
+          enum: ['1.0']
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+        type:
+          type: string
+        time:
+          type: string
+          format: date-time
+        datacontenttype:
+          type: string
+          enum: [application/json]
+        correlationid:
+          type: string
+        traceparent:
+          type: string
+          pattern: '^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$'
+        tracestate:
+          type: string
+        node_id:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+
     SearchQueryPayload:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/CloudEventAttributes'
       required:
         - payload
         - timestamp
@@ -531,6 +580,8 @@ components:
 
     StockUpdatedPayload:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/CloudEventAttributes'
       required:
         - payload
         - timestamp
@@ -575,6 +626,8 @@ components:
 
     OrderConfirmedPayload:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/CloudEventAttributes'
       required:
         - payload
         - timestamp
@@ -646,6 +699,8 @@ components:
 
     SagaCompensatePayload:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/CloudEventAttributes'
       required:
         - payload
         - timestamp
@@ -705,6 +760,8 @@ components:
 
     GeneralEventPayload:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/CloudEventAttributes'
       required:
         - payload
         - timestamp
@@ -747,6 +804,8 @@ components:
 
     KafkaRecordEnvelope:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/CloudEventAttributes'
       required:
         - payload
         - emitted_at

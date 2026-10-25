@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as amqp from 'amqplib';
 import { WinstonPhysicalLoggerService } from '../../../core/logger/winston-logger.service';
+import { TraceContextService } from '../../../core/tracing/trace-context.service';
 
 @Injectable()
 export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
@@ -19,7 +20,10 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
 
   private isConnected = false;
 
-  constructor(private readonly winstonLogger: WinstonPhysicalLoggerService) {}
+  constructor(
+    private readonly winstonLogger: WinstonPhysicalLoggerService,
+    private readonly traceContext: TraceContextService,
+  ) {}
 
   async onModuleInit() {
     await this.conectarRabbitMQ();
@@ -66,9 +70,15 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
   }
 
   async publish(routingKey: string, payload: any): Promise<boolean> {
-    const messageBuffer = Buffer.from(JSON.stringify({
+    const event = this.traceContext.createCloudEvent(
+      `com.booking.${routingKey}`,
+      'booking-prototipo',
       payload,
-      timestamp: new Date().toISOString(),
+    );
+    const messageBuffer = Buffer.from(JSON.stringify({
+      ...event,
+      payload,
+      timestamp: event.time,
       routing_key: routingKey,
     }));
 
@@ -76,6 +86,13 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
       try {
         const sent = this.channel.publish(this.EXCHANGE_NAME, routingKey, messageBuffer, {
           persistent: true,
+          correlationId: event.correlationid,
+          headers: {
+            correlationid: event.correlationid,
+            'x-correlation-id': event.correlationid,
+            traceparent: event.traceparent,
+            node_id: event.node_id,
+          },
         });
         this.winstonLogger.logAudit('RABBITMQ_EVENTO_PUBLICADO', {
           routing_key: routingKey,
@@ -91,6 +108,7 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
     this.winstonLogger.logAudit('RABBITMQ_EVENTO_EMITIDO_IN_MEMORY', {
       routing_key: routingKey,
       payload,
+      cloud_event: event,
     });
     return true;
   }

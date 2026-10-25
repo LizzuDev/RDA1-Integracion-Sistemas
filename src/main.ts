@@ -6,6 +6,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Rfc7807ExceptionFilter } from './core/filters/rfc7807-exception.filter';
 import { crearValidationPipeGlobal } from './core/validation/validation-pipe';
 import { HateoasInterceptor } from './core/interceptors/hateoas.interceptor';
+import { TraceContextInterceptor } from './core/tracing/trace-context.interceptor';
+import { TraceContextService } from './core/tracing/trace-context.service';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -79,21 +81,16 @@ async function bootstrap() {
       'Idempotency-Key',
       'x-correlation-id',
       'X-Correlation-Id',
+      'traceparent',
+      'node_id',
       'x-device-fingerprint',
       'X-Device-Fingerprint',
       // API key de los sistemas de proveedores (sincronización de alojamientos).
       'x-api-key',
       'X-Api-Key',
     ],
+    exposedHeaders: ['X-Correlation-Id', 'traceparent', 'node_id'],
     credentials: true,
-  });
-
-  // Trazabilidad distribuida: Correlation-ID (Consideraciones RDA2 §2)
-  app.use((req: any, res: any, next: any) => {
-    const correlationId = req.headers['x-correlation-id'] || `corr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    req.headers['x-correlation-id'] = correlationId;
-    res.setHeader('X-Correlation-Id', correlationId);
-    next();
   });
 
   app.setGlobalPrefix('api');
@@ -111,6 +108,9 @@ async function bootstrap() {
 
   // Registrar el filtro global de excepciones para cumplir con la RFC 7807
   app.useGlobalFilters(new Rfc7807ExceptionFilter());
+
+  // Captura la identidad validada por los guards antes de llamadas salientes.
+  app.useGlobalInterceptors(new TraceContextInterceptor(app.get(TraceContextService)));
 
   // HATEOAS: inyectar enlaces en las respuestas (Richardson Nivel 3)
   app.useGlobalInterceptors(new HateoasInterceptor());
