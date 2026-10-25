@@ -19,7 +19,7 @@ info:
     En el ecosistema multimodal de Booking Prototipo, la regla arquitectónica de transacciones comerciales estipula:
     1. **Booking Centraliza el Cobro:** Cuando un cliente realiza una compra (sea un paquete multidominio o un servicio individual), la pasarela de pagos central `MS_PAG` procesa la tarjeta de crédito/débito y genera un comprobante con un **`paymentReference`** unívoco (equivalente a `transaccion_id` o `codigo_autorizacion`).
     2. **Las Tiendas Satélites No Vuelven a Cobrar:** Microservicios como Vuelos (`MS_VUE`), Autos (`MS_AUT`) o Atracciones (`MS_ATR`) **no capturan tarjetas ni cobran directamente**. Reciben el `paymentReference` emitido por Booking y confirman sus reservas con la garantía de cobro previo.
-    3. **Validación de Pago B2B (Ruta Planificada):** Las tiendas externas socias necesitan un mecanismo para validar la autenticidad, estado (`CAPTURED`, `REFUNDED`, `FAILED`) y monto de dicho `paymentReference` antes de emitir tickets definitivos (`GET /pagos/{paymentReference}`).
+    3. **Validación de Pago B2B:** Las tiendas externas socias validan autenticidad, estado y monto de `paymentReference` antes de emitir reservas definitivas (`GET /pagos/{paymentReference}`).
 
     ---
 
@@ -59,6 +59,8 @@ info:
     - **`RECHAZO_FONDOS`:** Inyecta denegación por saldo insuficiente. Registra la transacción con estado `RECHAZADO` en `schema_pagos` y arroja HTTP `402 Payment Required` con código `INSUFFICIENT_FUNDS`.
     - **`TIMEOUT_RED`:** Aplica una demora forzada de 5.5 segundos (superior al timeout estándar de 5s exigido en la cátedra para disparar Circuit Breakers) y arroja HTTP `504 Gateway Timeout` con código `PAYMENT_GATEWAY_TIMEOUT`.
     - **`ERROR_INTERNO`:** Simula contingencia técnica inesperada en la red adquirente.
+    - **`FRAUDE`:** Rechaza determinísticamente la operación por control de fraude.
+    - En producción, activar el simulador requiere `PAGOS_SIMULADOR_HABILITADO=true`.
 
     > ⚠️ **Endpoints de Configuración del Simulador:**  
     > `GET /pagos/simulador/config` y `POST /pagos/simulador/config` son de uso exclusivo administrativo y de laboratorio docente (Panel 6).
@@ -84,9 +86,8 @@ info:
 
     | Evento CloudEvents | Nombre Semántico | Broker Principal (RabbitMQ) | Broker Réplica (Kafka) | Estado en Código Actual |
     |---|---|---|---|---|
-    | `ec.edu.epn.booking.pagos.payment.confirmed` | Pago Aprobado | `booking.events` / `q.pagos.procesados` | `topic-telemetria-audit` | **Solo Log Winston** (Hallazgo `H-P02-04`) |
-    | `ec.edu.epn.booking.pagos.payment.failed` | Pago Fallido / Rechazado | `booking.events` / `q.sagas.compensacion` | `topic-telemetria-audit` | **Solo Log Winston** (Hallazgo `H-P02-04`) |
-    | `ec.edu.epn.booking.pagos.payment.refunded` | Reembolso Emitido | `booking.events` / `q.sagas.compensacion` | `topic-audit-compensaciones` | **Solo Log Winston** (Hallazgo `H-P02-04`) |
+    | `com.booking.payment.completed` | Pago aprobado, rechazado o fraude evaluado | `booking.events` / `q.pagos.procesados` | — | RabbitMQ |
+    | `com.booking.payment.refunded` | Reembolso parcial o total | `booking.events` / `q.sagas.compensacion` | — | RabbitMQ |
 
     ---
 
@@ -99,7 +100,7 @@ info:
 
     ---
 
-    ## 7. Tabla de Operaciones y Cobertura (5 Implementadas, 1 Planificada)
+    ## 7. Tabla de Operaciones y Cobertura (rutas implementadas)
 
     | Método | Ruta | Handler | x-microservice | x-status |
     |---|---|---|---|---|
@@ -108,7 +109,8 @@ info:
     | `GET` | `/pagos/simulador/config` | `getConfigSimulador` | `MS_PAG` | `implemented` |
     | `POST` | `/pagos/simulador/config` | `updateConfigSimulador` | `MS_PAG` | `implemented` |
     | `GET` | `/pagos/transacciones` | `getTransacciones` | `MS_PAG` | `implemented` |
-    | `GET` | `/pagos/{paymentReference}` | N/A (planificado) | `MS_PAG` | `planned` |
+    | `GET` | `/pagos/{paymentReference}` | `validarPaymentReference` | `MS_PAG` | `implemented` |
+    | `POST` | `/pagos/{paymentReference}/reservas` | `asociarReserva` | `MS_PAG` | `implemented` |
 
   contact:
     name: Equipo Booking Prototipo — Integración de Sistemas EPN
@@ -229,6 +231,8 @@ paths:
                 code: 'PAYMENT_GATEWAY_TIMEOUT'
                 correlation_id: 'corr-1729810400000-a3f7b2c'
                 timestamp: '2026-10-24T23:30:10.000Z'
+        '409':
+          $ref: './common/components-v2.yaml#/components/responses/Problem409'
         '500':
           $ref: './common/components-v2.yaml#/components/responses/Problem500'
 
@@ -276,12 +280,16 @@ paths:
                 codigo_reembolso: 'REF-PAG-7B8A9C0D'
                 estado: 'REEMBOLSADO'
                 monto_reembolsado: 220.00
+                monto_reembolsado_acumulado: 220.00
+                transaccion_id: '9f8e7d6c-5b4a-3a2b-1c0d-9e8f7a6b5c4d'
                 fecha_reembolso: '2026-10-24T23:31:00.000Z'
                 mensaje: 'Reembolso compensatorio ejecutado exitosamente dentro del flujo Saga.'
         '400':
           $ref: './common/components-v2.yaml#/components/responses/Problem400'
         '404':
           $ref: './common/components-v2.yaml#/components/responses/Problem404'
+        '409':
+          $ref: './common/components-v2.yaml#/components/responses/Problem409'
         '500':
           $ref: './common/components-v2.yaml#/components/responses/Problem500'
 
@@ -292,7 +300,7 @@ paths:
       summary: Consultar configuración del simulador de fallos de pagos SOA (Panel 6)
       description: |
         Retorna el estado operativo actual de la pasarela de pagos simulada:
-        el modo activo (`NORMAL`, `RECHAZO_FONDOS`, `TIMEOUT_RED`, `ERROR_INTERNO`)
+        el modo activo (`NORMAL`, `RECHAZO_FONDOS`, `TIMEOUT_RED`, `ERROR_INTERNO`, `FRAUDE`)
         y la latencia simulada en milisegundos.
       operationId: getConfigSimulador
       x-source: 'src/modules/pagos/pagos.controller.ts#getConfigSimulador'
@@ -319,6 +327,7 @@ paths:
                   - RECHAZO_FONDOS
                   - TIMEOUT_RED
                   - ERROR_INTERNO
+                  - FRAUDE
         '400':
           $ref: './common/components-v2.yaml#/components/responses/Problem400'
         '500':
@@ -332,11 +341,13 @@ paths:
         Modifica en tiempo de ejecución las condiciones de respuesta de la pasarela de pagos.
         Permite a los docentes y evaluadores activar fallos controlados para verificar
         el comportamiento del orquestador Saga, las compensaciones LIFO y los Circuit Breakers.
+        En producción se requiere `PAGOS_SIMULADOR_HABILITADO=true` para activarlo.
       operationId: updateConfigSimulador
       x-source: 'src/modules/pagos/pagos.controller.ts#updateConfigSimulador'
       x-status: implemented
       x-microservice: MS_PAG
-      security: []
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: './common/components-v2.yaml#/components/parameters/CorrelationId'
       requestBody:
@@ -410,17 +421,20 @@ paths:
         - Auditoría y Validación
       summary: Validar estado y monto de un pago por paymentReference
       description: |
-        Ruta planificada (`x-status: planned`) para que las tiendas socias (ej. aerolíneas en `POST /vuelos/bookings`)
-        puedan verificar síncronamente que el cobro fue efectivamente capturado por Booking
-        antes de confirmar reservas, emitir billetes o procesar postventa.
+        Permite a ADMIN/SERVICE o a la tienda autenticada con `X-Api-Key` verificar síncronamente
+        el cobro realizado por Booking antes de confirmar reservas o emitir boletos. La API key
+        solo permite consultar pagos cuyo `carrito_id` coincide con el identificador de tienda
+        configurado. La respuesta nunca incluye datos de tarjeta.
         
         Permite validar tanto el UUID de transacción (`transaccion_id`) como el código de autorización
         (`AUTH-PAG-XXXXXXXX`). Responde `404 Not Found` bajo RFC 7807 si la referencia no existe.
       operationId: validarPaymentReference
-      x-source: n/a
-      x-status: planned
+      x-source: 'src/modules/pagos/pagos.controller.ts#validarPaymentReference'
+      x-status: implemented
       x-microservice: MS_PAG
-      security: []
+      security:
+        - BearerAuth: []
+        - X-Api-Key: []
       parameters:
         - name: paymentReference
           in: path
@@ -444,16 +458,86 @@ paths:
                 payment_reference: '9f8e7d6c-5b4a-3a2b-1c0d-9e8f7a6b5c4d'
                 status: 'CAPTURED'
                 amount: 220.00
+                refunded_amount: 0
                 currency: 'USD'
                 captured_at: '2026-10-24T23:30:00.000Z'
-                correlation_id: 'SAGA-A1B2C3D4'
                 auth_code: 'AUTH-PAG-A1B2C3D4'
+                bookings: []
         '404':
           $ref: './common/components-v2.yaml#/components/responses/Problem404'
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
         '500':
           $ref: './common/components-v2.yaml#/components/responses/Problem500'
 
+  /pagos/{paymentReference}/reservas:
+    post:
+      tags:
+        - Auditoría y Validación
+      summary: Asociar una reserva confirmada a una referencia de pago
+      description: |
+        Registra el identificador de reserva creado después del cobro. ADMIN/SERVICE o la
+        tienda propietaria (X-Api-Key) puede asociar sus reservas; repetir la misma asociación
+        no crea duplicados.
+      operationId: asociarReserva
+      x-source: 'src/modules/pagos/pagos.controller.ts#asociarReserva'
+      x-status: implemented
+      x-microservice: MS_PAG
+      security:
+        - BearerAuth: []
+        - X-Api-Key: []
+      parameters:
+        - name: paymentReference
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: './common/components-v2.yaml#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AsociarReservaPagoInput'
+      responses:
+        '200':
+          description: Reserva asociada o ya asociada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment_reference, reserva_id, associated]
+                properties:
+                  payment_reference:
+                    type: string
+                  reserva_id:
+                    type: string
+                  associated:
+                    type: boolean
+        '401':
+          $ref: './common/components-v2.yaml#/components/responses/Problem401'
+        '403':
+          $ref: './common/components-v2.yaml#/components/responses/Problem403'
+        '404':
+          $ref: './common/components-v2.yaml#/components/responses/Problem404'
+
 components:
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Supabase con rol ADMIN o SERVICE.
+    X-Api-Key:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        API key de tienda mapeada a `carrito_id` mediante `PAGOS_STORE_API_KEYS`.
+        Solo permite leer y asociar reservas de los pagos de ese carrito/tienda.
 
   schemas:
 
@@ -498,8 +582,12 @@ components:
           description: |
             Parámetro opcional para inyección de contingencias transaccionales puntuales.
             Sobrescribe la configuración global del simulador para esta solicitud.
-          enum: [NORMAL, RECHAZO_FONDOS, TIMEOUT_RED, ERROR_INTERNO]
+          enum: [NORMAL, RECHAZO_FONDOS, TIMEOUT_RED, ERROR_INTERNO, FRAUDE]
           example: NORMAL
+        idempotency_key:
+          type: string
+          deprecated: true
+          description: Compatibilidad con clientes v1; se recomienda `Idempotency-Key` en la cabecera.
 
     PagoAprobadoResponse:
       type: object
@@ -565,6 +653,10 @@ components:
           type: string
           description: Justificación del reembolso (ej. cancelación de orden o compensación Saga).
           example: Rollback compensatorio automático Saga LIFO por falla en reserva
+        idempotency_key:
+          type: string
+          deprecated: true
+          description: Compatibilidad con clientes v1; se recomienda `Idempotency-Key` en la cabecera.
 
     ReembolsoResponse:
       type: object
@@ -574,6 +666,8 @@ components:
         - codigo_reembolso
         - estado
         - monto_reembolsado
+        - monto_reembolsado_acumulado
+        - transaccion_id
         - fecha_reembolso
         - mensaje
       properties:
@@ -586,9 +680,15 @@ components:
           example: 'REF-PAG-7B8A9C0D'
         estado:
           type: string
-          enum: [REEMBOLSADO]
+          enum: [REEMBOLSO_PARCIAL, REEMBOLSADO]
           example: REEMBOLSADO
+        transaccion_id:
+          type: string
+          format: uuid
         monto_reembolsado:
+          type: number
+          example: 220.00
+        monto_reembolsado_acumulado:
           type: number
           example: 220.00
         fecha_reembolso:
@@ -609,7 +709,7 @@ components:
       properties:
         modo_actual:
           type: string
-          enum: [NORMAL, RECHAZO_FONDOS, TIMEOUT_RED, ERROR_INTERNO]
+          enum: [NORMAL, RECHAZO_FONDOS, TIMEOUT_RED, ERROR_INTERNO, FRAUDE]
           example: NORMAL
         latencia_ms:
           type: integer
@@ -624,6 +724,7 @@ components:
             - RECHAZO_FONDOS
             - TIMEOUT_RED
             - ERROR_INTERNO
+            - FRAUDE
 
     UpdateConfigSimuladorInput:
       type: object
@@ -634,7 +735,7 @@ components:
         modo:
           type: string
           description: Modo de operación a fijar en la pasarela.
-          enum: [NORMAL, RECHAZO_FONDOS, TIMEOUT_RED, ERROR_INTERNO]
+          enum: [NORMAL, RECHAZO_FONDOS, TIMEOUT_RED, ERROR_INTERNO, FRAUDE]
           example: RECHAZO_FONDOS
         latencia_ms:
           type: integer
@@ -686,12 +787,9 @@ components:
         metodoPago:
           type: string
           example: TARJETA_CREDITO
-        numeroTarjetaEnmascarado:
-          type: string
-          example: '•••• •••• •••• 4242'
         estado:
           type: string
-          enum: [INICIADA, APROBADO, RECHAZADO, REEMBOLSADO, ERROR_TIMEOUT]
+          enum: [INICIADA, APROBADO, RECHAZADO, FRAUDE, REEMBOLSO_PARCIAL, REEMBOLSADO, ERROR_TIMEOUT]
           example: APROBADO
         codigoAutorizacion:
           type: string
@@ -723,6 +821,8 @@ components:
         - amount
         - currency
         - captured_at
+        - refunded_amount
+        - bookings
       properties:
         payment_reference:
           type: string
@@ -731,12 +831,16 @@ components:
         status:
           type: string
           description: Estado normalizado del cobro para el consumidor externo.
-          enum: [CAPTURED, REFUNDED, FAILED]
+          enum: [CAPTURED, PARTIALLY_REFUNDED, REFUNDED, FAILED]
           example: CAPTURED
         amount:
           type: number
-          description: Monto total efectivamente capturado.
+          description: Monto total capturado (cero si el cobro fue rechazado).
           example: 220.00
+        refunded_amount:
+          type: number
+          description: Monto reembolsado acumulado hasta el momento.
+          example: 25.00
         currency:
           type: string
           description: Código de divisa ISO 4217.
@@ -756,3 +860,21 @@ components:
           nullable: true
           description: Código de autorización de la red adquirente.
           example: AUTH-PAG-A1B2C3D4
+        bookings:
+          type: array
+          description: Identificadores de reservas asociadas explícitamente a este pago.
+          items:
+            type: string
+          example: [RES-VUE-123]
+
+    AsociarReservaPagoInput:
+      type: object
+      additionalProperties: false
+      required: [reserva_id]
+      properties:
+        reserva_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Identificador de negocio de la reserva ya creada.
+          example: RES-VUE-123

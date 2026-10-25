@@ -13,6 +13,7 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
   public readonly QUEUES = {
     BUSQUEDAS_MASIVAS: 'q.busquedas.masivas',
     ORDENES_CONFIRMADAS: 'q.ordenes.confirmadas',
+    PAGOS_PROCESADOS: 'q.pagos.procesados',
     SAGAS_COMPENSACION: 'q.sagas.compensacion',
     STOCK_ACTUALIZADO: 'q.stock.actualizado',
     DEAD_LETTER: 'q.dead_letter',
@@ -53,8 +54,12 @@ export class RabbitMqEventBusService implements OnModuleInit, OnModuleDestroy {
       await this.channel.assertQueue(this.QUEUES.ORDENES_CONFIRMADAS, { durable: true });
       await this.channel.bindQueue(this.QUEUES.ORDENES_CONFIRMADAS, this.EXCHANGE_NAME, 'order.confirmed');
 
+      await this.channel.assertQueue(this.QUEUES.PAGOS_PROCESADOS, { durable: true });
+      await this.channel.bindQueue(this.QUEUES.PAGOS_PROCESADOS, this.EXCHANGE_NAME, 'payment.completed');
+
       await this.channel.assertQueue(this.QUEUES.SAGAS_COMPENSACION, { durable: true });
       await this.channel.bindQueue(this.QUEUES.SAGAS_COMPENSACION, this.EXCHANGE_NAME, 'saga.compensate');
+      await this.channel.bindQueue(this.QUEUES.SAGAS_COMPENSACION, this.EXCHANGE_NAME, 'payment.refunded');
 
       await this.channel.assertQueue(this.QUEUES.STOCK_ACTUALIZADO, { durable: true });
       await this.channel.bindQueue(this.QUEUES.STOCK_ACTUALIZADO, this.EXCHANGE_NAME, 'stock.updated');
