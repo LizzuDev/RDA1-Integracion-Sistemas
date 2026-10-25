@@ -67,7 +67,15 @@ async function bootstrap() {
   );
   app.use(requestLogger.use.bind(requestLogger));
 
-  app.useBodyParser('json', { limit: LIMITE_CUERPO });
+  app.useBodyParser('json', {
+    limit: LIMITE_CUERPO,
+    type: ['application/json', 'application/cloudevents+json'],
+    verify: (request, _response, buffer) => {
+      if (/^\/api\/v2\/webhooks(?:\/|\?|$)/.test(request.url || '')) {
+        (request as typeof request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+      }
+    },
+  });
   app.useBodyParser('urlencoded', { limit: LIMITE_CUERPO, extended: true });
 
   // Habilita CORS para que el frontend pueda llamar al backend.
@@ -103,8 +111,10 @@ async function bootstrap() {
       // API key de los sistemas de proveedores (sincronización de alojamientos).
       'x-api-key',
       'X-Api-Key',
+      'x-webhook-signature',
+      'X-Webhook-Signature',
     ],
-    exposedHeaders: ['X-Correlation-Id', 'traceparent', 'node_id'],
+    exposedHeaders: ['X-Correlation-Id', 'traceparent', 'node_id', 'Idempotent-Replayed'],
     credentials: true,
   });
 
