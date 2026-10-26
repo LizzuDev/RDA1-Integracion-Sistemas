@@ -111,6 +111,11 @@ api.interceptors.request.use(async (config) => {
     (config.headers as AxiosHeaders).set('Authorization', `Bearer ${accessToken}`);
   }
 
+  // Si la petición va dirigida a /v2/, ajustar el baseURL de /api/v1 a /api
+  if (config.url?.startsWith('/v2/') && config.baseURL?.endsWith('/api/v1')) {
+    config.baseURL = config.baseURL.replace(/\/api\/v1$/, '/api');
+  }
+
   // Trazabilidad distribuida: inyectar X-Correlation-Id (RDA2)
   if (!(config.headers as AxiosHeaders).get('X-Correlation-Id')) {
     (config.headers as AxiosHeaders).set(

@@ -853,8 +853,8 @@ paths:
         Permite renderizar en el frontend un monitor tipo grafo donde los microservicios activos
         se colorean en **verde** y los servicios fallidos o compensados en **rojo**.
       operationId: getTrazaGrafo
-      x-source: 'n/a'
-      x-status: planned
+      x-source: 'src/modules/observabilidad/observabilidad.controller.ts'
+      x-status: implemented
       x-microservice: MS_AUD
       security:
         - SupabaseBearer: []
