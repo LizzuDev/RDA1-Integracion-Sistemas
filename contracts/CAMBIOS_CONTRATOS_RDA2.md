@@ -12,9 +12,10 @@
 
 La evolución de la versión 1 a la versión 2 de los contratos OpenAPI responde a la transición formal desde el prototipo monolítico API-First hacia un **ecosistema distribuido basado en microservicios, resiliencia y agregación multimodal**.
 
-Se formalizan dos contratos enriquecidos para ser entregados a los equipos de desarrollo externos:
+Se formalizan tres contratos enriquecidos para ser entregados a los equipos de desarrollo externos:
 1. `contracts/atracciones-openapi-v2.yaml` (Vertical de Atracciones Turísticas).
 2. `contracts/autos-openapi-v2.yaml` (Vertical de Renta de Autos).
+3. `contracts/alojamientos-openapi-v2.yaml` (Vertical de Alojamientos y Hospedaje Hotelero · v2.2.0 Enterprise).
 
 ---
 
@@ -52,7 +53,35 @@ Se formalizan dos contratos enriquecidos para ser entregados a los equipos de de
 
 ---
 
-## 4. Política de Compatibilidad hacia Atrás (Backward Compatibility)
+## 4. Vertical de Alojamientos y Hospedaje: Matriz Comparativa v1 vs v2
+
+| Característica / Dominio | Contrato v1 (`contracts/alojamientos-openapi.yaml` incipiente) | Contrato v2 (`contracts/alojamientos-openapi-v2.yaml`) | Justificación Técnica & Normativa |
+|---|---|---|---|
+| **Ruta Base Gateway** | `/search`, `/availability` planos | `/api/v2/alojamientos/*` canónicos | Homologación con Gateway NestJS y prevención de colisiones de rutas en Swagger UI. |
+| **Exploración de Catálogo** | Inexistente (solo `POST /search`) | **`GET /alojamientos`** y **`GET /alojamientos/{id}`** con galería de fotos, coordenadas GPS y políticas | Permite navegación REST Nivel 3 y exploración básica sin exigir rango de fechas inmediato. |
+| **Taxonomía y Categorías** | Inexistente | **`GET /alojamientos/categorias`** y **`GET /alojamientos/tipos`**: Hoteles Boutique, Resorts, Hosterías, Cabañas, Glamping con flags de amenidades | Paridad 1:1 con árbol de categorías de Atracciones. |
+| **Inventario de Habitaciones y Régimen** | No tipificado | **`GET /alojamientos/{id}/habitaciones`** con desglose de tipología (`tipos_habitacion`) y régimen (`DESAYUNO_INCLUIDO`, `TODO_INCLUIDO`) | Mapeo 1:1 con `schema_alojamientos.tipos_habitacion`. |
+| **Disponibilidad Dinámica** | `POST /availability` básico | **Doble endpoint:** `POST /alojamientos/availability` (cotización congelada TTL 30 min) y **`GET /alojamientos/{id}/availability`** (fechas y huéspedes por query URL) | Cumple tanto el checkout transaccional como el frontend directo (`alojamientosApi.js`). |
+| **Validación Rigurosa de Identidad** | Solo `identificacion` genérica | **`CustomerContactDto` & `HuespedTitularV2`** (discriminador): `document_type: [CEDULA, PASAPORTE, RUC]`, Cédula Módulo 10, RUC 13 dígitos, teléfono E.164 (`+593...` / `09...`) | Máxima rigurosidad de identidad legal ecuatoriana (paridad exacta con Atracciones v2). |
+| **Manejo Monetario Exacto** | Tipo flotante (`number`) | **Tipo `Money` (string decimal exacto `"560.00"`)** | Elimina desajustes de centavos por precisión binaria IEEE 754 en balances contables y sumas de IVA. |
+| **Modelo ARI (Industria Hotelera)** | Tarifa plana única por habitación | **`RatePlanV2`** (`FLEX_BB`, suplementos adultos/niños) + **`RestriccionesDiaV2`** (`MIN_STAY`, `MAX_STAY`, `CLOSED_TO_ARRIVAL`, `STOP_SELL`, `CUTOFF`) | Estándar global de GDS y Channel Managers (Cloudbeds, Amadeus, Sabre). |
+| **Resolución Polimórfica de IDs** | UUID rígido | **`OrderRef`**: acepta indistintamente UUID técnico (`orderId`), llave de negocio (`ORD-HTL-XXXX`) y código de huésped (`BK-HOTEL-XXXX`) | Permite a la orquestación Saga compensar y cancelar con el `external_order_id` sin búsquedas intermedias. |
+| **Idempotencia y Reintentos** | Cabecera básica | **Idempotencia formal**: cabecera `Idempotent-Replayed: true`, `422 IDEMPOTENCY_KEY_REUSED` y `409 IDEMPOTENCY_IN_PROGRESS` | Resiliencia ante timeouts y reintentos automáticos del ESB sin duplicación de cobros ni cupos. |
+| **Registro de Huéspedes Múltiples** | Solo titular | **Titular + Acompañantes** (`HuespedAcompananteV2` con `tipoDocumento`, `identificacion`, `esMenorEdad`, `edad`) | Cumple persistencia en `schema_alojamientos.huespedes_reserva` (Capa 1). |
+| **Reseñas y Social Proof** | Inexistente | **`GET /alojamientos/{id}/resenas`** y **`POST /alojamientos/{id}/resenas`** con desglose por pilares (Limpieza, Confort, Ubicación, Personal, Calidad-Precio) | Resuelve la deficiencia documentada en `RDA2_CONTRACT_UPDATES.md`. |
+| **Sagas y Respuesta Obligatoria** | Parcial | **Respuesta síncrona formal**: `201 Created` con `externalOrderId` o `409 Conflict` (`OUT_OF_STOCK` canónico, `QUOTE_EXPIRED`, `PRICE_MISMATCH`) | Orquestador Saga en ESB ejecuta rollback LIFO y reembolso 100% automático. |
+| **Enrutamiento Dual y Frontend** | Solo rutas internas | **Doble interfaz:** `/orders/*` para ESB/Saga + **`/reservations` y `/reservas`** para el frontend (`reservarAlojamiento`, `getReservasAlojamientos`) | Interoperabilidad 100% con orquestadores distribuidos y con la app web React. |
+| **Check-in Digital (Regla 14:00 Guayaquil)** | Básico | **Check-in digital estricto** (`POST /alojamientos/orders/{id}/check-in`): 422 si es < 14:00 (UTC-5), habitación física y PIN de cerradura digital (`x-secret: true`). Early check-in administrado vía PUT. | Cumple directriz docente RDA2 y LOPDP. |
+| **Check-out y Liberación** | Inexistente | **`POST /alojamientos/orders/{id}/checkout`**: consumos de minibar, revocación de PIN y liberación de cuarto | Cumple Ficha Técnica `MS_ALO` y ciclo de vida de hospedaje. |
+| **Seguridad M2M y B2B** | Solo Bearer genérico | **OAuth2 con Scopes** (`alojamientos:book`, `alojamientos:cancel`, etc.) + `BearerAuth` (JWT) + `ApiKeyAuth` heredado | Principio de mínimo privilegio M2M y LOPDP (`x-pii`). |
+| **Promociones B2B Mandato §9** | Flag booleano estático | **`GET /alojamientos/promociones/contrato`** y **`PUT /alojamientos/promociones/contrato`** | Cumple Cátedra RDA2 §9: define si acepta combos y porcentaje máximo de descuento. |
+| **Salud de Nodo (Semáforo 🟢/🔴)** | Inexistente | **`GET /alojamientos/health`**: latencia, uptime y métricas de ocupación | Cumple Criterio CE01 y Cátedra RDA2 §2 para monitoreo visual en Panel 1. |
+| **Eventos Asíncronos (EDA)** | Schema sin endpoints | **CloudEvents v1.0**: `alojamiento.reserva.confirmada`, `alojamiento.reserva.cancelada`, `alojamiento.checkin.completado`, `alojamiento.checkout.completado` y Outbox **`GET /alojamientos/eventos`** (orden estricto `sequence`) | Cumple Criterio CE03 y Event Bus RabbitMQ. |
+| **Sincronización y Reconciliación de Stock** | No especificada | **gRPC Inbound HTTP/2** en puerto 50051 (`inventory.proto`) + **`GET /alojamientos/{id}/inventario`** (fuente de verdad ante divergencia de `last_sync_hash`) | Cumple directriz de la cátedra: stock en tiempo real sin saturar PostgreSQL y reconciliación garantizada. |
+
+---
+
+## 5. Política de Compatibilidad hacia Atrás (Backward Compatibility)
 
 Para asegurar que clientes existentes y evaluaciones previas del Reto 1 continúen funcionando sin disrupciones:
 
@@ -73,7 +102,7 @@ Para asegurar que clientes existentes y evaluaciones previas del Reto 1 continú
 
 ---
 
-## 5. Protocolo de Errores Estandarizados (RFC 7807 Problem Details)
+## 6. Protocolo de Errores Estandarizados (RFC 7807 Problem Details)
 
 Todos los microservicios y respuestas del API Gateway en la especificación v2 implementan el estándar RFC 7807 con cabecera `Content-Type: application/problem+json`:
 
@@ -91,11 +120,12 @@ Todos los microservicios y respuestas del API Gateway en la especificación v2 i
 
 ---
 
-## 6. Guía de Entrega para Equipos Externos (Atracciones y Autos)
+## 7. Guía de Entrega para Equipos Externos (Atracciones, Autos y Alojamientos)
 
 Los archivos de especificación OpenAPI listos para ser consumidos e implementados por los equipos externos son:
 - **Atracciones:** `contracts/atracciones-openapi-v2.yaml`
 - **Renta de Autos:** `contracts/autos-openapi-v2.yaml`
+- **Alojamientos:** `contracts/alojamientos-openapi-v2.yaml`
 - **Protocol Buffers para Stock Inbound:** `src/proto/inventory.proto`
 
 **Requisitos no negociables para las tiendas externas:**

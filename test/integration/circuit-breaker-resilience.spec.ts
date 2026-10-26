@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { NodesService } from '../../src/modules/nodes/nodes.service';
 import { NodesController } from '../../src/modules/nodes/nodes.controller';
 import { ConfigProveedor } from '../../src/modules/nodes/entities';
+import { Atraccion } from '../../src/modules/atracciones/entities/atraccion.entity';
 import { ConnectorHealthService } from '../../src/modules/admin/connector-health.service';
 import { DilanAtraccionesAdapter } from '../../src/modules/atracciones/acl/dilan-atracciones.adapter';
 import { AutosCircuitBreakerAdapter } from '../../src/modules/autos/acl/autos-circuit-breaker.adapter';
@@ -40,6 +41,14 @@ describe('Paso 3: Orquestación de Conectores Externos y Resiliencia Circuit Bre
       mockConfigRepoData.push(nuevo);
       return Promise.resolve(nuevo);
     }),
+    count: jest.fn().mockImplementation(() => Promise.resolve(mockConfigRepoData.length)),
+  };
+
+  const mockAtraccionRepo = {
+    find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+    save: jest.fn().mockImplementation((e) => Promise.resolve(e)),
+    create: jest.fn().mockImplementation((dto) => dto),
   };
 
   const mockHttpService = {
@@ -62,6 +71,7 @@ describe('Paso 3: Orquestación de Conectores Externos y Resiliencia Circuit Bre
         SupabaseAuthGuard,
         RolesGuard,
         { provide: getRepositoryToken(ConfigProveedor), useValue: mockConfigRepo },
+        { provide: getRepositoryToken(Atraccion), useValue: mockAtraccionRepo },
         { provide: HttpService, useValue: mockHttpService },
       ],
     }).compile();
