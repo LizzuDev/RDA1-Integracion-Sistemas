@@ -171,14 +171,17 @@ paths:
 
   /admin/nodes/{serviceId}/toggle:
     post:
+      deprecated: true
       tags:
         - Admin - Nodos y Kill-Switches (Panel 1)
-      summary: Conmutar kill-switch para desconectar/conectar una tienda externa en tiempo real
+      summary: Conmutar kill-switch para desconectar/conectar una tienda externa en tiempo real (DEPRECATED)
       description: |
+        [DEPRECATED: La ruta canónica oficial es POST /admin/nodes/{codigoNodo}/toggle-killswitch].
         Desconecta inmediatamente un microservicio del catálogo central activando
         su Circuit Breaker en modo `MANUALLY_OPEN`. El Gateway interceptará peticiones
         hacia dicho nodo y responderá con contingencias locales (mocks de contingencia).
-        Registra el evento en la bitácora física de auditoría.
+        Registra el evento en la bitácora física de auditoría. Retorna encabezados `Deprecation: true`
+        y `Link: </api/v2/admin/nodes/{serviceId}/toggle-killswitch>; rel="successor-version"`.
       operationId: toggleNode
       x-source: 'src/modules/admin/admin.controller.ts#toggleNode'
       x-status: implemented

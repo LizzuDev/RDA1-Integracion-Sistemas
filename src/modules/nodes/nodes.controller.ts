@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Delete, Param, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, HttpCode, HttpStatus, UseGuards, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth, ApiHeader, ApiBody } from '@nestjs/swagger';
 import { NodesService } from './nodes.service';
 import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
@@ -92,15 +92,25 @@ export class NodesController {
   @UseGuards(SupabaseAuthGuard, RolesGuard)
   @Roles(Rol.ADMIN, Rol.MANTENIMIENTO)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Alternar switch de un nodo socio desde el Panel 1 de Administración' })
+  @ApiOperation({
+    summary: 'Alternar switch de un nodo socio desde el Panel 1 de Administración (DEPRECATED: Usar POST /admin/nodes/{codigoNodo}/toggle-killswitch)',
+    deprecated: true,
+  })
   @ApiParam({ name: 'codigoNodo', description: 'Código o ID del nodo' })
+  @ApiResponse({ status: 200, description: 'Kill-switch conmutado (incluye cabecera Deprecation y Link sucesor)' })
   @ApiResponse({ status: 401, description: 'No autenticado' })
   @ApiResponse({ status: 403, description: 'Acceso restringido (requiere rol ADMIN o MANTENIMIENTO)' })
   async toggleNodePublic(
     @Param('codigoNodo') codigoNodo: string,
-    @Body() body?: { activar?: boolean },
+    @Body() body?: { activar?: boolean; enabled?: boolean },
+    @Res({ passthrough: true }) res?: any,
   ) {
-    return this.nodesService.toggleKillSwitch(codigoNodo, body?.activar);
+    if (res?.setHeader) {
+      res.setHeader('Deprecation', 'true');
+      res.setHeader('Link', `</api/v2/admin/nodes/${codigoNodo}/toggle-killswitch>; rel="successor-version"`);
+    }
+    const activar = body?.activar !== undefined ? body.activar : (body?.enabled !== undefined ? !body.enabled : undefined);
+    return this.nodesService.toggleKillSwitch(codigoNodo, activar);
   }
 
   @Get('admin/nodes')
@@ -165,16 +175,17 @@ export class NodesController {
   @Roles(Rol.ADMIN)
   @ApiBearerAuth()
   @ApiHeader({ name: 'X-Admin-Key', description: 'Clave de administración para pruebas automáticas', required: false })
-  @ApiOperation({ summary: 'Alternar en vivo el Kill-Switch de un nodo socio (Rol ADMIN - Cátedra RDA2 §2)' })
-  @ApiParam({ name: 'codigoNodo', description: 'Código del nodo (ej. NODE_ATR_DILAN)' })
+  @ApiOperation({ summary: 'Alternar en vivo el Kill-Switch de un nodo socio (Rol ADMIN - Canónico RDA2 §2)' })
+  @ApiParam({ name: 'codigoNodo', description: 'Código del nodo (ej. NODE_ATR_DILAN o serviceId como atracciones)' })
   @ApiResponse({ status: 200, description: 'Estado del Kill-Switch actualizado inmediatamente.' })
   @ApiResponse({ status: 401, description: 'No autenticado' })
   @ApiResponse({ status: 403, description: 'Acceso restringido (requiere rol ADMIN)' })
   async toggleKillSwitch(
     @Param('codigoNodo') codigoNodo: string,
-    @Body() body?: { activar?: boolean },
+    @Body() body?: { activar?: boolean; enabled?: boolean },
   ) {
-    return this.nodesService.toggleKillSwitch(codigoNodo, body?.activar);
+    const activar = body?.activar !== undefined ? body.activar : (body?.enabled !== undefined ? !body.enabled : undefined);
+    return this.nodesService.toggleKillSwitch(codigoNodo, activar);
   }
 
   @Post('admin/nodes/:codigoNodo/ping')

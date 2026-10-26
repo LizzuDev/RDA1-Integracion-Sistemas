@@ -278,12 +278,68 @@ export class NodesService {
     };
   }
 
-  async toggleKillSwitch(codigoNodo: string, activar?: boolean): Promise<any> {
-    const nodo = await this.configRepo.findOne({
-      where: [{ codigoNodo }, { id: codigoNodo }],
+  /**
+   * Resuelve un nodo socio a partir de su codigoNodo ('NODE_ATR_DILAN'),
+   * UUID 'id', o serviceId/vertical ('atracciones', 'autos', etc.).
+   */
+  async buscarNodo(identificador: string): Promise<ConfigProveedor | null> {
+    if (!identificador) return null;
+
+    // 1. Coincidencia directa por codigoNodo o id
+    let nodo = await this.configRepo.findOne({
+      where: [{ codigoNodo: identificador }, { id: identificador }],
     });
+    if (nodo) return nodo;
+
+    // 2. Mapeo de alias comunes de serviceId -> Vertical
+    const aliasMap: Record<string, string> = {
+      atracciones: 'ATRACCIONES',
+      tours: 'ATRACCIONES',
+      autos: 'AUTOS',
+      cars: 'AUTOS',
+      renta_autos: 'AUTOS',
+      alojamientos: 'ALOJAMIENTOS',
+      hoteles: 'ALOJAMIENTOS',
+      hospedaje: 'ALOJAMIENTOS',
+      vuelos: 'VUELOS',
+      flights: 'VUELOS',
+      grpc_inventory: 'INFRAESTRUCTURA',
+    };
+
+    const idLower = identificador.toLowerCase();
+    const vertical = aliasMap[idLower] || identificador.toUpperCase();
+
+    nodo = await this.configRepo.findOne({
+      where: { vertical },
+    });
+    if (nodo) return nodo;
+
+    // 3. Fallback: buscar coincidencia en todos los nodos si la tabla no está vacía
+    const all = await this.configRepo.find();
+    if (all && all.length > 0) {
+      const match = all.find(
+        (n: ConfigProveedor) =>
+          n.codigoNodo.toLowerCase() === idLower ||
+          n.vertical.toLowerCase() === idLower ||
+          n.nombreProveedor.toLowerCase().includes(idLower),
+      );
+      if (match) return match;
+    }
+
+    // 4. Si la tabla estuviese vacía, sembrar y reintentar
+    const count = await this.configRepo.count();
+    if (count === 0) {
+      await this.sembrarNodosPorDefecto();
+      return this.buscarNodo(identificador);
+    }
+
+    return null;
+  }
+
+  async toggleKillSwitch(codigoNodo: string, activar?: boolean): Promise<any> {
+    const nodo = await this.buscarNodo(codigoNodo);
     if (!nodo) {
-      throw new HttpException(`Nodo con código o id '${codigoNodo}' no encontrado`, HttpStatus.NOT_FOUND);
+      throw new HttpException(`Nodo con código, serviceId o id '${codigoNodo}' no encontrado`, HttpStatus.NOT_FOUND);
     }
 
     const nuevoEstado = activar !== undefined ? activar : !nodo.killSwitchActivo;
@@ -326,6 +382,17 @@ export class NodesService {
       mensaje: nuevoEstado
         ? `Kill-Switch ACTIVADO para ${nodo.nombreProveedor}. Las peticiones a este socio serán bloqueadas de inmediato.`
         : `Kill-Switch DESACTIVADO para ${nodo.nombreProveedor}. Tráfico normal restablecido.`,
+      message: nuevoEstado
+        ? `Conector '${nodo.nombreProveedor}' desconectado (Kill-Switch ACTIVO)`
+        : `Conector '${nodo.nombreProveedor}' conectado exitosamente`,
+      node: {
+        id: nodo.vertical.toLowerCase(),
+        nombre: nodo.nombreProveedor,
+        vertical: nodo.vertical,
+        enabled: !nuevoEstado,
+        status: nuevoEstado ? 'DISABLED' : 'ONLINE',
+        circuitBreaker: nuevoEstado ? 'MANUALLY_OPEN' : 'CLOSED',
+      },
     };
   }
 

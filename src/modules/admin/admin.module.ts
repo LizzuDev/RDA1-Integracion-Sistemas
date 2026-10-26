@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { AdminController } from './admin.controller';
@@ -18,6 +18,8 @@ import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
 import { Alojamiento } from '../alojamientos/entities/alojamiento.entity';
 import { CoreModule } from '../../core/core.module';
 import { AlojamientosModule } from '../alojamientos/alojamientos.module';
+import { NodesModule } from '../nodes/nodes.module';
+import { FinanzasModule } from '../finanzas/finanzas.module';
 
 /**
  * Global para que otros módulos (p. ej. Facturas, Adaptadores) puedan leer la configuración
@@ -31,6 +33,8 @@ import { AlojamientosModule } from '../alojamientos/alojamientos.module';
     HttpModule,
     // Las acciones del panel sobre hospedaje pasan por las reglas del propio módulo.
     AlojamientosModule,
+    forwardRef(() => NodesModule),
+    forwardRef(() => FinanzasModule),
   ],
   controllers: [AdminController, PublicConfigController, ProveedoresPublicController],
   providers: [

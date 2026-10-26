@@ -374,18 +374,19 @@ paths:
 
   /nodes/{codigoNodo}/toggle:
     post:
+      deprecated: true
       tags:
         - Nodos y Proveedores - Consulta Pública y Conexión
-      summary: Alternar kill-switch de un nodo socio desde el Panel 1 de Administración
+      summary: Alternar kill-switch de un nodo socio desde el Panel 1 de Administración (DEPRECATED)
       description: |
+        [DEPRECATED: La ruta canónica oficial es POST /admin/nodes/{codigoNodo}/toggle-killswitch].
         Invierte o fuerza el estado del Kill-Switch de un conector externo.
         - Si se activa: Marca `kill_switch_activo = true`, `health_status = 'DOWN'` y `circuit_breaker_estado = 'OPEN'`.
           Sincroniza en memoria con `ConnectorHealthService` para interceptar llamadas y activar contingencias.
         - Si se desactiva: Restablece el tráfico normal hacia el microservicio socio.
 
         Requiere sesión Supabase válida y rol `ADMIN` o `MANTENIMIENTO`. La ruta se conserva
-        para compatibilidad y el frontend administrativo usa la ruta canónica protegida
-        `/admin/nodes/{codigoNodo}/toggle-killswitch`.
+        para compatibilidad y retorna encabezados `Deprecation: true` y `Link: </api/v2/admin/nodes/{codigoNodo}/toggle-killswitch>; rel="successor-version"`.
       operationId: toggleNodePublic
       x-source: 'src/modules/nodes/nodes.controller.ts#toggleNodePublic'
       x-status: implemented

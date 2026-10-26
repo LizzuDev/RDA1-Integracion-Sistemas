@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Reserva } from '../vuelos/entities/reserva.entity';
@@ -6,6 +6,7 @@ import { OrderAuto } from '../autos/entities/order-auto.entity';
 import { ReservaAtraccion } from '../atracciones/entities/reserva.entity';
 import { ReservaAlojamiento } from '../alojamientos/entities/reserva.entity';
 import { AdminConfigService } from './admin-config.service';
+import { FinanzasService } from '../finanzas/finanzas.service';
 
 /** Estados que significan "el cliente ya pagó". */
 export const PAGADAS = new Set(['CONFIRMED', 'CONFIRMADA', 'PAGADA', 'PAID', 'TICKET_ISSUING', 'TICKETED', 'ISSUED', 'COMPLETED']);
@@ -55,20 +56,21 @@ export class AdminFinanzasService {
   private readonly logger = new Logger(AdminFinanzasService.name);
 
   constructor(
-    private readonly dataSource: DataSource,
-    private readonly configService: AdminConfigService,
-    @InjectRepository(Reserva) private readonly reservaRepo: Repository<Reserva>,
-    @InjectRepository(OrderAuto) private readonly orderAutoRepo: Repository<OrderAuto>,
-    @InjectRepository(ReservaAtraccion) private readonly reservaAtraccionRepo: Repository<ReservaAtraccion>,
-    @InjectRepository(ReservaAlojamiento) private readonly reservaAlojamientoRepo: Repository<ReservaAlojamiento>,
+    @Optional() private readonly finanzasService?: FinanzasService,
+    @Optional() private readonly dataSource?: DataSource,
+    @Optional() private readonly configService?: AdminConfigService,
+    @Optional() @InjectRepository(Reserva) private readonly reservaRepo?: Repository<Reserva>,
+    @Optional() @InjectRepository(OrderAuto) private readonly orderAutoRepo?: Repository<OrderAuto>,
+    @Optional() @InjectRepository(ReservaAtraccion) private readonly reservaAtraccionRepo?: Repository<ReservaAtraccion>,
+    @Optional() @InjectRepository(ReservaAlojamiento) private readonly reservaAlojamientoRepo?: Repository<ReservaAlojamiento>,
   ) {}
 
   private async movimientos(): Promise<Mov[]> {
     const [vuelos, autos, atracciones, hospedaje] = await Promise.all([
-      this.reservaRepo.find().catch((e) => { this.logger.error(`Finanzas vuelos: ${e.message}`); return [] as Reserva[]; }),
-      this.orderAutoRepo.find().catch((e) => { this.logger.error(`Finanzas autos: ${e.message}`); return [] as OrderAuto[]; }),
-      this.reservaAtraccionRepo.find().catch((e) => { this.logger.error(`Finanzas atracciones: ${e.message}`); return [] as ReservaAtraccion[]; }),
-      this.reservaAlojamientoRepo.find().catch((e) => { this.logger.error(`Finanzas hospedaje: ${e.message}`); return [] as ReservaAlojamiento[]; }),
+      this.reservaRepo?.find().catch((e) => { this.logger.error(`Finanzas vuelos: ${e.message}`); return [] as Reserva[]; }) || Promise.resolve([] as Reserva[]),
+      this.orderAutoRepo?.find().catch((e) => { this.logger.error(`Finanzas autos: ${e.message}`); return [] as OrderAuto[]; }) || Promise.resolve([] as OrderAuto[]),
+      this.reservaAtraccionRepo?.find().catch((e) => { this.logger.error(`Finanzas atracciones: ${e.message}`); return [] as ReservaAtraccion[]; }) || Promise.resolve([] as ReservaAtraccion[]),
+      this.reservaAlojamientoRepo?.find().catch((e) => { this.logger.error(`Finanzas hospedaje: ${e.message}`); return [] as ReservaAlojamiento[]; }) || Promise.resolve([] as ReservaAlojamiento[]),
     ]);
     return [
       ...vuelos.map((v) => ({
@@ -94,6 +96,7 @@ export class AdminFinanzasService {
   }
 
   private async pagosRegistrados() {
+    if (!this.dataSource || !this.configService) return [];
     await this.configService.asegurarEsquema();
     return this.dataSource.query(
       `SELECT vertical, periodo, SUM(monto_pagado)::float AS pagado, COUNT(*)::int AS pagos,
@@ -149,7 +152,10 @@ export class AdminFinanzasService {
   }
 
   async getFinanzas() {
-    const cfg = await this.configService.getConfig();
+    if (this.finanzasService && (!this.dataSource || !this.reservaRepo)) {
+      return this.finanzasService.getFinanzas();
+    }
+    const cfg = this.configService ? await this.configService.getConfig() : { comisionBase: 10, tasaImpuestos: 15 };
     const pct = cfg.comisionBase;
     const iva = cfg.tasaImpuestos;
     const [movs, pagos] = await Promise.all([this.movimientos(), this.pagosRegistrados()]);
@@ -222,19 +228,23 @@ export class AdminFinanzasService {
   }
 
   /**
-   * Aprueba (paga) lo pendiente de una liquidación vertical+periodo,
-   * calculada con las reservas reales de la base.
+   * Aprueba (paga) lo pendiente de una liquidación vertical+periodo.
+   * Si FinanzasService está presente, delega en él para unificar el motor contable.
    */
   async aprobarPayout(
     body: { vertical: string; periodo: string; referencia?: string; bruto?: number; reservas?: number },
     actor: string | null,
   ) {
+    if (this.finanzasService?.aprobarPayout) {
+      return this.finanzasService.aprobarPayout(body, actor);
+    }
+
     const { vertical, periodo } = body || ({} as any);
     if (!VERTICALES[vertical]) throw new BadRequestException(`Vertical inválida: ${vertical}`);
     if (!/^\d{4}-\d{2}$/.test(periodo || '')) throw new BadRequestException('periodo debe tener formato YYYY-MM');
 
     const fin = await this.getFinanzas();
-    const liq = fin.liquidaciones.find((l) => l.vertical === vertical && l.periodo === periodo);
+    const liq = fin.liquidaciones.find((l: any) => l.vertical === vertical && l.periodo === periodo);
     if (!liq) throw new BadRequestException(`No hay reservas pagadas para ${vertical} en ${periodo}`);
 
     if (liq.pendiente <= 0.009) throw new BadRequestException('Esta liquidación ya está pagada por completo.');
@@ -259,12 +269,18 @@ export class AdminFinanzasService {
   }
 
   async historialPayouts() {
-    await this.configService.asegurarEsquema();
-    const rows = await this.dataSource.query(
-      `SELECT id, vertical, periodo, reservas, monto_bruto::float AS bruto, comision_pct::float AS "comisionPct",
-              comision::float AS comision, monto_pagado::float AS pagado, referencia, aprobado_por AS "aprobadoPor", aprobado_en AS "aprobadoEn"
-       FROM panel_liquidaciones ORDER BY aprobado_en DESC LIMIT 100`,
-    );
-    return rows.map((r: any) => ({ ...r, proveedor: VERTICALES[r.vertical] || r.vertical }));
+    if (this.finanzasService && !this.dataSource) {
+      return this.finanzasService.historialPayouts();
+    }
+    if (this.configService && this.dataSource) {
+      await this.configService.asegurarEsquema();
+      const rows = await this.dataSource.query(
+        `SELECT id, vertical, periodo, reservas, monto_bruto::float AS bruto, comision_pct::float AS "comisionPct",
+                comision::float AS comision, monto_pagado::float AS pagado, referencia, aprobado_por AS "aprobadoPor", aprobado_en AS "aprobadoEn"
+         FROM panel_liquidaciones ORDER BY aprobado_en DESC LIMIT 100`,
+      );
+      return rows.map((r: any) => ({ ...r, proveedor: VERTICALES[r.vertical] || r.vertical }));
+    }
+    return [];
   }
 }

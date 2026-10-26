@@ -1,4 +1,4 @@
-import { BadRequestException, UseInterceptors, Controller, Get, Put, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, UseInterceptors, Controller, Get, Put, Post, Body, Param, Query, Req, Res, UseGuards, Optional } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminErrorsInterceptor } from './admin-errors.interceptor';
@@ -8,8 +8,8 @@ import { AdminAuditService, actorDesdeRequest } from './admin-audit.service';
 import { AdminProveedoresService } from './admin-proveedores.service';
 import { SupabaseAuthGuard } from '../../core/guards/supabase-auth.guard';
 import { AdminRoleGuard } from '../../core/guards/admin-role.guard';
-
 import { ConnectorHealthService } from './connector-health.service';
+import { NodesService } from '../nodes/nodes.service';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -25,6 +25,7 @@ export class AdminController {
     private readonly auditService: AdminAuditService,
     private readonly proveedoresService: AdminProveedoresService,
     private readonly connectorHealthService: ConnectorHealthService,
+    @Optional() private readonly nodesService?: NodesService,
   ) {}
 
   // ── Monitor de Nodos del Ecosistema y Kill-Switches (RDA2 Brecha B-03) ───
@@ -36,25 +37,48 @@ export class AdminController {
   }
 
   @Post('nodes/:serviceId/toggle')
-  @ApiOperation({ summary: 'Conmutar switch (kill-switch) para desconectar/conectar una tienda externa en tiempo real' })
+  @ApiOperation({
+    summary: 'Conmutar switch (kill-switch) para desconectar/conectar una tienda externa en tiempo real (DEPRECATED: Usar POST /admin/nodes/{codigoNodo}/toggle-killswitch)',
+    deprecated: true,
+  })
   async toggleNode(
     @Param('serviceId') serviceId: string,
-    @Body() body: { enabled?: boolean },
+    @Body() body: { enabled?: boolean; activar?: boolean },
     @Req() req: any,
+    @Res({ passthrough: true }) res?: any,
   ) {
-    const node = this.connectorHealthService.toggleNode(serviceId, body?.enabled);
+    if (res?.setHeader) {
+      res.setHeader('Deprecation', 'true');
+      res.setHeader('Link', `</api/v2/admin/nodes/${serviceId}/toggle-killswitch>; rel="successor-version"`);
+    }
+
+    const actor = actorDesdeRequest(req);
+    const activar = body?.activar !== undefined ? body.activar : (body?.enabled !== undefined ? !body.enabled : undefined);
+
+    let result: any;
+    if (this.nodesService) {
+      result = await this.nodesService.toggleKillSwitch(serviceId, activar);
+    } else {
+      const node = this.connectorHealthService.toggleNode(serviceId, body?.enabled !== undefined ? body.enabled : (activar !== undefined ? !activar : undefined));
+      result = {
+        success: true,
+        codigo_nodo: serviceId,
+        kill_switch_activo: !node.enabled,
+        estado: node.enabled ? 'OPERATIVO' : 'APAGADO',
+        message: `Conector '${node.nombre}' ${node.enabled ? 'conectado exitosamente' : 'desconectado (Kill-Switch ACTIVO)'}`,
+        node,
+      };
+    }
+
     await this.auditService.registrar(
-      actorDesdeRequest(req),
-      `Conmutó kill-switch para conector ${node.nombre} -> ${node.enabled ? 'CONECTADO' : 'DESCONECTADO'}`,
+      actor,
+      `Conmutó kill-switch para conector ${serviceId} -> ${result.kill_switch_activo ? 'DESCONECTADO' : 'CONECTADO'}`,
       'nodo_red',
       serviceId,
-      { enabled: node.enabled, status: node.status, circuit_breaker: node.circuitBreaker }
+      { kill_switch_activo: result.kill_switch_activo, estado: result.estado },
     );
-    return {
-      success: true,
-      message: `Conector '${node.nombre}' ${node.enabled ? 'conectado exitosamente' : 'desconectado (Kill-Switch ACTIVO)'}`,
-      node,
-    };
+
+    return result;
   }
 
   @Post('nodes/:serviceId/ping')

@@ -251,7 +251,7 @@ function MicroserviciosTab() {
     setToggleLoading(prev => ({ ...prev, [nodeId]: true }));
     setAviso(null);
     try {
-      const { data } = await api.post(`/admin/nodes/${nodeId}/toggle`);
+      const { data } = await api.post(`/admin/nodes/${nodeId}/toggle-killswitch`);
       setNodesData(prev => ({
         ...prev,
         nodes: prev.nodes.map(n => n.id === nodeId ? data.node : n),
@@ -831,8 +831,8 @@ function ProveedoresTab() {
   const toggleActivo = async (prov) => {
     const codigo = prov.codigo_nodo || prov.codigo || prov.id;
     try {
-      const { data } = await api.post(`/nodes/${codigo}/toggle`);
-      setAviso({ tipo: 'success', texto: data.mensaje });
+      const { data } = await api.post(`/admin/nodes/${codigo}/toggle-killswitch`);
+      setAviso({ tipo: 'success', texto: data.mensaje || data.message });
       await cargarProveedores();
     } catch (e) {
       setAviso({ tipo: 'error', texto: apiErrorMsg(e, 'Error al alternar estado del nodo') });
