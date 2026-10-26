@@ -2,10 +2,13 @@ syntax = "proto3";
 
 package inventory;
 
-// Servicio gRPC Inbound para recepción de actualizaciones de inventario en tiempo real
-// Las tiendas individuales envían su stock hacia Booking Prototipo mediante HTTP/2 multiplexado
+// ============================================================================
+// SERVICIO gRPC INBOUND: InventoryStockService (Booking Prototipo - RDA2)
+// ============================================================================
+// Las tiendas individuales envían su stock hacia Booking mediante HTTP/2 (puerto 50051).
+// Booking Prototipo consume/recibe inventario vía gRPC y se comunica hacia las tiendas vía REST.
 service InventoryStockService {
-  // Envío puntual de actualización de cupos
+  // Envío puntual unario de actualización de cupos
   rpc PushStockUpdate (StockUpdateMessage) returns (StockUpdateAck);
 
   // Streaming continuo de eventos de cambio de inventario
@@ -14,17 +17,22 @@ service InventoryStockService {
 
 message StockUpdateMessage {
   string service_id = 1;      // Identificador de la tienda (ej. "atracciones-dilan")
-  string item_id = 2;         // ID de la atracción o tour
+  string item_id = 2;         // ID del recurso en su vertical
   string date = 3;            // Fecha en formato YYYY-MM-DD
-  string time_slot = 4;       // Franja horaria (ej. "10:30 a.m.")
+  string time_slot = 4;       // Franja horaria (ej. "10:30", "DEFAULT")
   int32 available_units = 5;  // Cupos remanentes disponibles
-  int64 timestamp = 6;        // Epoch timestamp
+  int64 timestamp = 6;        // Epoch Unix timestamp en ms
+  string resource_type = 7;   // Clasificación opcional (VUELO, AUTO, ATRACCION, ALOJAMIENTO)
+  string correlation_id = 8;  // Correlation-ID universal
+  string traceparent = 9;     // W3C Trace Context
 }
 
 message StockUpdateAck {
   bool success = 1;
   string message = 2;
   int64 processed_at = 3;
+  string error_code = 4;
+  string correlation_id = 5;
 }
 
 message StockChangeEvent {
@@ -33,8 +41,9 @@ message StockChangeEvent {
   string item_id = 3;
   string date = 4;
   string time_slot = 5;
-  int32 delta = 6;            // Cambio neto (+1, -2)
+  int32 delta = 6;            // Variación neta (+1 liberación, -1 hold/compra)
   int64 timestamp = 7;
+  string correlation_id = 8;
 }
 
 message StreamSummary {

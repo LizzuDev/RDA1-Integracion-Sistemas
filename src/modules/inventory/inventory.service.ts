@@ -93,7 +93,7 @@ export class InventoryService {
       time_slot: timeSlot,
       available_units: availableUnits,
       last_updated: new Date().toISOString(),
-      source: 'GRPC_PUSH'
+      source: msg.source || 'GRPC_PUSH'
     };
 
     this.stockRegistry.set(key, record);

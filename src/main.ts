@@ -175,24 +175,32 @@ async function bootstrap() {
   ];
   const protoPath = protoCandidates.find(p => fs.existsSync(p)) || protoCandidates[2];
   const grpcPort = process.env.GRPC_PORT || 50051;
+  const grpcEnabled = process.env.GRPC_ENABLED !== 'false';
 
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.GRPC,
-    options: {
-      package: 'inventory',
-      protoPath,
-      url: `0.0.0.0:${grpcPort}`,
-      loader: {
-        keepCase: true,
+  if (grpcEnabled) {
+    app.connectMicroservice<MicroserviceOptions>({
+      transport: Transport.GRPC,
+      options: {
+        package: 'inventory',
+        protoPath,
+        url: `0.0.0.0:${grpcPort}`,
+        loader: {
+          keepCase: true,
+        },
       },
-    },
-  });
+    });
 
-  await app.startAllMicroservices();
+    await app.startAllMicroservices();
+  }
+
   const httpPort = process.env.PORT || 3000;
   await app.listen(httpPort);
   const logger = app.get(WinstonPhysicalLoggerService);
   logger.log(`Servidor HTTP/REST listo en puerto ${httpPort}`);
-  logger.log(`Servidor gRPC Inbound listo en puerto ${grpcPort} (proto: ${protoPath})`);
+  if (grpcEnabled) {
+    logger.log(`Servidor gRPC Inbound listo en puerto ${grpcPort} (proto: ${protoPath})`);
+  } else {
+    logger.log(`Servidor gRPC Inbound deshabilitado (GRPC_ENABLED=false)`);
+  }
 }
 bootstrap();

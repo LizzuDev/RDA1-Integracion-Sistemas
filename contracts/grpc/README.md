@@ -219,3 +219,22 @@ Si el entorno de producción en Render presenta limitaciones para exponer gRPC d
    * Utilizar un contenedor Envoy o middleware de gRPC-Web en NestJS para canalizar llamadas gRPC codificadas sobre peticiones HTTP/1.1 y HTTP/2 estándar en el puerto principal.
 3. **Red Privada / Túnel Seguro (Tailscale / Cloudflare Tunnel / Private Networking):**
    * Interconectar los microservicios de las tiendas y el Gateway a través de un túnel seguro punto a punto, permitiendo acceso directo al socket `50051` sin depender del balanceador público de Render.
+
+---
+
+## 8. Implementación Oficial I09: Unificación, Autenticación y Alterno REST
+
+### 8.1. Principio Arquitectónico de Asimetría de Comunicación
+- **Inbound (Ellos nos envían):** Las tiendas externas envían variaciones y sincronizaciones de stock hacia Booking Prototipo mediante **gRPC sobre HTTP/2** (`InventoryStockService` en socket `0.0.0.0:50051`) o mediante la ruta de contingencia **REST `POST /api/v2/inventory/stock`**.
+- **Outbound (Nosotros les enviamos / consultamos):** Booking Prototipo se comunica con las tiendas satélites (Vuelos, Autos, Atracciones, Alojamientos) consumiendo exclusivamente sus **APIs REST** oficiales documentadas en sus respectivos contratos OpenAPI.
+
+### 8.2. Características de Seguridad y Resiliencia Implementadas
+1. **Unificación Protobuf (`src/proto/inventory.proto`):** Se conservan los tags 1 a 6 de `StockUpdateMessage` y se extienden con tags 7 (`resource_type`), 8 (`correlation_id`) y 9 (`traceparent`), preservando compatibilidad binaria estricta hacia atrás.
+2. **Autenticación por Metadata gRPC:**
+   - Toda llamada gRPC entrante debe suministrar la clave en los metadatos `x-api-key`.
+   - Se valida contra `INVENTORY_API_KEYS` o `ALOJAMIENTOS_API_KEYS` utilizando comparación criptográfica en tiempo constante (`crypto.timingSafeEqual`).
+   - Si la clave está ausente o es incorrecta, se responde con código de estado gRPC `Status.UNAUTHENTICATED` (16).
+3. **Validación de Mensajes:** Si los campos obligatorios (`service_id`, `item_id`, `date`) están vacíos o `available_units < 0`, se rechaza con `Status.INVALID_ARGUMENT` (3).
+4. **Ruta Alterna REST Inbound:** Expuesta en `POST /api/v2/inventory/stock` (y `/inventory/stock`) autenticada mediante cabecera `X-Api-Key` para permitir sincronización inmediata desde entornos donde HTTP/2 multiplexado no esté habilitado.
+5. **Control de Arranque `GRPC_ENABLED`:** El socket `:50051` se inicia condicionado a `process.env.GRPC_ENABLED !== 'false'`, garantizando que el backend arranque limpiamente tanto en desarrollo local como en Render Web Service.
+
