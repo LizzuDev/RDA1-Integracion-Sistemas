@@ -1,7 +1,13 @@
 const { Client } = require('pg');
+// Usa DATABASE_URL (p. ej. la base de `supabase start`); nunca credenciales en el código.
+if (!process.env.DATABASE_URL) {
+  console.error('Falta DATABASE_URL');
+  process.exit(1);
+}
+const esLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL);
 const client = new Client({
-  connectionString: 'postgresql://postgres.owseuntgcgvflqpnmwcc:Semestre%402026@aws-0-us-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true',
-  ssl: { rejectUnauthorized: false }
+  connectionString: process.env.DATABASE_URL,
+  ssl: esLocal ? false : { rejectUnauthorized: false }
 });
 
 async function seed() {
