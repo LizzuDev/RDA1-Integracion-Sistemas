@@ -42,7 +42,10 @@ import { SecurityModule } from './core/security/security.module';
         url: configService.get<string>('DATABASE_URL'),
         autoLoadEntities: true,
         synchronize: false,
-        ssl: { rejectUnauthorized: false }, // Requerido por Supabase en producción
+        // SSL requerido por Supabase en producción; el Postgres local (supabase start, Docker) no lo soporta.
+        ssl: /@(localhost|127\.0\.0\.1)[:/]/.test(configService.get<string>('DATABASE_URL') || '')
+          ? false
+          : { rejectUnauthorized: false },
         extra: { max: 10 }, // Aumentado a 10 para evitar bloqueos en desarrollo
       }),
     }),
