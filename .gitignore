@@ -49,3 +49,6 @@ src/modules/*/pruebas/
 seed-ecuador.cjs
 
 alejo/
+
+# Esquema GraphQL autogenerado al arrancar (autoSchemaFile)
+src/schema.gql
