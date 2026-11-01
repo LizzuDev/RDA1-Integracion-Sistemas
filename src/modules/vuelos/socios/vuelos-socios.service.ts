@@ -138,6 +138,37 @@ export class VuelosSociosService {
     return out;
   }
 
+  /**
+   * El contrato usa dos formas de segmento: en búsqueda `departure: {iataCode, at}`
+   * y en reservas `departureIataCode` / `departureAt`. Algunas aerolíneas mandan
+   * la de búsqueda también en la reserva; se completan ambas formas para que el
+   * frontend (y Mis Reservas) funcionen con cualquiera.
+   */
+  static normalizarSegmentos(valor: any): any {
+    if (Array.isArray(valor)) return valor.map((v) => VuelosSociosService.normalizarSegmentos(v));
+    if (!valor || typeof valor !== 'object') return valor;
+    const out: any = {};
+    for (const [k, v] of Object.entries(valor)) out[k] = VuelosSociosService.normalizarSegmentos(v);
+    if (Array.isArray(out.segments)) {
+      out.segments = out.segments.map((seg: any) => {
+        if (!seg || typeof seg !== 'object') return seg;
+        const n = { ...seg };
+        n.departureIataCode ??= seg.departure?.iataCode;
+        n.departureAt ??= seg.departure?.at;
+        n.arrivalIataCode ??= seg.arrival?.iataCode;
+        n.arrivalAt ??= seg.arrival?.at;
+        if (!n.departure && (seg.departureIataCode || seg.departureAt)) {
+          n.departure = { iataCode: seg.departureIataCode, at: seg.departureAt, terminal: seg.departureTerminal ?? null };
+        }
+        if (!n.arrival && (seg.arrivalIataCode || seg.arrivalAt)) {
+          n.arrival = { iataCode: seg.arrivalIataCode, at: seg.arrivalAt, terminal: seg.arrivalTerminal ?? null };
+        }
+        return n;
+      });
+    }
+    return out;
+  }
+
   /** Quita `<nodo>~` antes de enviar el cuerpo al socio. */
   static quitarPrefijos(valor: any): any {
     if (Array.isArray(valor)) return valor.map((v) => VuelosSociosService.quitarPrefijos(v));
@@ -265,7 +296,7 @@ export class VuelosSociosService {
       }
       const lista: any[] = Array.isArray(datos?.offers) ? datos.offers : Array.isArray(datos) ? datos : [];
       const ofertas = lista.map((o) => ({
-        ...VuelosSociosService.prefijarIds(o, nodo.codigoNodo),
+        ...VuelosSociosService.normalizarSegmentos(VuelosSociosService.prefijarIds(o, nodo.codigoNodo)),
         provider: { nodeCode: nodo.codigoNodo, name: nodo.nombreProveedor, emoji: nodo.emoji || '✈️' },
       }));
       resumen.ok = true;
@@ -342,7 +373,10 @@ export class VuelosSociosService {
       this.logger.log(`[vuelos-socios] ${metodo} ${url} -> ${res.status}`);
       return {
         status: res.status,
-        body: datos && typeof datos === 'object' ? VuelosSociosService.prefijarIds(datos, nodo.codigoNodo) : datos,
+        body:
+          datos && typeof datos === 'object'
+            ? VuelosSociosService.normalizarSegmentos(VuelosSociosService.prefijarIds(datos, nodo.codigoNodo))
+            : datos,
         headers,
       };
     } catch (e: any) {
@@ -354,9 +388,34 @@ export class VuelosSociosService {
       );
     }
   }
+
+  /**
+   * Para rutas sin id de socio (p. ej. `GET /flights/{n}/status`): pregunta a
+   * todas las aerolíneas activas y devuelve la primera respuesta 2xx.
+   */
+  async primeraRespuesta(
+    metodo: string,
+    segmentos: string[],
+    query: string,
+    entrantes: Record<string, any>,
+    hostPropio?: string,
+  ): Promise<RespuestaProxy> {
+    const nodos = await this.nodosActivos(hostPropio);
+    if (nodos.length === 0) {
+      return problema(404, 'Sin aerolíneas', 'No hay aerolíneas socias registradas en Booking.');
+    }
+    const respuestas = await Promise.all(
+      nodos.map((n) => this.reenviar(n.codigoNodo, metodo, segmentos, query, null, entrantes)),
+    );
+    return (
+      respuestas.find((r) => r.status >= 200 && r.status < 300) ??
+      respuestas.find((r) => r.status === 404) ??
+      respuestas[0]
+    );
+  }
 }
 
-function precioTotal(oferta: any): number {
+export function precioTotal(oferta: any): number {
   const candidatos = [
     oferta?.grandTotal?.total,
     oferta?.price?.total,

@@ -8,6 +8,8 @@ import { SupabaseOrquestadorService } from './supabase-orquestador.service';
 import { ConfigProveedor } from '../nodes/entities/config-proveedor.entity';
 import { VuelosSociosService } from './socios/vuelos-socios.service';
 import { VuelosSociosMiddleware } from './socios/vuelos-socios.middleware';
+import { VuelosSociosReservasService } from './socios/vuelos-socios-reservas.service';
+import { PagosModule } from '../pagos/pagos.module';
 
 import {
   // ── Bloque 1 · Catálogo e Inventario (3) ──
@@ -128,9 +130,9 @@ const ENTIDADES = [
 ];
 
 @Module({
-  imports: [CommonModule, TypeOrmModule.forFeature([...ENTIDADES, ConfigProveedor])],
+  imports: [CommonModule, PagosModule, TypeOrmModule.forFeature([...ENTIDADES, ConfigProveedor])],
   controllers: [VuelosController],
-  providers: [VuelosService, SupabaseOrquestadorService, VuelosSociosService, VuelosSociosMiddleware],
+  providers: [VuelosService, SupabaseOrquestadorService, VuelosSociosService, VuelosSociosReservasService, VuelosSociosMiddleware],
   exports: [SupabaseOrquestadorService, VuelosSociosService, VuelosSociosMiddleware],
 })
 export class VuelosModule {}

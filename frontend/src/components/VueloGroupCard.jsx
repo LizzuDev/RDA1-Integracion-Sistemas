@@ -50,6 +50,16 @@ export function VueloGroupCard({ ofertasGrupo, onSeleccionarTarifa }) {
 
   const estado = primerSegmento ? ESTADOS_ES[primerSegmento.status] : null;
 
+  // Las aerolíneas socias deberían enviar `stopsCount` y `totalDurationMinutes`
+  // (obligatorios en el contrato); si faltan, se calculan desde los segmentos
+  // para no pintar "undefined escala(s)".
+  const escalas = primerItinerario?.stopsCount ?? Math.max(segmentos.length - 1, 0);
+  const duracionTotal =
+    primerItinerario?.totalDurationMinutes ??
+    (primerSegmento?.departure?.at && ultimoSegmento?.arrival?.at
+      ? Math.round((new Date(ultimoSegmento.arrival.at) - new Date(primerSegmento.departure.at)) / 60000)
+      : undefined);
+
   return (
     <>
     <article 
@@ -78,7 +88,7 @@ export function VueloGroupCard({ ofertasGrupo, onSeleccionarTarifa }) {
           <div className="vuelo-timeline" style={{ flex: 2 }}>
             <div className="vuelo-line-container" style={{ flexDirection: 'column', alignItems: 'center' }}>
               <span style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: 600, marginBottom: '4px' }}>
-                {primerItinerario?.stopsCount === 0 ? 'Directo' : `${primerItinerario?.stopsCount} escala(s)`} | {formatearDuracion(primerItinerario?.totalDurationMinutes)}
+                {escalas === 0 ? 'Directo' : `${escalas} escala(s)`} | {formatearDuracion(duracionTotal)}
               </span>
               <div className="vuelo-line-dashed">
                 <span className="vuelo-plane-icon">✈️</span>
