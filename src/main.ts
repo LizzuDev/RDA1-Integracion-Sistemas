@@ -81,10 +81,6 @@ async function bootstrap() {
   });
   app.useBodyParser('urlencoded', { limit: LIMITE_CUERPO, extended: true });
 
-  // RDA2 · Vuelos: Booking agrega a las aerolíneas socias (búsqueda en paralelo
-  // y reenvío de hold/reserva a la aerolínea dueña). Ver vuelos-socios.service.ts.
-  app.use(app.get(VuelosSociosMiddleware).handler());
-
   // Habilita CORS para que el frontend pueda llamar al backend.
   //
   // `X-Device-Fingerprint` es OBLIGATORIA en `POST /vuelos/search` (contrato
@@ -124,6 +120,13 @@ async function bootstrap() {
     exposedHeaders: ['X-Correlation-Id', 'traceparent', 'node_id', 'Idempotent-Replayed'],
     credentials: true,
   });
+
+  // RDA2 · Vuelos: Booking agrega a las aerolíneas socias (búsqueda en paralelo,
+  // reserva con cobro y reenvío a la aerolínea dueña). Ver vuelos-socios.service.ts.
+  // Va DESPUÉS de los body parsers (usa req.body) y de CORS: este middleware
+  // responde por sí mismo, y montado antes de `enableCors` el navegador
+  // bloqueaba sus respuestas por falta de Access-Control-Allow-Origin.
+  app.use(app.get(VuelosSociosMiddleware).handler());
 
   app.setGlobalPrefix('api');
   app.enableVersioning({

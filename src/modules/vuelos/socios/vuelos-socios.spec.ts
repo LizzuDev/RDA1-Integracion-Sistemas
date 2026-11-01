@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import * as express from 'express';
 import { VuelosSociosService } from './vuelos-socios.service';
 import { VuelosSociosMiddleware } from './vuelos-socios.middleware';
+import { resumenDeReserva } from './vuelos-socios-reservas.service';
 
 /**
  * Prueba el agregador contra aerolíneas FALSAS levantadas en un puerto local.
@@ -40,6 +41,22 @@ describe('VuelosSociosService (agregador de aerolíneas)', () => {
         }
         if (ruta === '/api/v2/vuelos/offers/hold' && req.method === 'POST') {
           return json(201, { holdId: `HOLD-${nodo}`, offerId: body.offerId });
+        }
+        if (ruta.startsWith('/api/v2/vuelos/offers/hold/') && req.method === 'GET') {
+          return json(200, { holdId: ruta.split('/').pop(), lockedPrice: { currency: 'USD', total: '150.00' } });
+        }
+        if (ruta === '/api/v2/vuelos/bookings' && req.method === 'POST') {
+          if (nodo === 'oauth') return json(409, { title: 'Sin cupo', detail: 'El vuelo se llenó.' });
+          return json(201, {
+            bookingId: 'BK-1', pnr: 'ABC123', status: 'CONFIRMED', grandTotal: { currency: 'USD', total: '150.00' },
+            itineraries: [{ segments: [{ departure: { iataCode: 'UIO', at: '2026-11-10T08:00:00-05:00' }, arrival: { iataCode: 'GYE', at: '2026-11-10T09:00:00-05:00' } }] }],
+          });
+        }
+        if (/\/api\/v2\/vuelos\/bookings\/[^/]+\/cancel$/.test(ruta)) {
+          return json(200, { bookingId: ruta.split('/')[5], pnr: 'ABC123', status: 'CANCELLED', refund: { refundId: 'R1', amount: '125.00' } });
+        }
+        if (ruta.startsWith('/api/v2/vuelos/flights/')) {
+          return nodo === 'oauth' ? json(200, { flightNumber: 'RA101', status: 'DELAYED' }) : json(404, { title: 'no opera' });
         }
         if (ruta.startsWith('/api/v2/vuelos/bookings/') && req.method === 'GET') {
           return json(200, { bookingId: ruta.split('/').pop(), status: 'CONFIRMED' });
@@ -112,6 +129,18 @@ describe('VuelosSociosService (agregador de aerolíneas)', () => {
     expect(VuelosSociosService.detectarNodo(['bookings', '3f2a-uuid-local'], { holdId: 'uuid-local' })).toBeNull();
   });
 
+  it('completa las dos formas de segmento (búsqueda y reserva) para el frontend', () => {
+    const anidado = { itineraries: [{ segments: [{ departure: { iataCode: 'UIO', at: '2026-11-10T07:00:00-05:00' }, arrival: { iataCode: 'GYE', at: '2026-11-10T08:00:00-05:00' } }] }] };
+    const plano = { itineraries: [{ segments: [{ departureIataCode: 'UIO', departureAt: '2026-11-10T07:00:00-05:00', arrivalIataCode: 'GYE', arrivalAt: '2026-11-10T08:00:00-05:00' }] }] };
+    const a = VuelosSociosService.normalizarSegmentos(anidado).itineraries[0].segments[0];
+    const b = VuelosSociosService.normalizarSegmentos(plano).itineraries[0].segments[0];
+    expect(a).toMatchObject({ departureIataCode: 'UIO', arrivalAt: '2026-11-10T08:00:00-05:00' });
+    expect(b).toMatchObject({ departure: { iataCode: 'UIO' }, arrival: { at: '2026-11-10T08:00:00-05:00' } });
+    expect(resumenDeReserva({ ...plano, grandTotal: { currency: 'USD', total: '99.50' } })).toMatchObject({
+      origin: 'UIO', destination: 'GYE', departureDate: '2026-11-10', total: 99.5,
+    });
+  });
+
   it('no consulta nodos que apuntan a Booking mismo (seeds localhost)', () => {
     expect(original('http://localhost:3000/api/v2/vuelos')).toBe(true);
     expect(original('https://booking.example.com/api/v2/vuelos', 'booking.example.com')).toBe(true);
@@ -121,12 +150,40 @@ describe('VuelosSociosService (agregador de aerolíneas)', () => {
   describe('middleware sobre Express', () => {
     let app: http.Server;
     let base: string;
-    const local = { searchFlights: jest.fn(async () => ({ offers: [{ offerId: 'LOCAL-1' }] })) };
+    const local = {
+      searchFlights: jest.fn(async () => ({ offers: [{ offerId: 'LOCAL-1' }] })),
+      listarReservas: jest.fn(async () => ({ items: [{ bookingId: 'local-uuid', createdAt: '2020-01-01T00:00:00Z' }], nextCursor: null })),
+    };
+    const DUENO = '11111111-1111-4111-8111-111111111111';
+    const OTRO = '22222222-2222-4222-8222-222222222222';
+    const copias = new Map<string, any>();
+    const cobros: any[] = [];
+    const reembolsos: any[] = [];
+    const reservasFalsas = {
+      cobrar: jest.fn(async (monto: number, idem: string, propietario: string) => {
+        cobros.push({ monto, idem, propietario });
+        return monto > 1000 ? { ok: false, status: 402, detalle: 'Fondos insuficientes' } : { ok: true, transaccionId: 'tx-1', paymentReference: 'AUTH-777' };
+      }),
+      reembolsar: jest.fn(async (tx: string, monto: number, motivo: string) => {
+        reembolsos.push({ tx, monto, motivo });
+        return monto;
+      }),
+      registrar: jest.fn(async (d: any) => copias.set(d.bookingId, { ...d, transaccionId: d.cobro?.transaccionId, status: 'CONFIRMED', createdAt: new Date().toISOString() })),
+      obtener: jest.fn(async (id: string) => copias.get(id) ?? null),
+      actualizarDesdeSocio: jest.fn(async () => undefined),
+      marcarEstado: jest.fn(async (id: string, status: string) => copias.has(id) && (copias.get(id).status = status)),
+      listar: jest.fn(async (prop: string) =>
+        [...copias.values()].filter((c) => c.propietarioId === prop).map((c) => ({
+          bookingId: c.bookingId, codigoNodo: c.codigoNodo, pnr: 'ABC123', status: c.status, origin: 'UIO', destination: 'GYE',
+          departureDate: '2026-11-10', currency: 'USD', grandTotal: 150, createdAt: c.createdAt,
+        })),
+      ),
+    };
 
     beforeAll(async () => {
       const e = express();
       e.use(express.json());
-      e.use(new VuelosSociosMiddleware(crear(), local as any).handler());
+      e.use(new VuelosSociosMiddleware(crear(), local as any, reservasFalsas as any).handler());
       e.use((_req, res) => res.status(299).json({ local: true }));
       app = await new Promise((r) => {
         const s = e.listen(0, '127.0.0.1', () => r(s));
@@ -157,13 +214,81 @@ describe('VuelosSociosService (agregador de aerolíneas)', () => {
       delete process.env.VUELOS_FUENTE;
     });
 
-    it('reenvía GET de una reserva de aerolínea y deja pasar las rutas locales', async () => {
+    it('no expone reservas de socio no registradas y deja pasar las rutas locales', async () => {
+      // Una reserva de socio que Booking no registró no se expone (protección IDOR).
       const r = await fetch(`${base}/api/v2/vuelos/bookings/${encodeURIComponent('NODE_VUE_KEY~BK-77')}`);
-      expect(r.status).toBe(200);
-      expect(await r.json()).toEqual({ bookingId: 'NODE_VUE_KEY~BK-77', status: 'CONFIRMED' });
+      expect(r.status).toBe(404);
 
       const localRes = await fetch(`${base}/api/v2/vuelos/bookings/uuid-local`);
       expect(localRes.status).toBe(299);
+    });
+
+    const conDueno = (prop: string, extra: Record<string, string> = {}) => ({
+      'Content-Type': 'application/json', 'X-Device-Fingerprint': prop, ...extra,
+    });
+
+    it('reserva: cobra el precio del hold, envía la referencia real y guarda la copia', async () => {
+      const r = await fetch(`${base}/api/v2/vuelos/bookings`, {
+        method: 'POST', headers: conDueno(DUENO, { 'Idempotency-Key': 'idem-ok' }),
+        body: JSON.stringify({ holdId: 'NODE_VUE_KEY~HOLD-key', passengers: [], payment: { paymentReference: 'pay_falso_del_front' } }),
+      });
+      const datos = await r.json();
+      expect(r.status).toBe(201);
+      expect(datos.bookingId).toBe('NODE_VUE_KEY~BK-1');
+      expect(cobros.at(-1)).toEqual({ monto: 150, idem: 'idem-ok', propietario: DUENO });
+      const enviada = llamadas.find((c) => c.url === '/api/v2/vuelos/bookings' && c.method === 'POST')!;
+      expect(enviada.body.payment.paymentReference).toBe('AUTH-777');
+      expect(enviada.body.holdId).toBe('HOLD-key');
+      expect(copias.get('NODE_VUE_KEY~BK-1')).toMatchObject({ propietarioId: DUENO, codigoNodo: 'NODE_VUE_KEY' });
+    });
+
+    it('reserva: si la aerolínea rechaza, Booking reembolsa (SAGA)', async () => {
+      const r = await fetch(`${base}/api/v2/vuelos/bookings`, {
+        method: 'POST', headers: conDueno(DUENO, { 'Idempotency-Key': 'idem-falla' }),
+        body: JSON.stringify({ holdId: 'NODE_VUE_OAUTH~HOLD-oauth', passengers: [] }),
+      });
+      expect(r.status).toBe(409);
+      expect((await r.json()).detail).toMatch(/reembolsó/);
+      expect(reembolsos.at(-1)).toMatchObject({ tx: 'tx-1', monto: 150 });
+    });
+
+    it('reserva: sin Idempotency-Key no se cobra', async () => {
+      const antes = cobros.length;
+      const r = await post('/api/v2/vuelos/bookings', { holdId: 'NODE_VUE_KEY~HOLD-key' });
+      expect(r.status).toBe(400);
+      expect(cobros.length).toBe(antes);
+    });
+
+    it('Mis Reservas: lista las reservas de socios del dueño, no las de otro', async () => {
+      const mias = await (await fetch(`${base}/api/v2/vuelos/bookings?limit=20`, { headers: conDueno(DUENO) })).json();
+      expect(mias.items.map((i: any) => i.bookingId)).toEqual(['NODE_VUE_KEY~BK-1']);
+      expect(mias.items[0]).toMatchObject({ origin: 'UIO', destination: 'GYE', grandTotal: { total: '150.00' } });
+      const ajenas = await (await fetch(`${base}/api/v2/vuelos/bookings`, { headers: conDueno(OTRO) })).json();
+      expect(ajenas.items).toEqual([]);
+    });
+
+    it('detalle: otro usuario recibe 404 aunque conozca el id (IDOR)', async () => {
+      const id = encodeURIComponent('NODE_VUE_KEY~BK-1');
+      expect((await fetch(`${base}/api/v2/vuelos/bookings/${id}`, { headers: conDueno(OTRO) })).status).toBe(404);
+      expect((await fetch(`${base}/api/v2/vuelos/bookings/${id}`, { headers: conDueno(DUENO) })).status).toBe(200);
+    });
+
+    it('cancelar: Booking ejecuta el reembolso que calcula la aerolínea', async () => {
+      const id = encodeURIComponent('NODE_VUE_KEY~BK-1');
+      const r = await fetch(`${base}/api/v2/vuelos/bookings/${id}/cancel`, {
+        method: 'POST', headers: conDueno(DUENO, { 'Idempotency-Key': 'c-1' }), body: JSON.stringify({ quoteId: 'Q1' }),
+      });
+      const datos = await r.json();
+      expect(r.status).toBe(200);
+      expect(datos.refund).toMatchObject({ amount: '125.00', executedByBooking: true, executedAmount: '125.00' });
+      expect(reembolsos.at(-1)).toMatchObject({ tx: 'tx-1', monto: 125 });
+      expect(copias.get('NODE_VUE_KEY~BK-1').status).toBe('CANCELLED');
+    });
+
+    it('estado de vuelo: responde la aerolínea que opera el vuelo', async () => {
+      const r = await fetch(`${base}/api/v2/vuelos/flights/RA101/status?date=2026-11-10`);
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ flightNumber: 'RA101', status: 'DELAYED' });
     });
 
     it('modo local: todo sigue al controlador de siempre', async () => {
