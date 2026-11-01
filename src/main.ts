@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { VuelosSociosMiddleware } from './modules/vuelos/socios/vuelos-socios.middleware';
 import { NestFactory } from '@nestjs/core';
 import { VersioningType } from '@nestjs/common';
 import { ExpressAdapter, NestExpressApplication } from '@nestjs/platform-express';
@@ -79,6 +80,10 @@ async function bootstrap() {
     },
   });
   app.useBodyParser('urlencoded', { limit: LIMITE_CUERPO, extended: true });
+
+  // RDA2 · Vuelos: Booking agrega a las aerolíneas socias (búsqueda en paralelo
+  // y reenvío de hold/reserva a la aerolínea dueña). Ver vuelos-socios.service.ts.
+  app.use(app.get(VuelosSociosMiddleware).handler());
 
   // Habilita CORS para que el frontend pueda llamar al backend.
   //

@@ -111,12 +111,16 @@ export function VuelosPage() {
   }
 
   const ofertas = resultados?.offers ?? [];
+  // RDA2: Booking agrega a las aerolíneas socias; `sources` dice cuál respondió.
+  const fuentes = resultados?.sources ?? [];
+  const fuentesCaidas = fuentes.filter(f => !f.ok);
 
   // Agrupar ofertas por número de vuelo para el diseño de acordeón moderno
   const ofertasAgrupadas = Object.values(
     ofertas.reduce((acc, oferta) => {
       // Usamos los números de vuelo de todos los segmentos como clave de agrupación
-      const key = oferta.itineraries?.[0]?.segments?.map(s => s.flightNumber).join('-');
+      // Se incluye la aerolínea socia para no mezclar vuelos de dos e-commerce distintos.
+      const key = `${oferta.provider?.nodeCode ?? ''}|${oferta.itineraries?.[0]?.segments?.map(s => s.flightNumber).join('-')}`;
       if (!acc[key]) acc[key] = [];
       acc[key].push(oferta);
       return acc;
@@ -280,6 +284,16 @@ export function VuelosPage() {
           <div className="state-container">
             <div className="error-icon" aria-hidden="true">🔎</div>
             <h3 className="state-title">No encontramos vuelos</h3>
+            {resultados?.meta?.fuente && fuentes.length === 0 && (
+              <p className="state-subtitle">
+                Aún no hay aerolíneas socias conectadas. Regístralas en Admin → Servicios &amp; Prov. (tipo Vuelos).
+              </p>
+            )}
+            {fuentesCaidas.length > 0 && (
+              <p className="state-subtitle">
+                No respondieron: {fuentesCaidas.map(f => `${f.nombre} (${f.error || 'sin respuesta'})`).join(', ')}.
+              </p>
+            )}
             <p className="state-subtitle">
               No encontramos vuelos para esta ruta en la fecha seleccionada.<br /><br />
               <b>💡 Consejo:</b> Intenta mover tu fecha de salida un día antes o un día después.
@@ -303,6 +317,12 @@ export function VuelosPage() {
               )}
               .
             </p>
+            {fuentes.length > 0 && (
+              <p className="section-subtitle" style={{ marginTop: '-8px', marginBottom: '16px', fontSize: '0.9rem' }}>
+                ✈️ {fuentes.length - fuentesCaidas.length} de {fuentes.length} aerolíneas respondieron
+                {fuentesCaidas.length > 0 && <> · sin respuesta: {fuentesCaidas.map(f => f.nombre).join(', ')}</>}
+              </p>
+            )}
 
             <div className="atracciones-grid vuelo-grid">
               {ofertasAgrupadas.map((grupoOfertas, indice) => (
