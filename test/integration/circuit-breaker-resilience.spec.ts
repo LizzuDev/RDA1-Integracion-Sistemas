@@ -92,8 +92,9 @@ describe('Paso 3: Orquestación de Conectores Externos y Resiliencia Circuit Bre
       const dilanNode = nodos.find((n) => n.codigo_nodo === 'NODE_ATR_DILAN');
       expect(dilanNode).toBeDefined();
       expect(dilanNode.vertical).toBe('ATRACCIONES');
-      expect(dilanNode.semaforo_led.icono).toBe('🟢');
-      expect(dilanNode.semaforo_led.estado).toBe('HEALTHY');
+      // Recién sembrado nadie lo ha verificado con un ping real: no puede salir en verde.
+      expect(dilanNode.semaforo_led.icono).toBe('⚪');
+      expect(dilanNode.semaforo_led.estado).toBe('UNKNOWN');
       expect(dilanNode.url).toBe(process.env.TIENDA_ATRACCIONES_URL || 'http://100.88.114.108:8080/api/v3');
 
       // Compatibilidad con campos de Panel 1

@@ -60,6 +60,10 @@ export class NodesService {
       } else if (n.healthStatus === 'DOWN' || n.tasaFallosPct >= 50) {
         ledColor = '🔴';
         ledStatus = 'DOWN';
+      } else if (n.healthStatus === 'UNKNOWN') {
+        // Nunca verificado con un ping real (o sin URL http): no se pinta verde.
+        ledColor = '⚪';
+        ledStatus = 'UNKNOWN';
       } else if (n.healthStatus === 'DEGRADED' || n.latenciaMs > 800 || n.tasaFallosPct > 5) {
         ledColor = '🟡';
         ledStatus = 'DEGRADED';
@@ -139,8 +143,9 @@ export class NodesService {
       baseUrlRest: url.trim(),
       endpointGrpc: dto.endpointGrpc || dto.endpoint_grpc || null,
       apiKey: (dto.apiKey || dto.api_key || '').trim() || null,
-      healthStatus: 'HEALTHY',
-      latenciaMs: 25,
+      // Un nodo recién registrado NO está "en línea" hasta que un ping real lo confirme.
+      healthStatus: 'UNKNOWN',
+      latenciaMs: 0,
       killSwitchActivo: false,
       circuitBreakerEstado: 'CLOSED',
       tasaFallosPct: 0.00,
@@ -309,7 +314,8 @@ export class NodesService {
       nodo.healthStatus = 'DOWN';
       nodo.circuitBreakerEstado = 'OPEN';
     } else {
-      nodo.healthStatus = 'HEALTHY';
+      // Al reactivar no se sabe si responde: queda "sin verificar" hasta el próximo ping.
+      nodo.healthStatus = 'UNKNOWN';
       nodo.circuitBreakerEstado = 'CLOSED';
     }
     const guardado = await this.configRepo.save(nodo);
@@ -356,10 +362,12 @@ export class NodesService {
     }
 
     const t0 = Date.now();
-    let latencia = 25;
-    let online = true;
+    let latencia = 0;
+    let online = false;
+    let verificable = false;
 
     if (nodo.baseUrlRest && (nodo.baseUrlRest.startsWith('http://') || nodo.baseUrlRest.startsWith('https://'))) {
+      verificable = true;
       try {
         const cleanBase = nodo.baseUrlRest.replace(/\/+$/, '');
         const verticalHealth = nodo.vertical === 'ATRACCIONES' ? `${cleanBase}/atracciones/health` : (nodo.vertical === 'AUTOS' ? `${cleanBase}/autos/health` : `${cleanBase}/health`);
@@ -389,15 +397,17 @@ export class NodesService {
         latencia = Date.now() - t0;
         online = false;
       }
-    } else {
-      latencia = Math.floor(Math.random() * 40) + 15;
     }
+    // Sin URL http(s) no hay nada que medir: antes se inventaba una latencia
+    // aleatoria y el nodo salía "en línea". Ahora queda "sin verificar".
 
     nodo.latenciaMs = latencia;
     nodo.ultimoPingAt = new Date();
     if (!nodo.killSwitchActivo) {
       const umbralDegradado = nodo.baseUrlRest?.startsWith('https://') ? 3000 : 1200;
-      nodo.healthStatus = online ? (latencia > umbralDegradado ? 'DEGRADED' : 'HEALTHY') : 'DOWN';
+      nodo.healthStatus = !verificable
+        ? 'UNKNOWN'
+        : online ? (latencia > umbralDegradado ? 'DEGRADED' : 'HEALTHY') : 'DOWN';
     }
     await this.configRepo.save(nodo);
 
@@ -408,6 +418,7 @@ export class NodesService {
       latenciaMs: latencia,
       health_status: nodo.healthStatus,
       online: nodo.healthStatus === 'HEALTHY' || nodo.healthStatus === 'DEGRADED',
+      verificado: verificable,
       timestamp: nodo.ultimoPingAt,
     };
   }
@@ -709,8 +720,8 @@ export class NodesService {
         baseUrlRest: 'http://100.88.114.108:8080/api/v3',
         endpointGrpc: bookingGrpc,
         apiKey: '40f8a31375e24536bf1dd8f48dd48a94c7187e498b5df568',
-        healthStatus: 'HEALTHY',
-        latenciaMs: 35,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -726,8 +737,8 @@ export class NodesService {
         baseUrlRest: 'http://100.74.154.34:3001/api/v3',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 25,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -743,8 +754,8 @@ export class NodesService {
         baseUrlRest: 'http://100.126.104.108:3000/api/v2',
         endpointGrpc: bookingGrpc,
         apiKey: 'atr_PMaHffqZE4ao_bk1bMuqzA0xXzeAbr5nZ6qOcnV7gsAu_Vh7B65zWOYM',
-        healthStatus: 'HEALTHY',
-        latenciaMs: 30,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -760,8 +771,8 @@ export class NodesService {
         baseUrlRest: 'http://100.67.28.33:3000/api/v3',
         endpointGrpc: bookingGrpc,
         apiKey: 'atr-f575172d62a81d51e87fbc0a37952d984ce1c078',
-        healthStatus: 'HEALTHY',
-        latenciaMs: 30,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -777,8 +788,8 @@ export class NodesService {
         baseUrlRest: 'http://100.64.117.64:3000/api/v2',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 30,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -796,8 +807,8 @@ export class NodesService {
         baseUrlRest: 'http://100.124.9.75:3000/api/v3',
         endpointGrpc: bookingGrpc,
         apiKey: 'KdAHH2_mzMP3feumO8jrQk1TTwwJ7DHInvvB94Hp7os',
-        healthStatus: 'HEALTHY',
-        latenciaMs: 8,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -813,8 +824,8 @@ export class NodesService {
         baseUrlRest: 'https://maneja-de-una-v3-api.onrender.com/api/v3',
         endpointGrpc: bookingGrpc,
         apiKey: 'Irsuf7pF+8E89Lrmo6w2no/uTODQDhm2k5EFXTF0jq0=',
-        healthStatus: 'HEALTHY',
-        latenciaMs: 15,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -830,8 +841,8 @@ export class NodesService {
         baseUrlRest: 'https://maneja-de-una-v3-api.onrender.com/api/v3',
         endpointGrpc: bookingGrpc,
         apiKey: 'Irsuf7pF+8E89Lrmo6w2no/uTODQDhm2k5EFXTF0jq0=',
-        healthStatus: 'HEALTHY',
-        latenciaMs: 15,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -847,8 +858,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/autos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 26,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -863,8 +874,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/autos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 29,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -879,8 +890,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/autos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 27,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -897,8 +908,8 @@ export class NodesService {
         baseUrlRest: process.env.TIENDA_VUELOS_URL || 'http://localhost:3000/api/v2/vuelos',
         endpointGrpc: bookingGrpc,
         apiKey: process.env.TIENDA_VUELOS_API_KEY || null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 42,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -913,8 +924,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/vuelos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 40,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -929,8 +940,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/vuelos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 44,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -945,8 +956,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/vuelos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 41,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -961,8 +972,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/vuelos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 43,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -979,8 +990,8 @@ export class NodesService {
         baseUrlRest: process.env.TIENDA_ALOJAMIENTOS_URL || 'http://localhost:3000/api/v2/alojamientos',
         endpointGrpc: bookingGrpc,
         apiKey: process.env.TIENDA_ALOJAMIENTOS_API_KEY || null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 20,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -995,8 +1006,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/alojamientos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 22,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -1011,8 +1022,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/alojamientos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 21,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -1027,8 +1038,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/alojamientos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 23,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
@@ -1043,8 +1054,8 @@ export class NodesService {
         baseUrlRest: 'http://localhost:3000/api/v2/alojamientos',
         endpointGrpc: bookingGrpc,
         apiKey: null,
-        healthStatus: 'HEALTHY',
-        latenciaMs: 24,
+        healthStatus: 'UNKNOWN',
+        latenciaMs: 0,
         killSwitchActivo: false,
         circuitBreakerEstado: 'CLOSED',
         tasaFallosPct: 0.00,
