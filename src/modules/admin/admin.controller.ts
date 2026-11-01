@@ -1,5 +1,6 @@
 import { BadRequestException, UseInterceptors, Controller, Get, Put, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { AdminMetricasService } from './admin-metricas.service';
+import { trazaVuelos } from '../vuelos/socios/vuelos-traza';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminErrorsInterceptor } from './admin-errors.interceptor';
@@ -85,6 +86,12 @@ export class AdminController {
   @ApiOperation({ summary: 'Datos en vivo para los grafos del proceso de reserva de vuelos (estados, dinero, aerolíneas)' })
   async getProcesoVuelos() {
     return this.metricasService.getProcesoVuelos();
+  }
+
+  @Get('procesos/vuelos/en-vivo')
+  @ApiOperation({ summary: 'Traza en tiempo real del proceso de vuelos, agrupable por X-Correlation-Id (eventos nuevos desde `desde`)' })
+  enVivoVuelos(@Query('desde') desde?: string) {
+    return trazaVuelos.desde(Number(desde) || 0);
   }
 
   // ── Usuarios ──────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../services/api';
+import { ProcesoEnVivo } from './ProcesoEnVivo';
 
 /**
  * Pestaña "Procesos" del admin: el proceso de reserva de vuelos con aerolíneas
@@ -290,7 +291,7 @@ function Diagrama({ definicion, id }) {
 // ───────────────────────────── Pestaña ─────────────────────────────
 
 export function ProcesosTab({ refreshKey = 0 }) {
-  const [activo, setActivo] = useState('cfg');
+  const [activo, setActivo] = useState('vivo');
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -312,8 +313,9 @@ export function ProcesosTab({ refreshKey = 0 }) {
     cargar();
   }, [cargar, refreshKey]);
 
+  const enVivo = activo === 'vivo';
   const grafo = GRAFOS.find((g) => g.id === activo) || GRAFOS[0];
-  const definicion = useMemo(() => grafo.def(datos), [grafo, datos]);
+  const definicion = useMemo(() => (enVivo ? '' : grafo.def(datos)), [grafo, datos, enVivo]);
   const aero = datos?.aerolineas ?? [];
   const enLinea = aero.filter((a) => a.estado === 'EN_LINEA').length;
 
@@ -355,7 +357,7 @@ export function ProcesosTab({ refreshKey = 0 }) {
       </div>
 
       <div role="tablist" aria-label="Tipo de grafo" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {GRAFOS.map((g) => (
+        {[{ id: 'vivo', tab: '🔴 Flujo en vivo' }, ...GRAFOS].map((g) => (
           <button
             key={g.id}
             role="tab"
@@ -372,6 +374,9 @@ export function ProcesosTab({ refreshKey = 0 }) {
         ))}
       </div>
 
+      {enVivo && <ProcesoEnVivo />}
+
+      {!enVivo && (
       <section style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px', display: 'grid', gap: 14 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', alignItems: 'baseline' }}>
           <h3 style={{ margin: 0, fontSize: '1.1rem', color: T.text }}>{grafo.titulo}</h3>
@@ -400,6 +405,7 @@ export function ProcesosTab({ refreshKey = 0 }) {
           </div>
         </div>
       </section>
+      )}
 
       {aero.length > 0 && activo === 'fta' && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, overflowX: 'auto' }}>

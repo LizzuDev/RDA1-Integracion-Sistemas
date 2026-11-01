@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { RespuestaProxy, VuelosSociosService } from './vuelos-socios.service';
 import { VuelosSociosReservasService } from './vuelos-socios-reservas.service';
+import { PasoVuelo, ResultadoPaso, trazaVuelos } from './vuelos-traza';
 import { VuelosService } from '../vuelos.service';
 import { propietarioDesde } from '../vuelos.controller';
 
@@ -70,6 +71,7 @@ export class VuelosSociosMiddleware {
     // ── Estado de vuelo ──
     if (metodo === 'GET' && segmentos[0] === 'flights' && segmentos[2] === 'status') {
       const r = await this.socios.primeraRespuesta('GET', segmentos, query, entrantes, req.headers.host);
+      this.traza(entrantes, 'estado_vuelo', r.status < 300 ? 'ok' : 'aviso', `Vuelo ${segmentos[1]}: ${r.body?.status ?? `HTTP ${r.status}`}`, { nodo: r.headers['X-Booking-Node'] ?? null });
       if (fuente === 'mixto' && (r.status < 200 || r.status >= 300)) return false; // que responda la base local
       this.enviar(res, r);
       return true;
@@ -94,19 +96,39 @@ export class VuelosSociosMiddleware {
         return true;
       }
       const r = await this.socios.reenviar(nodo, metodo, segmentos, query, req.body, entrantes);
-      await this.despuesDeReserva(metodo, segmentos, bookingId, copia, r);
+      await this.despuesDeReserva(metodo, segmentos, bookingId, copia, r, entrantes);
       this.enviar(res, r);
       return true;
     }
 
-    this.enviar(res, await this.socios.reenviar(nodo, metodo, segmentos, query, req.body, entrantes));
+    const t0 = Date.now();
+    const rg = await this.socios.reenviar(nodo, metodo, segmentos, query, req.body, entrantes);
+    if (segmentos[0] === 'offers' && segmentos[1] === 'hold' && metodo === 'POST') {
+      this.traza(entrantes, 'hold', rg.status < 300 ? 'ok' : 'error',
+        rg.status < 300 ? `Hold creado · precio congelado ${rg.body?.lockedPrice?.total ?? '?'} ${rg.body?.lockedPrice?.currency ?? ''} · ${rg.body?.ttlMinutes ?? '?'} min` : `Hold rechazado (HTTP ${rg.status}): ${rg.body?.detail || rg.body?.title || ''}`,
+        { nodo, ms: Date.now() - t0, monto: parseFloat(rg.body?.lockedPrice?.total) || null });
+    } else {
+      this.traza(entrantes, 'consulta', rg.status < 300 ? 'ok' : 'aviso', `${metodo} /${segmentos.join('/')} → HTTP ${rg.status}`, { nodo, ms: Date.now() - t0 });
+    }
+    this.enviar(res, rg);
     return true;
   }
 
   // ───────────────────────────── Búsqueda ─────────────────────────────
 
   private async buscar(req: Request, res: Response, fuente: string, entrantes: Record<string, any>) {
+    const t0 = Date.now();
     const { offers, sources } = await this.socios.buscar(req.body, entrantes, req.headers.host);
+    const it = req.body?.itineraries?.[0] || {};
+    const okN = sources.filter((s) => s.ok).length;
+    this.traza(
+      entrantes,
+      'busqueda',
+      sources.length === 0 || okN === 0 ? 'error' : okN < sources.length ? 'aviso' : 'ok',
+      `${it.origin ?? '?'} → ${it.destination ?? '?'} ${it.departureDate ?? ''}: ${offers.length} ofertas, ${okN}/${sources.length} aerolíneas respondieron` +
+        (sources.some((s) => !s.ok) ? ` (sin respuesta: ${sources.filter((s) => !s.ok).map((s) => s.nombre).join(', ')})` : ''),
+      { ms: Date.now() - t0 },
+    );
     let todas = offers;
     if (fuente === 'mixto') {
       try {
@@ -135,6 +157,7 @@ export class VuelosSociosMiddleware {
     const propietario = propietarioDesde(entrantes['x-device-fingerprint'], entrantes['authorization']);
     const idem = String(entrantes['idempotency-key'] || '').trim();
     if (!idem) {
+      this.traza(entrantes, 'cobro', 'error', 'Sin Idempotency-Key: no se cobra', { nodo });
       this.enviar(res, problema(400, 'Falta Idempotency-Key', 'La cabecera Idempotency-Key es obligatoria para reservar.'));
       return;
     }
@@ -144,6 +167,7 @@ export class VuelosSociosMiddleware {
     const hold = await this.socios.reenviar(nodo, 'GET', ['offers', 'hold', holdId], '', null, entrantes);
     const monto = parseFloat(String(hold.body?.lockedPrice?.total ?? hold.body?.price?.total ?? hold.body?.grandTotal?.total ?? ''));
     if (hold.status < 200 || hold.status >= 300 || !Number.isFinite(monto) || monto <= 0) {
+      this.traza(entrantes, 'hold', 'error', `No se pudo leer el precio del hold (HTTP ${hold.status}): no se cobra`, { nodo });
       this.enviar(
         res,
         hold.status >= 400
@@ -154,7 +178,11 @@ export class VuelosSociosMiddleware {
     }
 
     // 2) Cobro en MS_PAG (idempotente con la misma clave del cliente).
+    const tCobro = Date.now();
     const cobro = await this.reservas.cobrar(monto, idem, propietario);
+    this.traza(entrantes, 'cobro', cobro.ok ? 'ok' : 'error',
+      cobro.ok ? `Pago aprobado · ${cobro.paymentReference}` : `Pago rechazado: ${cobro.detalle ?? cobro.estado ?? ''}`,
+      { nodo, ms: Date.now() - tCobro, monto });
     if (!cobro.ok) {
       this.enviar(res, problema(cobro.status === 402 ? 402 : cobro.status ?? 502, 'Pago no aprobado', cobro.detalle ?? 'El cobro fue rechazado.'));
       return;
@@ -162,12 +190,19 @@ export class VuelosSociosMiddleware {
 
     // 3) Reserva en la aerolínea con la referencia de pago real.
     const cuerpo = { ...(req.body ?? {}), payment: { ...(req.body?.payment ?? {}), paymentReference: cobro.paymentReference } };
+    const tRes = Date.now();
     const r = await this.socios.reenviar(nodo, 'POST', ['bookings'], '', cuerpo, entrantes);
+    const confirmo = r.status >= 200 && r.status < 300 && !!r.body?.bookingId;
+    this.traza(entrantes, 'reserva_aerolinea', confirmo ? 'ok' : 'error',
+      confirmo ? `Aerolínea confirmó · PNR ${r.body?.pnr ?? '?'}` : `Aerolínea rechazó (HTTP ${r.status}): ${r.body?.detail || r.body?.title || ''}`,
+      { nodo, ms: Date.now() - tRes, monto });
 
     // 4) SAGA: si la aerolínea no confirmó, se devuelve el dinero.
     if (r.status < 200 || r.status >= 300 || !r.body?.bookingId) {
       if (cobro.transaccionId) {
-        await this.reservas.reembolsar(cobro.transaccionId, monto, `Aerolínea ${nodo} rechazó la reserva (HTTP ${r.status})`);
+        const devuelto = await this.reservas.reembolsar(cobro.transaccionId, monto, `Aerolínea ${nodo} rechazó la reserva (HTTP ${r.status})`);
+        this.traza(entrantes, 'reembolso', devuelto > 0 ? 'ok' : 'error',
+          devuelto > 0 ? `SAGA: se devolvieron ${devuelto.toFixed(2)}` : 'SAGA: el reembolso FALLÓ, el cliente quedó cobrado sin reserva', { nodo, monto });
       }
       this.enviar(res, r.status >= 400 ? withDetalle(r, 'Se reembolsó el cobro.') : problema(502, 'Reserva no confirmada', 'La aerolínea no devolvió bookingId. Se reembolsó el cobro.'));
       return;
@@ -176,14 +211,17 @@ export class VuelosSociosMiddleware {
     // 5) Copia para Mis Reservas.
     try {
       await this.reservas.registrar({ bookingId: r.body.bookingId, codigoNodo: nodo, propietarioId: propietario, reserva: r.body, montoCobrado: monto, cobro });
+      this.traza(entrantes, 'copia', 'ok', 'Copia guardada para Mis Reservas', { nodo });
     } catch (e: any) {
       this.logger.error(`[vuelos-socios] No se guardó la copia de ${r.body.bookingId}: ${e?.message}`);
+      this.traza(entrantes, 'copia', 'error', `No se guardó la copia: ${e?.message}`, { nodo });
     }
+    this.traza(entrantes, 'confirmada', 'ok', `Reserva confirmada · ${r.body.bookingId}`, { nodo, monto });
     r.body = { ...r.body, payment: { ...(r.body.payment ?? {}), paymentReference: cobro.paymentReference } };
     this.enviar(res, r);
   }
 
-  private async despuesDeReserva(metodo: string, segmentos: string[], bookingId: string, copia: any, r: RespuestaProxy) {
+  private async despuesDeReserva(metodo: string, segmentos: string[], bookingId: string, copia: any, r: RespuestaProxy, entrantes: Record<string, any>) {
     if (r.status < 200 || r.status >= 300 || !r.body || typeof r.body !== 'object') return;
     try {
       if (metodo === 'GET' && segmentos.length === 2) {
@@ -194,8 +232,10 @@ export class VuelosSociosMiddleware {
         let devuelto = 0;
         if (copia.transaccionId && Number.isFinite(monto) && monto > 0) {
           devuelto = await this.reservas.reembolsar(copia.transaccionId, monto, `Cancelación ${bookingId}`);
+          if (devuelto <= 0) this.traza(entrantes, 'reembolso', 'error', `Cancelación ${bookingId}: el reembolso FALLÓ`, { nodo: copia.codigoNodo, monto });
         }
         await this.reservas.marcarEstado(bookingId, String(r.body.status || 'CANCELLED'), devuelto);
+        this.traza(entrantes, 'cancelacion', 'ok', `Reserva ${String(r.body.status || 'CANCELLED')} · reembolso ${devuelto.toFixed(2)}`, { nodo: copia.codigoNodo, monto: devuelto });
         if (devuelto > 0) r.body = { ...r.body, refund: { ...(r.body.refund ?? {}), executedByBooking: true, executedAmount: devuelto.toFixed(2) } };
       }
     } catch (e: any) {
@@ -248,6 +288,15 @@ export class VuelosSociosMiddleware {
   }
 
   // ───────────────────────────── Util ─────────────────────────────
+
+  /** Deja un paso en la traza en vivo, con el correlation ID de la compra. */
+  private traza(entrantes: Record<string, any>, paso: PasoVuelo, resultado: ResultadoPaso, detalle: string, extra: { nodo?: string | null; ms?: number | null; monto?: number | null } = {}) {
+    try {
+      trazaVuelos.registrar({ correlacion: String(entrantes['x-correlation-id'] || 'sin-correlacion'), paso, resultado, detalle, ...extra });
+    } catch {
+      /* la traza nunca debe romper una reserva */
+    }
+  }
 
   private enviar(res: Response, r: RespuestaProxy) {
     for (const [k, v] of Object.entries(r.headers)) res.setHeader(k, v);
