@@ -5,6 +5,9 @@ import { VuelosService } from './vuelos.service';
 import { VuelosController } from './vuelos.controller';
 import { CommonModule } from '../../common/common.module';
 import { SupabaseOrquestadorService } from './supabase-orquestador.service';
+import { ConfigProveedor } from '../nodes/entities/config-proveedor.entity';
+import { VuelosSociosService } from './socios/vuelos-socios.service';
+import { VuelosSociosMiddleware } from './socios/vuelos-socios.middleware';
 
 import {
   // ── Bloque 1 · Catálogo e Inventario (3) ──
@@ -125,9 +128,9 @@ const ENTIDADES = [
 ];
 
 @Module({
-  imports: [CommonModule, TypeOrmModule.forFeature(ENTIDADES)],
+  imports: [CommonModule, TypeOrmModule.forFeature([...ENTIDADES, ConfigProveedor])],
   controllers: [VuelosController],
-  providers: [VuelosService, SupabaseOrquestadorService],
-  exports: [SupabaseOrquestadorService],
+  providers: [VuelosService, SupabaseOrquestadorService, VuelosSociosService, VuelosSociosMiddleware],
+  exports: [SupabaseOrquestadorService, VuelosSociosService, VuelosSociosMiddleware],
 })
 export class VuelosModule {}

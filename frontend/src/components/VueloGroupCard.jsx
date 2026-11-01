@@ -66,7 +66,12 @@ export function VueloGroupCard({ ofertasGrupo, onSeleccionarTarifa }) {
             </h3>
             <p className="vuelo-route-desc" style={{fontWeight:"bold", marginTop:"2px", color:"#003087"}}>{formatearFecha(extraerFecha(primerSegmento?.departure.at))}</p>
             <p className="vuelo-route-desc">
-              Operado por {ofertaBase.airline?.name ?? 'Aerolínea'}
+              Operado por {ofertaBase.airline?.name ?? ofertaBase.provider?.name ?? 'Aerolínea'}
+              {ofertaBase.provider && (
+                <span title={ofertaBase.provider.nodeCode} style={{ marginLeft: 8, fontSize: '0.8em', opacity: 0.8 }}>
+                  · vía {ofertaBase.provider.emoji} {ofertaBase.provider.name}
+                </span>
+              )}
             </p>
           </div>
 
