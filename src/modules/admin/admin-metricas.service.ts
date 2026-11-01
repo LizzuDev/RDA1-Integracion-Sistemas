@@ -210,6 +210,66 @@ export class AdminMetricasService {
     ];
   }
 
+  /**
+   * Datos en vivo para la pestaña "Procesos": cuántas reservas de aerolíneas
+   * socias hay en cada estado, cuánto se cobró y reembolsó, y el estado real
+   * de cada aerolínea registrada.
+   */
+  async getProcesoVuelos() {
+    const [estados, dinero, aerolineas] = await Promise.all([
+      this.seguro(
+        'estados de reservas socias',
+        () => this.dataSource.query(`SELECT status, COUNT(*)::int AS n FROM public.vuelos_reservas_socio GROUP BY status`),
+        [] as { status: string; n: number }[],
+      ),
+      this.seguro(
+        'dinero de reservas socias',
+        () =>
+          this.dataSource.query(
+            `SELECT COALESCE(SUM(grand_total),0)::float AS cobrado, COALESCE(SUM(reembolsado),0)::float AS reembolsado,
+                    COUNT(*) FILTER (WHERE transaccion_id IS NULL)::int AS sin_pago
+               FROM public.vuelos_reservas_socio`,
+          ),
+        [{ cobrado: 0, reembolsado: 0, sin_pago: 0 }],
+      ),
+      this.seguro(
+        'aerolíneas',
+        () =>
+          this.dataSource.query(
+            `SELECT codigo_nodo, nombre_proveedor, health_status, kill_switch_activo, latencia_ms, ultimo_ping_at, base_url_rest
+               FROM schema_proveedores.config_proveedor WHERE vertical = 'VUELOS' ORDER BY nombre_proveedor`,
+          ),
+        [] as any[],
+      ),
+    ]);
+    const porEstado: Record<string, number> = {};
+    for (const e of estados) porEstado[String(e.status).toUpperCase()] = Number(e.n);
+    const d = dinero[0] || {};
+    return {
+      generadoEn: new Date().toISOString(),
+      porEstado,
+      totalReservas: Object.values(porEstado).reduce((a, b) => a + b, 0),
+      cobrado: Math.round(Number(d.cobrado || 0) * 100) / 100,
+      reembolsado: Math.round(Number(d.reembolsado || 0) * 100) / 100,
+      sinPagoRegistrado: Number(d.sin_pago || 0),
+      timeoutMs: Number(process.env.VUELOS_SOCIOS_TIMEOUT_MS) || 8000,
+      fuente: (process.env.VUELOS_FUENTE || 'socios').toLowerCase(),
+      aerolineas: aerolineas.map((a: any) => ({
+        codigo: a.codigo_nodo,
+        nombre: a.nombre_proveedor,
+        estado: a.kill_switch_activo
+          ? 'APAGADA'
+          : !/^https?:\/\//i.test(a.base_url_rest || '') || a.health_status === 'UNKNOWN'
+            ? 'SIN_VERIFICAR'
+            : a.health_status === 'DOWN'
+              ? 'CAIDA'
+              : 'EN_LINEA',
+        latenciaMs: a.latencia_ms,
+        ultimoPing: a.ultimo_ping_at,
+      })),
+    };
+  }
+
   /** Estado REAL de los socios registrados (último ping guardado). */
   private async proveedores() {
     const filas = await this.seguro(

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ResumenTab } from '../components/admin/ResumenTab';
+import { ProcesosTab } from '../components/admin/ProcesosTab';
 import { api } from '../services/api';
 import { supabase } from '../services/supabase';
 import { GestionAlojamientos } from '../components/admin/GestionAlojamientos';
@@ -23,6 +24,7 @@ const C = {
 
 const TABS = [
   { id: 'resumen', label: '📈 Resumen', sub: 'Ventas y métricas' },
+  { id: 'procesos', label: '🧭 Procesos', sub: 'Grafos de vuelos' },
   { id: 'paneles_rda2', label: '🚀 8 Paneles RDA2', sub: 'Arquitectura Distribuida' },
   { id: 'observabilidad', label: '📊 Observabilidad & Finanzas', sub: 'Estado en vivo y dinero' },
   { id: 'microservicios', label: '🔬 Servicios & Prov.', sub: 'Socios conectados' },
@@ -3079,6 +3081,7 @@ export function AdminDashboard() {
           </div>
         )}
         {activeTab==='resumen'&&<ResumenTab refreshKey={refreshKey} onIrA={setActiveTab}/>}
+        {activeTab==='procesos'&&<ProcesosTab refreshKey={refreshKey}/>}
         {activeTab==='observabilidad'&&<ObservabilidadTab stats={stats} loadingStats={loadingStats} serviceHealth={serviceHealth} refreshKey={refreshKey}/>}
         {activeTab==='microservicios'&&(
           <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>

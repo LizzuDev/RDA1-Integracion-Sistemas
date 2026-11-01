@@ -81,6 +81,12 @@ export class AdminController {
     return this.metricasService.getMetricas(Number(dias));
   }
 
+  @Get('procesos/vuelos')
+  @ApiOperation({ summary: 'Datos en vivo para los grafos del proceso de reserva de vuelos (estados, dinero, aerolíneas)' })
+  async getProcesoVuelos() {
+    return this.metricasService.getProcesoVuelos();
+  }
+
   // ── Usuarios ──────────────────────────────────────────────────────────────
   @Get('users')
   @ApiOperation({ summary: 'Lista de usuarios registrados (auth.users)' })
