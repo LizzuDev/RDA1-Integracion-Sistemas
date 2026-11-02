@@ -727,7 +727,10 @@ function ProveedoresTab() {
       url: prov.url || prov.base_url_rest || '',
       apiBase: prov.base_url_rest || prov.apiBase || prov.url || '',
       endpointGrpc: prov.endpoint_grpc || prov.endpointGrpc || '',
-      apiKey: prov.api_key || prov.apiKey || '',
+      // La API solo devuelve la clave enmascarada: el campo empieza vacío y,
+      // si se deja vacío, el backend conserva la clave actual.
+      apiKey: '',
+      apiKeyActual: prov.api_key_configurada || prov.api_key ? (prov.api_key || 'configurada') : '',
       tipo: prov.tipo || prov.vertical || 'Atracciones',
       descripcion: prov.descripcion || '',
       contacto: prov.contacto || '',
@@ -763,8 +766,10 @@ function ProveedoresTab() {
         baseUrlRest: (form.apiBase || form.url).trim(),
         url: (form.url || form.apiBase).trim(),
         endpointGrpc: form.endpointGrpc ? form.endpointGrpc.trim() : null,
-        apiKey: form.apiKey ? form.apiKey.trim() : null,
-        api_key: form.apiKey ? form.apiKey.trim() : null,
+        // En edición, un campo vacío significa "no cambiar la clave".
+        ...(form.apiKey?.trim()
+          ? { apiKey: form.apiKey.trim(), api_key: form.apiKey.trim() }
+          : modal === 'nuevo' ? { apiKey: null, api_key: null } : {}),
         equipo: form.equipo,
         contacto: form.contacto,
         emoji: form.emoji || '🔗',
@@ -1020,7 +1025,7 @@ function ProveedoresTab() {
               {[
                 ['🌐 URL Base REST (OpenAPI v2)', detalle.base_url_rest || detalle.url],
                 ['⚡ Socket Inventario gRPC', detalle.endpoint_grpc || detalle.endpointGrpc || 'grpc://100.93.143.85:50051'],
-                ['🔑 API Key (X-API-Key M2M)', detalle.api_key || detalle.apiKey ? '••••••••' + (detalle.api_key || detalle.apiKey).slice(-6) : 'No configurada (usa .env fallback)'],
+                ['🔑 API Key (X-API-Key M2M)', detalle.api_key || detalle.apiKey || 'No configurada (usa .env fallback)'],
                 ['📧 Correo de Contacto', detalle.contacto || 'No especificado'],
                 ['🚦 Circuit Breaker', detalle.circuit_breaker_estado || 'CLOSED'],
                 ['🛡️ Kill-Switch Activo', detalle.kill_switch_activo ? 'SÍ (Bloqueado)' : 'NO (Operativo)'],
@@ -1101,7 +1106,7 @@ function ProveedoresTab() {
               ].map(([field, label, placeholder]) => (
                 <div key={field} style={{ marginBottom: 14 }}>
                   <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: 4, color: C.text }}>{label}</label>
-                  <input value={form[field] || ''} onChange={e => { setForm(f => ({ ...f, [field]: e.target.value })); setFormErr(er => { const n = { ...er }; delete n[field]; return n; }); }} placeholder={placeholder} style={inputStyle(field)} />
+                  <input value={form[field] || ''} onChange={e => { setForm(f => ({ ...f, [field]: e.target.value })); setFormErr(er => { const n = { ...er }; delete n[field]; return n; }); }} placeholder={field === 'apiKey' && modal === 'editar' && form.apiKeyActual ? `Clave actual ${form.apiKeyActual} · déjalo vacío para conservarla` : placeholder} style={inputStyle(field)} />
                   {formErr[field] && <div style={{ color: C.red, fontSize: '0.75rem', marginTop: 2 }}>{formErr[field]}</div>}
                 </div>
               ))}

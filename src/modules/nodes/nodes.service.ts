@@ -8,6 +8,20 @@ import { WinstonPhysicalLoggerService } from '../../core/logger/winston-logger.s
 import { ConnectorHealthService } from '../admin/connector-health.service';
 import { TraceContextService } from '../../core/tracing/trace-context.service';
 
+/**
+ * Las claves de los socios NUNCA salen completas por la API: `GET /nodes` es
+ * público (lo usa el panel de proveedores) y antes devolvía cada X-API-Key tal
+ * cual. Se muestran solo los 4 últimos caracteres.
+ */
+export const MASCARA_CLAVE = '••••';
+export function enmascararClave(clave?: string | null): string | null {
+  if (!clave) return null;
+  return `${MASCARA_CLAVE}${clave.slice(-4)}`;
+}
+export function esClaveEnmascarada(valor: unknown): boolean {
+  return typeof valor === 'string' && valor.trim().startsWith(MASCARA_CLAVE);
+}
+
 @Injectable()
 export class NodesService {
   private readonly logger = new Logger(NodesService.name);
@@ -87,8 +101,9 @@ export class NodesService {
         apiBase: n.baseUrlRest,
         endpoint_grpc: n.endpointGrpc,
         endpointGrpc: n.endpointGrpc,
-        api_key: n.apiKey,
-        apiKey: n.apiKey,
+        api_key: enmascararClave(n.apiKey),
+        apiKey: enmascararClave(n.apiKey),
+        api_key_configurada: !!n.apiKey,
         health_status: n.healthStatus,
         activo: !n.killSwitchActivo,
         estado: n.killSwitchActivo ? 'APAGADO' : (n.healthStatus === 'HEALTHY' ? 'OPERATIVO' : n.healthStatus),
@@ -179,8 +194,9 @@ export class NodesService {
         url: guardado.baseUrlRest,
         endpoint_grpc: guardado.endpointGrpc,
         endpointGrpc: guardado.endpointGrpc,
-        api_key: guardado.apiKey,
-        apiKey: guardado.apiKey,
+        api_key: enmascararClave(guardado.apiKey),
+        apiKey: enmascararClave(guardado.apiKey),
+        api_key_configurada: !!guardado.apiKey,
         health_status: guardado.healthStatus,
         kill_switch_activo: guardado.killSwitchActivo,
         circuit_breaker_estado: guardado.circuitBreakerEstado,
@@ -244,7 +260,10 @@ export class NodesService {
     }
     if (dto.apiKey !== undefined || dto.api_key !== undefined) {
       const rawKey = dto.apiKey !== undefined ? dto.apiKey : dto.api_key;
-      nodo.apiKey = (rawKey || '').trim() || null;
+      // Un valor enmascarado (el que devuelve el listado) nunca reemplaza la clave real.
+      if (!esClaveEnmascarada(rawKey)) {
+        nodo.apiKey = (rawKey || '').trim() || null;
+      }
     }
     if (dto.equipo !== undefined) nodo.equipo = dto.equipo;
     if (dto.contacto !== undefined) nodo.contacto = dto.contacto;
@@ -289,8 +308,9 @@ export class NodesService {
         url: guardado.baseUrlRest,
         endpoint_grpc: guardado.endpointGrpc,
         endpointGrpc: guardado.endpointGrpc,
-        api_key: guardado.apiKey,
-        apiKey: guardado.apiKey,
+        api_key: enmascararClave(guardado.apiKey),
+        apiKey: enmascararClave(guardado.apiKey),
+        api_key_configurada: !!guardado.apiKey,
         health_status: guardado.healthStatus,
         kill_switch_activo: guardado.killSwitchActivo,
         circuit_breaker_estado: guardado.circuitBreakerEstado,
