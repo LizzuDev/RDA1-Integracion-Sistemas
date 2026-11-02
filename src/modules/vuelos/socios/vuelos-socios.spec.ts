@@ -4,6 +4,7 @@ import * as express from 'express';
 import { VuelosSociosService } from './vuelos-socios.service';
 import { VuelosSociosMiddleware } from './vuelos-socios.middleware';
 import { resumenDeReserva } from './vuelos-socios-reservas.service';
+import { trazaVuelos } from './vuelos-traza';
 
 /**
  * Prueba el agregador contra aerolíneas FALSAS levantadas en un puerto local.
@@ -240,6 +241,23 @@ describe('VuelosSociosService (agregador de aerolíneas)', () => {
       expect(enviada.body.payment.paymentReference).toBe('AUTH-777');
       expect(enviada.body.holdId).toBe('HOLD-key');
       expect(copias.get('NODE_VUE_KEY~BK-1')).toMatchObject({ propietarioId: DUENO, codigoNodo: 'NODE_VUE_KEY' });
+    });
+
+    it('traza en vivo: los pasos de una compra quedan unidos por su X-Correlation-Id', async () => {
+      trazaVuelos.reiniciar();
+      const corr = 'corr-vuelo-prueba-1';
+      await fetch(`${base}/api/v2/vuelos/search`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Correlation-Id': corr }, body: JSON.stringify({ itineraries: [] }) });
+      await fetch(`${base}/api/v2/vuelos/bookings`, {
+        method: 'POST', headers: conDueno(DUENO, { 'Idempotency-Key': 'idem-traza', 'X-Correlation-Id': corr }),
+        body: JSON.stringify({ holdId: 'NODE_VUE_KEY~HOLD-key', passengers: [] }),
+      });
+      const { eventos, contadores } = trazaVuelos.desde(0);
+      const deLaCompra = eventos.filter((e) => e.correlacion === corr).map((e) => `${e.paso}:${e.resultado}`);
+      expect(deLaCompra).toEqual(['busqueda:aviso', 'cobro:ok', 'reserva_aerolinea:ok', 'copia:ok', 'confirmada:ok']);
+      expect(contadores.cobro.ok).toBe(1);
+      // La aerolínea recibe el mismo correlation ID que el cliente.
+      const enviado = llamadas.find((c) => c.url === '/api/v2/vuelos/bookings' && c.method === 'POST')!;
+      expect(enviado.headers['x-correlation-id']).toBe(corr);
     });
 
     it('reserva: si la aerolínea rechaza, Booking reembolsa (SAGA)', async () => {
