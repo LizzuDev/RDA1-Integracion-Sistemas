@@ -1,6 +1,36 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatearMoneda } from '../../services/formato';
 import { totalBooking } from '../../utils/precioBooking';
+
+/** Luhn: detecta números de tarjeta mal escritos. */
+export function luhnValido(n) {
+  let suma = 0;
+  for (let i = 0; i < n.length; i++) {
+    let d = Number(n[n.length - 1 - i]);
+    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
+    suma += d;
+  }
+  return n.length > 0 && suma % 10 === 0;
+}
+
+/** Errores de la tarjeta (demo: solo forma, no se procesa). */
+export function erroresTarjeta({ numero, nombre, venc, cvc }, hoy = new Date()) {
+  const e = {};
+  const n = String(numero).replace(/\D/g, '');
+  if (n.length < 13 || n.length > 16) e.numero = 'Debe tener entre 13 y 16 dígitos.';
+  else if (!luhnValido(n)) e.numero = 'Número de tarjeta no válido.';
+  const nom = String(nombre).trim();
+  if (nom.length < 2 || !/^[A-ZÁÉÍÓÚÜÑ ]+$/.test(nom)) e.nombre = 'Solo letras y espacios (mínimo 2).';
+  const m = /^(\d{2})\/(\d{2})$/.exec(String(venc));
+  if (!m || Number(m[1]) < 1 || Number(m[1]) > 12) e.venc = 'Usa MM/AA con un mes entre 01 y 12.';
+  else {
+    const fin = new Date(2000 + Number(m[2]), Number(m[1]), 1); // primer día del mes siguiente
+    if (fin <= hoy) e.venc = 'La tarjeta está vencida.';
+  }
+  const largo = /^3[47]/.test(n) ? 4 : 3;
+  if (!new RegExp(`^\\d{${largo}}$`).test(String(cvc))) e.cvc = `Debe tener ${largo} dígitos.`;
+  return e;
+}
 
 const marcaDe = (n) => (/^4/.test(n) ? 'VISA' : /^(5[1-5]|2[2-7])/.test(n) ? 'MASTERCARD' : /^3[47]/.test(n) ? 'AMEX' : '');
 
@@ -10,15 +40,23 @@ const marcaDe = (n) => (/^4/.test(n) ? 'VISA' : /^(5[1-5]|2[2-7])/.test(n) ? 'MA
  * (la demo referencia el pago, no lo procesa); el botón "Pagar" sigue siendo
  * el del formulario, con la misma lógica.
  */
-export function PasarelaPago({ hold, lista }) {
+export function PasarelaPago({ hold, lista, onValidez }) {
   const [numero, setNumero] = useState('4111111111111111');
   const [nombre, setNombre] = useState(() => {
     const p = (lista ?? []).find((x) => x.passengerType !== 'INFANT') ?? lista?.[0];
-    return `${p?.firstName ?? ''} ${p?.lastName ?? ''}`.trim().toUpperCase() || 'NOMBRE APELLIDO';
+    const n = `${p?.firstName ?? ''} ${p?.lastName ?? ''}`.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 26);
+    return n.length >= 2 ? n : 'NOMBRE APELLIDO';
   });
-  const [venc, setVenc] = useState('12/28');
+  // Tarjeta de prueba ya llenada (Luhn válido, vigente): la demo no cobra a la tarjeta.
+  const [venc, setVenc] = useState(() => `12/${String((new Date().getFullYear() + 3) % 100).padStart(2, '0')}`);
   const [cvc, setCvc] = useState('123');
   const [girada, setGirada] = useState(false);
+  const [tocados, setTocados] = useState({});
+  const errores = erroresTarjeta({ numero, nombre, venc, cvc });
+  const valida = Object.keys(errores).length === 0;
+  useEffect(() => { onValidez?.(valida); }, [valida, onValidez]);
+  const tocar = (k) => () => setTocados((t) => ({ ...t, [k]: true }));
+  const err = (k) => (tocados[k] && errores[k] ? <small className="pp-error" role="alert">{errores[k]}</small> : null);
 
   const moneda = hold?.bookingPrice?.currency ?? hold?.lockedPrice?.currency;
   const grupos = numero.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
@@ -82,21 +120,28 @@ export function PasarelaPago({ hold, lista }) {
         <div className="pp-campos">
           <label className="pp-campo pp-ancho">
             <span>Número de tarjeta</span>
-            <input inputMode="numeric" autoComplete="off" value={grupos} onChange={(e) => setNumero(e.target.value.replace(/\D/g, '').slice(0, 16))} />
+            <input inputMode="numeric" autoComplete="off" value={grupos} onBlur={tocar('numero')} aria-invalid={!!(tocados.numero && errores.numero)}
+              onChange={(e) => setNumero(e.target.value.replace(/\D/g, '').slice(0, 16))} />
+            {err('numero')}
           </label>
           <label className="pp-campo pp-ancho">
             <span>Nombre en la tarjeta</span>
-            <input autoComplete="off" value={nombre} onChange={(e) => setNombre(e.target.value.toUpperCase().slice(0, 26))} />
+            <input autoComplete="off" value={nombre} onBlur={tocar('nombre')} aria-invalid={!!(tocados.nombre && errores.nombre)}
+              onChange={(e) => setNombre(e.target.value.toUpperCase().replace(/[^A-ZÁÉÍÓÚÜÑ ]/g, '').replace(/\s{2,}/g, ' ').slice(0, 26))} />
+            {err('nombre')}
           </label>
           <label className="pp-campo">
             <span>Vencimiento</span>
             <input inputMode="numeric" autoComplete="off" placeholder="MM/AA" value={venc}
-              onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 4); setVenc(d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d); }} />
+              onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 4); setVenc(d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d); }}
+              onBlur={tocar('venc')} aria-invalid={!!(tocados.venc && errores.venc)} />
+            {err('venc')}
           </label>
           <label className="pp-campo">
             <span>CVC</span>
-            <input inputMode="numeric" autoComplete="off" value={cvc} onFocus={() => setGirada(true)} onBlur={() => setGirada(false)}
-              onChange={(e) => setCvc(e.target.value.replace(/\D/g, '').slice(0, 4))} />
+            <input inputMode="numeric" autoComplete="off" value={cvc} onFocus={() => setGirada(true)} onBlur={() => { setGirada(false); tocar('cvc')(); }} aria-invalid={!!(tocados.cvc && errores.cvc)}
+              onChange={(e) => setCvc(e.target.value.replace(/\D/g, '').slice(0, /^3[47]/.test(numero) ? 4 : 3))} />
+            {err('cvc')}
           </label>
         </div>
         <div className="pp-seguro">🔒 Pago seguro · cifrado SSL · <span>Demo: el pago se referencia, no se cobra a la tarjeta</span></div>
@@ -107,6 +152,7 @@ export function PasarelaPago({ hold, lista }) {
 
 const CSS = `
 .pp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px;margin-top:16px}
+.pp-error{display:block;color:#b42318;font-size:.75rem;margin-top:4px;font-weight:600}
 .pp section{border:1px solid #e1e6ee;border-radius:14px;padding:16px;background:#fff}
 .pp-resumen{background:#f8fafc!important}
 .pp-titulo{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#003580;margin-bottom:10px}

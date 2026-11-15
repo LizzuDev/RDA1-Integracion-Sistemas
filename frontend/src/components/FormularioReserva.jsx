@@ -32,17 +32,29 @@ const COUNTRIES = [
  * mismo y se envía en E.164 (+593991234567), que es lo que exigen las aerolíneas.
  */
 const PAISES_TELEFONO = [
-  { pais: 'EC', bandera: '🇪🇨', prefijo: '593', regla: /^(9\d{8}|[2-7]\d{7})$/, ejemplo: '991234567', ayuda: 'celular de 9 dígitos que empieza con 9, u 8 dígitos fijo' },
-  { pais: 'CO', bandera: '🇨🇴', prefijo: '57', regla: /^(3\d{9}|60\d{8})$/, ejemplo: '3001234567', ayuda: '10 dígitos (celular empieza con 3)' },
-  { pais: 'PE', bandera: '🇵🇪', prefijo: '51', regla: /^(9\d{8}|[1-8]\d{7})$/, ejemplo: '912345678', ayuda: 'celular de 9 dígitos que empieza con 9' },
-  { pais: 'AR', bandera: '🇦🇷', prefijo: '54', regla: /^9?\d{10}$/, ejemplo: '91123456789', ayuda: '10 dígitos con código de área (celular: 9 + 10)' },
-  { pais: 'CL', bandera: '🇨🇱', prefijo: '56', regla: /^\d{9}$/, ejemplo: '912345678', ayuda: '9 dígitos' },
-  { pais: 'UY', bandera: '🇺🇾', prefijo: '598', regla: /^[249]\d{7}$/, ejemplo: '94123456', ayuda: '8 dígitos (celular empieza con 9)' },
-  { pais: 'US', bandera: '🇺🇸', prefijo: '1', regla: /^[2-9]\d{2}[2-9]\d{6}$/, ejemplo: '2025550123', ayuda: '10 dígitos' },
-  { pais: 'MX', bandera: '🇲🇽', prefijo: '52', regla: /^\d{10}$/, ejemplo: '5512345678', ayuda: '10 dígitos' },
-  { pais: 'ES', bandera: '🇪🇸', prefijo: '34', regla: /^[6-9]\d{8}$/, ejemplo: '612345678', ayuda: '9 dígitos' },
-  { pais: 'BR', bandera: '🇧🇷', prefijo: '55', regla: /^[1-9]{2}9?\d{8}$/, ejemplo: '11912345678', ayuda: 'DDD + número (10 u 11 dígitos)' },
+  { pais: 'EC', max: 9, bandera: '🇪🇨', prefijo: '593', regla: /^(9\d{8}|[2-7]\d{7})$/, ejemplo: '991234567', ayuda: 'celular de 9 dígitos que empieza con 9, u 8 dígitos fijo' },
+  { pais: 'CO', max: 10, bandera: '🇨🇴', prefijo: '57', regla: /^(3\d{9}|60\d{8})$/, ejemplo: '3001234567', ayuda: '10 dígitos (celular empieza con 3)' },
+  { pais: 'PE', max: 9, bandera: '🇵🇪', prefijo: '51', regla: /^(9\d{8}|[1-8]\d{7})$/, ejemplo: '912345678', ayuda: 'celular de 9 dígitos que empieza con 9' },
+  { pais: 'AR', max: 11, bandera: '🇦🇷', prefijo: '54', regla: /^9?\d{10}$/, ejemplo: '91123456789', ayuda: '10 dígitos con código de área (celular: 9 + 10)' },
+  { pais: 'CL', max: 9, bandera: '🇨🇱', prefijo: '56', regla: /^\d{9}$/, ejemplo: '912345678', ayuda: '9 dígitos' },
+  { pais: 'UY', max: 8, bandera: '🇺🇾', prefijo: '598', regla: /^[249]\d{7}$/, ejemplo: '94123456', ayuda: '8 dígitos (celular empieza con 9)' },
+  { pais: 'US', max: 10, bandera: '🇺🇸', prefijo: '1', regla: /^[2-9]\d{2}[2-9]\d{6}$/, ejemplo: '2025550123', ayuda: '10 dígitos' },
+  { pais: 'MX', max: 10, bandera: '🇲🇽', prefijo: '52', regla: /^\d{10}$/, ejemplo: '5512345678', ayuda: '10 dígitos' },
+  { pais: 'ES', max: 9, bandera: '🇪🇸', prefijo: '34', regla: /^[6-9]\d{8}$/, ejemplo: '612345678', ayuda: '9 dígitos' },
+  { pais: 'BR', max: 11, bandera: '🇧🇷', prefijo: '55', regla: /^[1-9]{2}9?\d{8}$/, ejemplo: '11912345678', ayuda: 'DDD + número (10 u 11 dígitos)' },
 ];
+/** Nombres y apellidos: letras (con tildes y ñ), espacio, apóstrofo y guion. */
+const LETRAS_NOMBRE = /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]/g;
+export const limpiarNombre = (v) => String(v ?? '').replace(LETRAS_NOMBRE, '').replace(/\s{2,}/g, ' ').replace(/^\s+/, '').slice(0, 40);
+const RE_NOMBRE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(?:[' -][A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)*$/;
+const reglaNombre = (que) => (v) => {
+  const t = String(v ?? '').trim();
+  if (!t) return `${que} es obligatorio.`;
+  if (t.length < 2 || t.length > 40) return `${que} debe tener entre 2 y 40 letras.`;
+  return RE_NOMBRE.test(t) ? '' : `${que}: solo letras, espacios, apóstrofo o guion (sin números).`;
+};
+export const esCedulaEc = (p) => p?.documentType === 'NATIONAL_ID' && (p?.nationality ?? 'EC') === 'EC';
+
 const PAIS_TELEFONO = Object.fromEntries(PAISES_TELEFONO.map((p) => [p.pais, p]));
 
 /** Solo dígitos y sin el 0 inicial de marcación nacional (099… → 99…). */
@@ -223,17 +235,17 @@ function pasajeroVacio(tipo, indice, idsAdultos, nroInfante = 0) {
  * con los del DTO. Si divergen, el error es silencioso (ver nota de arriba).
  */
 const REGLAS = {
-  firstName: (v) => (v && v.trim() ? '' : 'El nombre es obligatorio.'),
-  lastName: (v) => (v && v.trim() ? '' : 'El apellido es obligatorio.'),
+  firstName: reglaNombre('El nombre'),
+  lastName: reglaNombre('El apellido'),
   documentNumber: (v, p) => {
     const doc = (v ?? '').trim();
-    if (p?.documentType === 'NATIONAL_ID' && p?.nationality === 'EC') {
+    if (esCedulaEc(p)) {
       if (!/^\d{10}$/.test(doc)) return 'La cédula debe tener 10 dígitos.';
       return cedulaValida(doc) ? '' : 'Cédula no válida: revisa los dígitos.';
     }
-    return /^[A-Z0-9][A-Z0-9-]{3,19}$/.test(doc)
+    return /^[A-Z0-9]{5,20}$/.test(doc)
       ? ''
-      : 'Debe tener entre 4 y 20 caracteres alfanumericos en mayusculas.';
+      : 'Debe tener entre 5 y 20 letras o números, sin espacios ni símbolos.';
   },
   nationality: (v) =>
     v && /^[A-Z]{2}$/.test(v.trim())
@@ -242,11 +254,16 @@ const REGLAS = {
   birthDate: (v) => {
     if (!v) return 'La fecha de nacimiento es obligatoria.';
     if (v > new Date().toISOString().slice(0, 10)) return 'No puede ser futura.';
+    if (v < '1900-01-01') return 'Revisa el año de nacimiento.';
     return '';
   },
   gender: (v) => (v ? '' : 'Selecciona una opcion.'),
-  email: (v) =>
-    v && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim()) ? '' : 'Correo no valido.',
+  email: (v) => {
+    const t = String(v ?? '').trim();
+    if (!t) return 'El correo es obligatorio.';
+    if (t.length > 100) return 'El correo no puede pasar de 100 caracteres.';
+    return /^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$/.test(t) ? '' : 'Correo no válido (ejemplo: nombre@correo.com).';
+  },
   phone: (v, p) => errorTelefono(p?.phoneCountry ?? 'EC', v),
 };
 
@@ -266,6 +283,9 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
   // Día del primer vuelo (para las edades); si no se conoce, hoy en Ecuador.
   const fechaViaje = hold?.fechaViaje
     || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(new Date());
+  // Día del último vuelo (el pasaporte debe seguir vigente hasta el regreso).
+  const fechaUltimoVuelo = (hold?.tramos ?? []).map((t) => String(t?.salida ?? t?.llegada ?? '').slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().pop() || fechaViaje;
+  const maxVencimiento = (() => { const d = new Date(`${fechaViaje}T12:00:00`); d.setFullYear(d.getFullYear() + 10); return d.toISOString().slice(0, 10); })();
   // Vuelo internacional: todos los pasajeros (bebés incluidos) viajan con pasaporte.
   const internacional = esViajeInternacional(hold?.tramos);
 
@@ -281,6 +301,8 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
   // Asientos que otros clientes están eligiendo ahora mismo: { [segmentId]: ['14D', ...] }
   const [bloqueosAjenos, setBloqueosAjenos] = useState({});
   const [enviando, setEnviando] = useState(false);
+  // La pasarela (demo) avisa si los datos de la tarjeta tienen forma válida.
+  const [tarjetaValida, setTarjetaValida] = useState(true);
   /** Etapa visible del pago (Verificando asientos → Procesando pago → Confirmando con la aerolínea). */
   const [etapaPago, setEtapaPago] = useState(null);
   const [errorGeneral, setErrorGeneral] = useState(null);
@@ -369,13 +391,23 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
    */
   const cambiarNormalizado = useCallback(
     (indice, campo, valor) => {
-      if (campo === 'nationality' || campo === 'documentNumber') {
+      if (campo === 'nationality') {
         cambiar(indice, campo, valor.toUpperCase());
+      } else if (campo === 'documentNumber') {
+        // Cédula EC: solo números (10). Pasaporte u otro: letras y números (20), sin símbolos.
+        const p = lista[indice];
+        cambiar(indice, campo, esCedulaEc(p)
+          ? valor.replace(/\D/g, '').slice(0, 10)
+          : valor.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20));
+      } else if (campo === 'firstName' || campo === 'lastName') {
+        cambiar(indice, campo, limpiarNombre(valor));
+      } else if (campo === 'email') {
+        cambiar(indice, campo, valor.replace(/\s/g, '').toLowerCase().slice(0, 100));
       } else {
         cambiar(indice, campo, valor);
       }
     },
-    [cambiar],
+    [cambiar, lista],
   );
 
   /** Pide a la aerolínea el mapa de asientos de cada tramo del hold. */
@@ -642,6 +674,14 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         nuevos[`${prefijo}.passengerId`] = 'El passengerId esta repetido.';
       }
       vistos.add(p.passengerId);
+      // El mismo documento no puede ir en dos pasajeros de la misma compra.
+      const doc = String(p.documentNumber ?? '').trim().toUpperCase();
+      if (doc) {
+        const k = lista.findIndex((o, j) => j < i && String(o.documentNumber ?? '').trim().toUpperCase() === doc);
+        if (k !== -1 && !nuevos[`${prefijo}.documentNumber`]) {
+          nuevos[`${prefijo}.documentNumber`] = `Este documento ya está en el pasajero ${k + 1}: cada pasajero necesita el suyo.`;
+        }
+      }
 
       for (const [campo, regla] of Object.entries(REGLAS)) {
         const mensaje = regla(p[campo], p);
@@ -654,8 +694,10 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
       if (p.documentType === 'PASSPORT') {
         if (!p.documentExpiryDate) {
           nuevos[`${prefijo}.documentExpiryDate`] = 'Indica la fecha de vencimiento del pasaporte.';
-        } else if (p.documentExpiryDate < fechaViaje) {
-          nuevos[`${prefijo}.documentExpiryDate`] = 'El pasaporte vence antes del viaje: debe estar vigente ese día.';
+        } else if (p.documentExpiryDate <= fechaUltimoVuelo) {
+          nuevos[`${prefijo}.documentExpiryDate`] = 'El pasaporte debe seguir vigente después del último vuelo de la reserva.';
+        } else if (p.documentExpiryDate > maxVencimiento) {
+          nuevos[`${prefijo}.documentExpiryDate`] = 'Revisa la fecha: un pasaporte no vence a más de 10 años.';
         }
       }
 
@@ -700,7 +742,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
 
     setErrores(nuevos);
     return nuevos;
-  }, [lista, fechaViaje]);
+  }, [lista, fechaViaje, fechaUltimoVuelo, maxVencimiento]);
 
   const alEnviar = useCallback(
     async (evento) => {
@@ -733,6 +775,11 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         setErrorGeneral(null);
         setPasoActual(3);
         trackEvent('form_step_completed', 'vuelos', { step: 2 });
+        return;
+      }
+
+      if (pasoActual === 3 && !tarjetaValida) {
+        setErrorGeneral('Revisa los datos de la tarjeta antes de pagar.');
         return;
       }
 
@@ -889,7 +936,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
         setEtapaPago(null);
       }
     },
-    [enviando, lista, hold, validar, onConfirmada, pasoActual, cargarMapas, revisarAsientos, soltarTomados],
+    [enviando, lista, hold, validar, onConfirmada, pasoActual, cargarMapas, revisarAsientos, soltarTomados, tarjetaValida],
   );
 
   if (!abierto || !hold) return null;
@@ -962,7 +1009,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
                       id={id('firstName')}
                       type="text"
                       value={p.firstName}
-                      onChange={(e) => cambiar(i, 'firstName', e.target.value)}
+                      onChange={(e) => cambiarNormalizado(i, 'firstName', e.target.value)}
                       aria-required="true"
                       aria-invalid={err('firstName') ? 'true' : 'false'}
                       aria-describedby={enlazado('firstName')}
@@ -983,7 +1030,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
                       id={id('lastName')}
                       type="text"
                       value={p.lastName}
-                      onChange={(e) => cambiar(i, 'lastName', e.target.value)}
+                      onChange={(e) => cambiarNormalizado(i, 'lastName', e.target.value)}
                       aria-required="true"
                       aria-invalid={err('lastName') ? 'true' : 'false'}
                       aria-describedby={enlazado('lastName')}
@@ -1028,7 +1075,8 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
                         className={`modal-input ${err('documentExpiryDate') ? 'es-error' : ''}`}
                         id={id('documentExpiryDate')}
                         type="date"
-                        min={fechaViaje}
+                        min={fechaUltimoVuelo}
+                        max={maxVencimiento}
                         value={p.documentExpiryDate ?? ''}
                         onChange={(e) => cambiar(i, 'documentExpiryDate', e.target.value)}
                         aria-required="true"
@@ -1099,6 +1147,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
                       className={`modal-input ${err('birthDate') ? 'es-error' : ''}`}
                       id={id('birthDate')}
                       type="date"
+                      min="1900-01-01"
                       max={new Date().toISOString().slice(0, 10)}
                       value={p.birthDate}
                       onChange={(e) => cambiar(i, 'birthDate', e.target.value)}
@@ -1189,7 +1238,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
                       id={id('email')}
                       type="email"
                       value={p.email}
-                      onChange={(e) => cambiar(i, 'email', e.target.value)}
+                      onChange={(e) => cambiarNormalizado(i, 'email', e.target.value)}
                       aria-required="true"
                       aria-invalid={err('email') ? 'true' : 'false'}
                       aria-describedby={enlazado('email')}
@@ -1228,7 +1277,8 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
                         placeholder={PAIS_TELEFONO[p.phoneCountry ?? 'EC']?.ejemplo}
                         value={p.phone}
                         onChange={(e) => {
-                          const v = e.target.value.replace(/[^\d\s]/g, '');
+                          // Solo dígitos, con el largo del país (+1 por el 0 inicial opcional: 099…).
+                          const v = e.target.value.replace(/\D/g, '').slice(0, (PAIS_TELEFONO[p.phoneCountry ?? 'EC']?.max ?? 15) + 1);
                           cambiar(i, 'phone', v);
                           // Si ya había error, se quita en cuanto el número es válido.
                           if (err('phone')) validarTelefonoAhora(i, p.phoneCountry ?? 'EC', v);
@@ -1291,7 +1341,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
 
           {pasoActual === 3 && (
             <div className="paso-pago">
-              <PasarelaPago hold={hold} lista={lista} />
+              <PasarelaPago hold={hold} lista={lista} onValidez={setTarjetaValida} />
             </div>
           )}
 
@@ -1328,7 +1378,7 @@ export function FormularioReserva({ abierto, hold, pasajeros, onCerrar, onConfir
                   Los administradores no pueden pagar.
                 </div>
               ) : (
-                <button type="submit" className="btn-primario" disabled={enviando}>
+                <button type="submit" className="btn-primario" disabled={enviando || (pasoActual === 3 && !tarjetaValida)}>
                   {pasoActual === 1 && 'Continuar a Extras'}
                   {pasoActual === 2 && (!user ? 'Inicia sesión para continuar' : 'Continuar al Pago')}
                   {pasoActual === 3 && (enviando ? <><SpinnerVuelos />{etapaPago || 'Procesando pago…'}</> : <>🔒 Pagar {formatearMoneda(totalBooking(hold), hold?.bookingPrice?.currency ?? hold?.lockedPrice?.currency)}</>)}
