@@ -213,10 +213,11 @@ export function AlojamientoCheckoutModal({
   // confirmar o al cerrar el modal.
   const idempotencyKeyRef = useRef(null);
 
-  // Discount calculation
+  // Discount & Tax calculations (All-Inclusive con desglose oficial SRI 15% IVA)
   const discountAmount = Math.max(0, originalPrice - totalPrice);
   const cancellationCost = Math.round(totalPrice * 0.5 * 100) / 100;
-  const ivaAmount = Math.round(totalPrice * 0.15 * 100) / 100;
+  const subtotalAmount = Math.round((totalPrice / 1.15) * 100) / 100;
+  const ivaAmount = Math.round((totalPrice - subtotalAmount) * 100) / 100;
   const cleaningFee = Math.max(0, Math.round((taxes - ivaAmount) * 100) / 100);
 
   // Safe hotel address formatting (handles string, object with address/city/country)
@@ -455,11 +456,13 @@ export function AlojamientoCheckoutModal({
     // Pinta la pantalla de reserva confirmada a partir de la respuesta del backend.
     const finalizarConReserva = (res) => {
       const reservationCode = res.codigo_reserva || res.codigoReserva || res.reservation_id || codigoReservaPnr;
+      const finalTotal = Number(res.total_price?.total ?? res.total ?? totalPrice);
 
       // Automated email invoice dispatch
       if (navigator.onLine) {
         enviarFacturaTrasCompra({
           ...datosFactura,
+          total: finalTotal,
           pnr: String(reservationCode).substring(0, 8).toUpperCase(),
         });
       }
@@ -483,7 +486,7 @@ export function AlojamientoCheckoutModal({
         huesped: `${nombre} ${apellidos}`.trim(),
         email: email.trim(),
         status: res.status || 'CONFIRMED',
-        totalPrice,
+        totalPrice: finalTotal,
       };
 
       const existing = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
@@ -644,7 +647,7 @@ export function AlojamientoCheckoutModal({
         doc.text('Importe Total:', 25, 125);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 128, 9);
-        doc.text(`${currency} ${convertPrice(totalPrice)}`, 75, 125);
+        doc.text(`${currency} ${convertPrice(bookingConfirmed.totalPrice || totalPrice)}`, 75, 125);
 
         doc.setTextColor(150, 150, 150);
         doc.setFontSize(10);
@@ -795,7 +798,7 @@ export function AlojamientoCheckoutModal({
             <div className="bkg-confirmed-detail-item">
               <strong>Total</strong>
               <span style={{ color: '#008009', fontWeight: 800, fontSize: '18px' }}>
-                {currency} {convertPrice(totalPrice)}
+                {currency} {convertPrice(bookingConfirmed?.totalPrice || totalPrice)}
               </span>
             </div>
           </div>
@@ -953,11 +956,11 @@ export function AlojamientoCheckoutModal({
 
               <div className="bkg-final-price-box">
                 <div className="bkg-final-price-header">
-                  <span className="bkg-final-price-label">Precio</span>
+                  <span className="bkg-final-price-label">Precio final</span>
                   <span className="bkg-final-price-num">{currency} {convertPrice(totalPrice)}</span>
                 </div>
-                <div className="bkg-taxes-note">
-                  + {currency} {convertPrice(taxes)} de impuestos y cargos
+                <div className="bkg-taxes-note" style={{ color: '#008009', fontWeight: 600 }}>
+                  ✓ Impuestos y cargos incluidos
                 </div>
 
                 <button
@@ -971,18 +974,20 @@ export function AlojamientoCheckoutModal({
                 {showTaxesDetail && (
                   <div className="bkg-taxes-breakdown">
                     <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                      No incluye {currency} {convertPrice(taxes)} en impuestos y cargos:
+                      Desglose de impuestos incluidos en el precio:
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span>15% IVA</span>
+                      <span>Subtotal habitación</span>
+                      <span>{currency} {convertPrice(subtotalAmount)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span>15% IVA (SRI Ecuador)</span>
                       <span>{currency} {convertPrice(ivaAmount)}</span>
                     </div>
-                    {cleaningFee > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Tarifa de limpieza / servicio</span>
-                        <span>{currency} {convertPrice(cleaningFee)}</span>
-                      </div>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', borderTop: '1px solid #e5e7eb', paddingTop: '4px', fontWeight: 700 }}>
+                      <span>Total final a pagar</span>
+                      <span>{currency} {convertPrice(totalPrice)}</span>
+                    </div>
                   </div>
                 )}
               </div>

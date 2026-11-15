@@ -1625,8 +1625,8 @@ export function AlojamientosSearchPage() {
                           {currency} {convertPrice(Math.round(totalPrice / (noches * rooms)))} por noche
                         </span>
                       )}
-                      <span className="sr-taxes-note">
-                        +{currency} {convertPrice(taxes)} de impuestos y cargos
+                      <span className="sr-taxes-note" style={{ color: '#008009', fontWeight: 600 }}>
+                        ✓ Impuestos y cargos incluidos
                       </span>
 
                       <Link to={`/alojamientos/${prop.id}?${detailQuery}`} className="sr-cta-btn">

@@ -1188,8 +1188,8 @@ export function AlojamientoDetail() {
                     <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1a1a1a' }}>
                       {currency} {convertPrice(totalPrice)}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#595959' }}>
-                      +{currency} {convertPrice(taxes)} de impuestos y cargos
+                    <div style={{ fontSize: '0.75rem', color: '#008009', fontWeight: 600 }}>
+                      ✓ Impuestos y cargos incluidos
                     </div>
                   </td>
                   <td>
@@ -1266,8 +1266,8 @@ export function AlojamientoDetail() {
               <div style={{ fontSize: '22px', fontWeight: 800, color: '#1a1a1a', lineHeight: 1.1 }}>
                 {currency} {convertPrice(totalPrice)}
               </div>
-              <div style={{ fontSize: '11px', color: '#595959', marginBottom: '4px' }}>
-                +{currency} {convertPrice(taxes)} de impuestos y cargos
+              <div style={{ fontSize: '11px', color: '#008009', fontWeight: 600, marginBottom: '4px' }}>
+                ✓ Impuestos y cargos incluidos
               </div>
 
               <button
