@@ -235,7 +235,18 @@ export class DilanAtraccionesAdapter {
 
       this.handleSuccess();
       return response.data;
-    } catch (err) {
+    } catch (err: any) {
+      if (err.response?.status === 409 || err.response?.data?.code === 'CANCELLATION_WINDOW_CLOSED' || err.response?.data?.title?.includes('Fuera de Plazo')) {
+        const errorDetail = err.response?.data?.detail || err.response?.data?.message || 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación al horario reservado.';
+        throw new HttpException({
+          type: 'https://descubre-ec.com/errores/cancellation-window-closed',
+          title: 'Cancelación Fuera de Plazo',
+          status: HttpStatus.CONFLICT,
+          statusCode: HttpStatus.CONFLICT,
+          detail: errorDetail,
+          message: errorDetail,
+        }, HttpStatus.CONFLICT);
+      }
       this.logger.warn(`ACL: No se pudo contactar a tienda externa para cancelar ${reservaId}: ${err.message}. El reverso local continúa.`);
       return {
         status: 'CANCELLED_LOCAL_REVERSED',

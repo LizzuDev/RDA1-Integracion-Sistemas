@@ -3319,6 +3319,17 @@ export class AtraccionesService implements OnModuleInit {
         const eventTime = new Date(eventDateStr).getTime();
         if (!isNaN(eventTime)) {
           const diffHours = (eventTime - Date.now()) / (1000 * 60 * 60);
+          if (diffHours < 24) {
+            throw new HttpException({
+              type: 'https://booking.epn.edu.ec/errors/cancellation-window-closed',
+              title: 'Cancelación Fuera de Plazo',
+              status: HttpStatus.CONFLICT,
+              statusCode: HttpStatus.CONFLICT,
+              message: 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación al horario reservado.',
+              detail: 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación al horario reservado.',
+              code: 'CANCELLATION_WINDOW_CLOSED',
+            }, HttpStatus.CONFLICT);
+          }
           if (diffHours < 0 && ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO'].includes(currentStatus)) {
             throw new HttpException({
               type: 'https://api.booking.local/errors/conflict',
@@ -3340,52 +3351,6 @@ export class AtraccionesService implements OnModuleInit {
     const partnerCancelId = reserva?.cancelCode || reservationId;
     const partnerUrlIcs = reserva?.icsCalendarUrl || '';
     const atraccionId = reserva?.atraccionId || '';
-
-    if (reserva) {
-      reserva.status = 'CANCELLED';
-      reserva.motivoCancelacion = dto?.reason || 'Cancelación solicitada por el usuario';
-      reserva.cancelCode = cancelCode;
-      await this.reservaRepo.save(reserva);
-
-      // Restituir cupos en TurnoAforo
-      if (reserva.turnoId) {
-        const turno = await this.turnoRepo.findOne({ where: { id: reserva.turnoId } });
-        if (turno) {
-          turno.cuposDisponibles += reserva.ticketCount;
-          if (turno.estado === 'AGOTADO' && turno.cuposDisponibles > 0) {
-            turno.estado = turno.cuposDisponibles <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE';
-          }
-          await this.turnoRepo.save(turno);
-        }
-      }
-
-      // Restituir cupos en base de datos concurrentemente (SQL directo idempotente)
-      if (this.dataSource && this.dataSource.isInitialized && reserva.atraccionId && reserva.date) {
-        try {
-          const rawTime = (reserva.time || '10:00').trim();
-          await this.dataSource.query(
-            `UPDATE schema_atracciones.atracciones_turnos_aforo
-             SET cupos_disponibles = LEAST(capacidad_total, cupos_disponibles + $1),
-                 estado = CASE 
-                   WHEN (cupos_disponibles + $1) > 5 THEN 'DISPONIBLE'
-                   WHEN (cupos_disponibles + $1) > 0 THEN 'ULTIMOS_CUPOS'
-                   ELSE 'DISPONIBLE'
-                 END
-             WHERE atraccion_id = $2 AND fecha = $3 AND (hora_inicio = $4 OR hora_inicio LIKE $5)`,
-            [reserva.ticketCount, reserva.atraccionId, reserva.date, rawTime, `${rawTime.split(' ')[0]}%`],
-          );
-        } catch (_) { }
-      }
-
-      // Evento Outbox
-      try {
-        await this.outboxRepo.save({
-          eventType: 'ATRACCION_RESERVA_CANCELADA',
-          aggregateId: reserva.id,
-          payload: { reserva_id: reserva.id, cancel_code: cancelCode, refund_amount: refundAmount },
-        });
-      } catch (e) { }
-    }
 
     // Compensación Saga: Identificación unívoca del socio y notificación externa para liberar stock
     let atraccion = reserva ? await this.atraccionRepo.findOne({ where: { id: reserva.atraccionId } }) : null;
@@ -3434,27 +3399,56 @@ export class AtraccionesService implements OnModuleInit {
         try {
           await firstValueFrom(
             this.httpService.post(
-              `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v3/atracciones/reservas/${partnerCancelId}/cancel`,
+              `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v2/atracciones/reservas/${partnerCancelId}/cancel`,
               { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
               { headers, timeout: 6000 },
             ),
           );
           this.logger.log(`[Gloria Cancel] Reserva ${partnerCancelId} cancelada exitosamente en ms-catalog`);
         } catch (err1: any) {
-          if (err1.response?.status === 404 && partnerCancelId !== reservationId) {
-            await firstValueFrom(
-              this.httpService.post(
-                `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v3/atracciones/reservas/${reservationId}/cancel`,
-                { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
-                { headers, timeout: 6000 },
-              ),
-            );
-            this.logger.log(`[Gloria Cancel] Reserva ${reservationId} cancelada exitosamente en ms-catalog (fallback id)`);
+          if (err1.response?.status === 409 || err1.status === 409 || err1.response?.data?.code === 'CANCELLATION_WINDOW_CLOSED') {
+            const detail = err1.response?.data?.detail || err1.response?.data?.message || 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación.';
+            throw new HttpException({
+              type: 'https://booking.epn.edu.ec/errors/cancellation-window-closed',
+              title: 'Cancelación Fuera de Plazo',
+              status: HttpStatus.CONFLICT,
+              statusCode: HttpStatus.CONFLICT,
+              message: detail,
+              detail: detail,
+              code: 'CANCELLATION_WINDOW_CLOSED',
+            }, HttpStatus.CONFLICT);
+          }
+          if ((err1.response?.status === 404 || err1.response?.status === 400) && partnerCancelId !== reservationId) {
+            try {
+              await firstValueFrom(
+                this.httpService.post(
+                  `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v2/atracciones/reservas/${reservationId}/cancel`,
+                  { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
+                  { headers, timeout: 6000 },
+                ),
+              );
+              this.logger.log(`[Gloria Cancel] Reserva ${reservationId} cancelada exitosamente en ms-catalog (fallback id)`);
+            } catch (err2: any) {
+              if (err2.response?.status === 409 || err2.status === 409 || err2.response?.data?.code === 'CANCELLATION_WINDOW_CLOSED') {
+                const detail = err2.response?.data?.detail || err2.response?.data?.message || 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación.';
+                throw new HttpException({
+                  type: 'https://booking.epn.edu.ec/errors/cancellation-window-closed',
+                  title: 'Cancelación Fuera de Plazo',
+                  status: HttpStatus.CONFLICT,
+                  statusCode: HttpStatus.CONFLICT,
+                  message: detail,
+                  detail: detail,
+                  code: 'CANCELLATION_WINDOW_CLOSED',
+                }, HttpStatus.CONFLICT);
+              }
+              throw err2;
+            }
           } else {
             throw err1;
           }
         }
       } catch (err: any) {
+        if (err instanceof HttpException) throw err;
         this.logger.warn(`[Gloria Cancel] Error notificando cancelación a ms-catalog: ${err.message}`);
       }
     } else if (isAriel) {
@@ -3478,10 +3472,21 @@ export class AtraccionesService implements OnModuleInit {
             );
             this.logger.log(`[Ariel Cancel] Reserva ${targetArielId} cancelada exitosamente en Ecuatravel`);
           } catch (err1: any) {
+            if (err1.response?.status === 409 || err1.status === 409) {
+              const detail = err1.response?.data?.detail || err1.response?.data?.message || 'Cancelación fuera de plazo en socio.';
+              throw new HttpException({
+                status: HttpStatus.CONFLICT,
+                statusCode: HttpStatus.CONFLICT,
+                message: detail,
+                detail: detail,
+                code: 'CANCELLATION_WINDOW_CLOSED',
+              }, HttpStatus.CONFLICT);
+            }
             this.logger.warn(`[Ariel Cancel] Aviso de API externa Ariel: ${err1.response?.status || err1.message}`);
           }
         }
       } catch (err: any) {
+        if (err instanceof HttpException) throw err;
         this.logger.warn(`[Ariel Cancel] Error notificando cancelación a Ariel: ${err.message}`);
       }
     } else if (isAlisson) {
@@ -3501,6 +3506,16 @@ export class AtraccionesService implements OnModuleInit {
           );
           this.logger.log(`[Alisson Cancel] Reserva ${alissonTargetId} cancelada exitosamente en Alisson (/atracciones/reservas)`);
         } catch (err1: any) {
+          if (err1.response?.status === 409 || err1.status === 409) {
+            const detail = err1.response?.data?.detail || err1.response?.data?.message || 'Cancelación fuera de plazo en socio.';
+            throw new HttpException({
+              status: HttpStatus.CONFLICT,
+              statusCode: HttpStatus.CONFLICT,
+              message: detail,
+              detail: detail,
+              code: 'CANCELLATION_WINDOW_CLOSED',
+            }, HttpStatus.CONFLICT);
+          }
           if (err1.response?.status === 404) {
             await firstValueFrom(
               this.httpService.post(
@@ -3515,6 +3530,7 @@ export class AtraccionesService implements OnModuleInit {
           }
         }
       } catch (err: any) {
+        if (err instanceof HttpException) throw err;
         this.logger.warn(`[Alisson Cancel] Error notificando cancelación a Alisson: ${err.message}`);
       }
     } else if (isMichael) {
@@ -3540,6 +3556,16 @@ export class AtraccionesService implements OnModuleInit {
           );
           this.logger.log(`[Michael Cancel] Reserva ${michaelTargetId} cancelada exitosamente en TourGirls (/atracciones/reservas)`);
         } catch (err1: any) {
+          if (err1.response?.status === 409 || err1.status === 409) {
+            const detail = err1.response?.data?.detail || err1.response?.data?.message || 'Cancelación fuera de plazo en socio TourGirls.';
+            throw new HttpException({
+              status: HttpStatus.CONFLICT,
+              statusCode: HttpStatus.CONFLICT,
+              message: detail,
+              detail: detail,
+              code: 'CANCELLATION_WINDOW_CLOSED',
+            }, HttpStatus.CONFLICT);
+          }
           if (err1.response?.status === 404) {
             await firstValueFrom(
               this.httpService.post(
@@ -3554,6 +3580,7 @@ export class AtraccionesService implements OnModuleInit {
           }
         }
       } catch (err: any) {
+        if (err instanceof HttpException) throw err;
         this.logger.warn(`[Michael Cancel] Error notificando cancelación a Michael: ${err.message}`);
       }
     } else {
@@ -3563,6 +3590,9 @@ export class AtraccionesService implements OnModuleInit {
         this.logger.log(`[Dilan Cancel] Reserva notificada exitosamente a Descubre EC (${partnerCancelId || reservationId})`);
         dilanOk = true;
       } catch (adapterErr: any) {
+        if (adapterErr instanceof HttpException || adapterErr.status === 409 || adapterErr.response?.status === 409) {
+          throw adapterErr;
+        }
         this.logger.warn(`ACL: No se pudo notificar reverso a tienda externa de Dilan: ${adapterErr.message}`);
       }
       if (!dilanOk) {
@@ -3602,6 +3632,53 @@ export class AtraccionesService implements OnModuleInit {
           }
         } catch (_) { }
       }
+    }
+
+    // APLICAR CANCELACIÓN LOCAL ÚNICAMENTE TRAS CONFIRMACIÓN O NO CONFLICTO DEL SOCIO
+    if (reserva) {
+      reserva.status = 'CANCELLED';
+      reserva.motivoCancelacion = dto?.reason || 'Cancelación solicitada por el usuario';
+      reserva.cancelCode = cancelCode;
+      await this.reservaRepo.save(reserva);
+
+      // Restituir cupos en TurnoAforo
+      if (reserva.turnoId) {
+        const turno = await this.turnoRepo.findOne({ where: { id: reserva.turnoId } });
+        if (turno) {
+          turno.cuposDisponibles += reserva.ticketCount;
+          if (turno.estado === 'AGOTADO' && turno.cuposDisponibles > 0) {
+            turno.estado = turno.cuposDisponibles <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE';
+          }
+          await this.turnoRepo.save(turno);
+        }
+      }
+
+      // Restituir cupos en base de datos concurrentemente (SQL directo idempotente)
+      if (this.dataSource && this.dataSource.isInitialized && reserva.atraccionId && reserva.date) {
+        try {
+          const rawTime = (reserva.time || '10:00').trim();
+          await this.dataSource.query(
+            `UPDATE schema_atracciones.atracciones_turnos_aforo
+             SET cupos_disponibles = LEAST(capacidad_total, cupos_disponibles + $1),
+                 estado = CASE 
+                   WHEN (cupos_disponibles + $1) > 5 THEN 'DISPONIBLE'
+                   WHEN (cupos_disponibles + $1) > 0 THEN 'ULTIMOS_CUPOS'
+                   ELSE 'DISPONIBLE'
+                 END
+             WHERE atraccion_id = $2 AND fecha = $3 AND (hora_inicio = $4 OR hora_inicio LIKE $5)`,
+            [reserva.ticketCount, reserva.atraccionId, reserva.date, rawTime, `${rawTime.split(' ')[0]}%`],
+          );
+        } catch (_) { }
+      }
+
+      // Evento Outbox
+      try {
+        await this.outboxRepo.save({
+          eventType: 'ATRACCION_RESERVA_CANCELADA',
+          aggregateId: reserva.id,
+          payload: { reserva_id: reserva.id, cancel_code: cancelCode, refund_amount: refundAmount },
+        });
+      } catch (e) { }
     }
 
     // Auditoría Winston física
@@ -3830,6 +3907,13 @@ export class AtraccionesService implements OnModuleInit {
                   },
                 ),
               );
+              if (data && (data.status === 'CANCELLED' || data.status === 'CANCELADA' || data.estado === 'CANCELADA' || data.estado === 'CANCELLED')) {
+                r.status = 'CANCELLED';
+                r.motivoCancelacion = data.motivo_cancelacion || data.motivo || data.reason || 'Cancelado en panel de administración de TourGirls';
+                await this.reservaRepo.save(r);
+                this.logger.log(`[Michael Live Sync] Reserva ${r.id} sincronizada a CANCELLED`);
+                return;
+              }
               if (data && (data.status === 'CHECKED_IN' || data.estado === 'CHECKED_IN' || data.estado_asistencia === 'CONFIRMADO_ASISTIDO' || data.status === 'CONFIRMADO_ASISTIDO')) {
                 r.status = 'CONFIRMADO_ASISTIDO';
                 r.checkinAt = data.checked_in_at || data.hora_checkin ? new Date(data.checked_in_at || data.hora_checkin) : new Date();
@@ -3853,6 +3937,13 @@ export class AtraccionesService implements OnModuleInit {
                   },
                 ),
               );
+              if (data && (data.status === 'CANCELLED' || data.status === 'CANCELADA' || data.estado === 'CANCELADA' || data.estado === 'CANCELLED')) {
+                r.status = 'CANCELLED';
+                r.motivoCancelacion = data.motivo_cancelacion || data.motivo || data.reason || 'Cancelado en panel de administración de Alisson';
+                await this.reservaRepo.save(r);
+                this.logger.log(`[Alisson Live Sync] Reserva ${r.id} sincronizada a CANCELLED`);
+                return;
+              }
               if (data && (data.status === 'CHECKED_IN' || data.estado === 'CHECKED_IN' || data.estado_asistencia === 'CONFIRMADO_ASISTIDO' || data.status === 'CONFIRMADO_ASISTIDO')) {
                 r.status = 'CONFIRMADO_ASISTIDO';
                 r.checkinAt = data.hora_checkin ? new Date(data.hora_checkin) : new Date();
@@ -3876,6 +3967,13 @@ export class AtraccionesService implements OnModuleInit {
                   },
                 ),
               );
+              if (data && (data.status === 'CANCELLED' || data.status === 'CANCELADA' || data.estado === 'CANCELADA' || data.estado === 'CANCELLED')) {
+                r.status = 'CANCELLED';
+                r.motivoCancelacion = data.motivo_cancelacion || data.motivo || data.reason || 'Cancelado en panel de administración de Descubre EC';
+                await this.reservaRepo.save(r);
+                this.logger.log(`[Dilan Live Sync] Reserva ${r.id} sincronizada a CANCELLED`);
+                return;
+              }
               if (data && (data.status === 'CHECKED_IN' || data.estado === 'CHECKED_IN' || data.estado_asistencia === 'CONFIRMADO_ASISTIDO' || data.status === 'CONFIRMADO_ASISTIDO')) {
                 r.status = 'CONFIRMADO_ASISTIDO';
                 r.checkinAt = data.checked_in_at || data.hora_checkin ? new Date(data.checked_in_at || data.hora_checkin) : new Date();
@@ -3896,6 +3994,13 @@ export class AtraccionesService implements OnModuleInit {
                   timeout: 4500,
                 }),
               );
+              if (data && (data.status === 'CANCELLED' || data.status === 'CANCELADA' || data.estado === 'CANCELADA' || data.estado === 'CANCELLED')) {
+                r.status = 'CANCELLED';
+                r.motivoCancelacion = data.motivo_cancelacion || data.motivo || data.reason || 'Cancelado en panel de administración de EcuaTravel';
+                await this.reservaRepo.save(r);
+                this.logger.log(`[Ariel Live Sync] Reserva ${r.id} sincronizada a CANCELLED`);
+                return;
+              }
               if (data && (data.status === 'CHECKED_IN' || data.estado === 'CHECKED_IN' || data.estado_asistencia === 'CONFIRMADO_ASISTIDO' || data.status === 'CONFIRMADO_ASISTIDO')) {
                 r.status = 'CONFIRMADO_ASISTIDO';
                 r.checkinAt = data.hora_checkin ? new Date(data.hora_checkin) : new Date();

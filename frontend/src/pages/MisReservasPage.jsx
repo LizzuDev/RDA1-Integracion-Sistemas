@@ -2293,7 +2293,7 @@ export function MisReservasPage() {
                     // Alojamientos: cancelación y reembolso del 100% garantizado hasta 48h antes del check-in
                     const esFueraDePlazo = selectedReserva.tipo === 'alojamiento'
                       ? horasRestantes < 48
-                      : (selectedReserva.tipo === 'atraccion' ? horasRestantes < 0 : horasRestantes < 24);
+                      : horasRestantes < 24;
 
                     if (esFueraDePlazo) {
                       const limiteTexto = selectedReserva.tipo === 'alojamiento' ? '48h antes del check-in' : '24h antes del horario reservado';
