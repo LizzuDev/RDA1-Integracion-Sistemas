@@ -1324,7 +1324,6 @@ export class AtraccionesService implements OnModuleInit {
 
         if (data && Array.isArray(data.horarios) && data.horarios.length > 0) {
           const dateCompact = targetDate.replace(/-/g, '');
-          const attrCap = Number((data as any)?.capacidad_maxima || (data as any)?.capacidadMaxima || (data as any)?.capacidad || (item as any)?.capacidadMaxima || (item as any)?.capacidad || 5);
           const mappedSlots = data.horarios.map((h: any) => {
             const timeRaw = h.hora || '09:00:00';
             const timeCompact = timeRaw.replace(/[^0-9]/g, '').slice(0, 4);
@@ -1336,7 +1335,7 @@ export class AtraccionesService implements OnModuleInit {
                 ? h.available_spots
                 : (typeof h.cupos_disponibles === 'number'
                   ? h.cupos_disponibles
-                  : (h.disponible ? 5 : 0)));
+                  : (h.disponible ? 15 : 0)));
             let totalSpots = adminInfo !== undefined
               ? adminInfo.total
               : (typeof h.total_spots === 'number'
@@ -1345,10 +1344,6 @@ export class AtraccionesService implements OnModuleInit {
                   ? h.capacidad_total
                   : (typeof h.available_spots === 'number' ? h.available_spots : availSpots)));
 
-            if (attrCap > 0) {
-              availSpots = Math.min(availSpots, attrCap);
-              totalSpots = Math.min(totalSpots, attrCap);
-            }
             availSpots = Math.min(availSpots, totalSpots);
             const isAvail = h.disponible !== false && availSpots > 0;
             return {
@@ -1402,16 +1397,11 @@ export class AtraccionesService implements OnModuleInit {
 
           if (activeSlots.length > 0) {
             const dateCompact = targetDate.replace(/-/g, '');
-            const attrCap = Number((item as any)?.capacidadMaxima || (item as any)?.capacidad || 0);
             const mappedSlots = activeSlots.map((s: any) => {
               const timeSlot = s.timeSlot || '09:16';
               const timeCompact = timeSlot.replace(/[^0-9]/g, '').slice(0, 4);
-              let avail = Number(s.available ?? 5);
-              let tot = Number(s.total ?? 5);
-              if (attrCap > 0) {
-                avail = Math.min(avail, attrCap);
-                tot = Math.min(tot, attrCap);
-              }
+              let avail = Number(s.available ?? 15);
+              let tot = Number(s.total ?? 15);
               avail = Math.min(avail, tot);
               return {
                 id: s.slotId || `slot-${dateCompact}-${timeCompact}`,
@@ -2484,7 +2474,7 @@ export class AtraccionesService implements OnModuleInit {
         const tRows = await this.dataSource.query(
           `INSERT INTO schema_atracciones.atracciones_turnos_aforo 
              (atraccion_id, fecha, hora_inicio, hora_fin, capacidad_total, cupos_disponibles, estado)
-           VALUES ($1, $2, $3, '12:00 p.m.', 20, 20, 'DISPONIBLE')
+           VALUES ($1, $2, $3, '12:00 p.m.', 15, GREATEST(0, 15 - $4), 'DISPONIBLE')
            ON CONFLICT (atraccion_id, fecha, hora_inicio) DO UPDATE SET
              cupos_disponibles = GREATEST(0, schema_atracciones.atracciones_turnos_aforo.cupos_disponibles - $4)
            RETURNING id`,

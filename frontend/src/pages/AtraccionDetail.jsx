@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getAtraccion, reservarAtraccion, getDisponibilidadAtraccion } from '../services/atraccionesApi';
 import { v4 as uuidv4 } from 'uuid';
@@ -110,60 +110,59 @@ export function AtraccionDetail() {
     fetchDetalle();
   }, [id]);
 
-  useEffect(() => {
+  const refrescarDisponibilidad = useCallback(() => {
     if (!id || !form.date) return;
-
-    const refrescarDisponibilidad = () => {
-      getDisponibilidadAtraccion(id, form.date)
-        .then(res => {
-          const list = Array.isArray(res) ? res : (res?.turnos || res?.time_slots || res?.slots || []);
-          if (Array.isArray(list) && list.length > 0) {
-            const mapped = list.map(s => {
-              const cuposNum = Number(s.cupos ?? s.cupos_disponibles ?? s.available_spots ?? 5);
-              const timeVal = s.time || s.horaInicio || s.hora || '09:00 a.m.';
-              return {
-                ...s,
-                time: timeVal,
-                cupos: cuposNum,
-                cupos_disponibles: cuposNum,
-                estado: s.estado || s.status || (cuposNum > 0 ? 'DISPONIBLE' : 'AGOTADO')
-              };
-            });
-            setTimeSlots((prev) => {
-              if (prev && prev.length === mapped.length) {
-                let hasDiff = false;
-                for (let i = 0; i < mapped.length; i++) {
-                  if (
-                    prev[i].time !== mapped[i].time ||
-                    prev[i].cupos !== mapped[i].cupos ||
-                    prev[i].estado !== mapped[i].estado
-                  ) {
-                    hasDiff = true;
-                    break;
-                  }
+    getDisponibilidadAtraccion(id, form.date)
+      .then(res => {
+        const list = Array.isArray(res) ? res : (res?.turnos || res?.time_slots || res?.slots || []);
+        if (Array.isArray(list) && list.length > 0) {
+          const mapped = list.map(s => {
+            const cuposNum = Number(s.cupos ?? s.cupos_disponibles ?? s.available_spots ?? 5);
+            const timeVal = s.time || s.horaInicio || s.hora || '09:00 a.m.';
+            return {
+              ...s,
+              time: timeVal,
+              cupos: cuposNum,
+              cupos_disponibles: cuposNum,
+              estado: s.estado || s.status || (cuposNum > 0 ? 'DISPONIBLE' : 'AGOTADO')
+            };
+          });
+          setTimeSlots((prev) => {
+            if (prev && prev.length === mapped.length) {
+              let hasDiff = false;
+              for (let i = 0; i < mapped.length; i++) {
+                if (
+                  prev[i].time !== mapped[i].time ||
+                  prev[i].cupos !== mapped[i].cupos ||
+                  prev[i].estado !== mapped[i].estado
+                ) {
+                  hasDiff = true;
+                  break;
                 }
-                if (!hasDiff) return prev;
               }
-              return mapped;
-            });
-            // Sincronizar automáticamente el formulario si el horario actual no existe en los turnos disponibles
-            setForm((prev) => {
-              const exists = mapped.some((s) => s.time === prev.time);
-              if (!exists && mapped[0]) {
-                return { ...prev, time: mapped[0].time };
-              }
-              return prev;
-            });
-          }
-        })
-        .catch(() => {});
-    };
+              if (!hasDiff) return prev;
+            }
+            return mapped;
+          });
+          // Sincronizar automáticamente el formulario si el horario actual no existe en los turnos disponibles
+          setForm((prev) => {
+            const exists = mapped.some((s) => s.time === prev.time);
+            if (!exists && mapped[0]) {
+              return { ...prev, time: mapped[0].time };
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(() => {});
+  }, [id, form.date]);
 
+  useEffect(() => {
     refrescarDisponibilidad();
     // Auto-polling para reflejar en tiempo real la deducción o adición de cupos
     const interval = setInterval(refrescarDisponibilidad, 4000);
     return () => clearInterval(interval);
-  }, [id, form.date]);
+  }, [refrescarDisponibilidad]);
 
   const provCodigo = atraccion?.proveedor_codigo || atraccion?.proveedorCodigo || atraccion?.proveedor?.codigo || atraccion?.proveedor?.id || '';
   const admiteNinos = Boolean(
@@ -344,6 +343,32 @@ export function AtraccionDetail() {
       setBookingResult({ success: true, data: result });
       setConfirmedReservation(atraccionRes);
       setShowSuccessModal(true);
+
+      // Decrementar inmediatamente la capacidad del turno seleccionado en pantalla (Doble Actualización / Optimistic UI)
+      setTimeSlots(prev => prev.map(slot => {
+        const sTime = slot.time || slot.hora || slot.hora_inicio || '';
+        const curTime = form.time || '';
+        const match = sTime === curTime || 
+          sTime.replace(/[^0-9]/g, '').slice(0, 4) === curTime.replace(/[^0-9]/g, '').slice(0, 4);
+        if (match) {
+          const currentCupos = Number(slot.cupos ?? slot.cupos_disponibles ?? slot.available_spots ?? 0);
+          const newCupos = Math.max(0, currentCupos - totalTickets);
+          return {
+            ...slot,
+            cupos: newCupos,
+            cupos_disponibles: newCupos,
+            available_spots: newCupos,
+            estado: newCupos <= 0 ? 'AGOTADO' : newCupos <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE',
+            status: newCupos <= 0 ? 'AGOTADO' : newCupos <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'
+          };
+        }
+        return slot;
+      }));
+
+      // Sincronizar en segundo plano con el backend y la API oficial
+      try {
+        refrescarDisponibilidad();
+      } catch (_) {}
 
       // Resetear el selector de personas y categorías inmediatamente tras confirmar la compra
       setForm(prev => ({
