@@ -311,7 +311,6 @@ export function AlojamientosPage() {
   const [rooms, setRooms] = useState(1);
   const [showDatesPopover, setShowDatesPopover] = useState(false);
   const [showOccupancyPopover, setShowOccupancyPopover] = useState(false);
-  const [workTravel, setWorkTravel] = useState(false);
 
   // Estado pestaña planificador
   const [activePlannerTab, setActivePlannerTab] = useState('tranquil');
@@ -330,52 +329,99 @@ export function AlojamientosPage() {
     }
   };
 
-  const fetchData = useCallback(async (customDest) => {
-    setLoading(true);
-    setError(null);
+  const isFetchingRef = useRef(false);
+
+  const fetchData = useCallback(async (customDest, isSilent = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (!isSilent) {
+      setLoading(true);
+      setError(null);
+    }
     const destToSearch = customDest !== undefined ? customDest : destination;
     try {
       let result;
+      const opts = isSilent ? { timeout: 12000 } : {};
       if (destToSearch && destToSearch.trim()) {
         result = await searchAlojamientos({
           destino: destToSearch.trim(),
-        });
+        }, opts);
       } else {
-        result = await getAlojamientos();
+        result = await getAlojamientos(opts);
       }
       const data = result.data || result;
-      setAlojamientos(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setAlojamientos((prev) => {
+        if (prev && prev.length === list.length) {
+          let hasDiff = false;
+          for (let i = 0; i < list.length; i++) {
+            const p = prev[i];
+            const n = list[i];
+            const pId = p.id || p.alojamiento_id || p._id;
+            const nId = n.id || n.alojamiento_id || n._id;
+            const pPrice = typeof p.precio_por_noche === 'object' ? p.precio_por_noche?.total : (p.precio_por_noche || p.precio_noche || p.price);
+            const nPrice = typeof n.precio_por_noche === 'object' ? n.precio_por_noche?.total : (n.precio_por_noche || n.precio_noche || n.price);
+            const pStock = p.habitaciones_disponibles || p.cupos || p.disponibilidad;
+            const nStock = n.habitaciones_disponibles || n.cupos || n.disponibilidad;
+            if (pId !== nId || pPrice !== nPrice || pStock !== nStock || (p.nombre || p.name) !== (n.nombre || n.name)) {
+              hasDiff = true;
+              break;
+            }
+          }
+          if (!hasDiff) return prev;
+        }
+        return list;
+      });
+      if (isSilent) setError(null);
     } catch (err) {
-      console.error('Error al cargar alojamientos:', err);
-      setError('No se pudieron cargar los alojamientos desde el servidor.');
+      console.warn('[AlojamientosPage] Error transitorio en refresco silencioso:', err?.message || err);
+      if (!isSilent) {
+        setError('No se pudieron cargar los alojamientos desde el servidor.');
+      }
     } finally {
-      setLoading(false);
+      isFetchingRef.current = false;
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   }, [destination]);
 
   // Espera a que el usuario deje de escribir antes de consultar al servidor
-  // (antes se hacía una petición por cada tecla).
+  // y mantiene sondeo silencioso en segundo plano cada 5 segundos (en vivo)
   useEffect(() => {
-    const timer = setTimeout(() => fetchData(), destination ? 400 : 0);
-    return () => clearTimeout(timer);
-  }, [fetchData]);
+    let timer = null;
+    let isCancelled = false;
 
-  // Carga una vez la lista de destinos reales del catálogo (incluidos los de los
-  // socios) para que el autocompletado los sugiera, no solo los locales.
+    const debounceTimer = setTimeout(() => {
+      const runPoll = async (silent) => {
+        if (isCancelled) return;
+        if (silent && typeof document !== 'undefined' && document.hidden) {
+          timer = setTimeout(() => runPoll(true), 5000);
+          return;
+        }
+        await fetchData(undefined, silent);
+        if (!isCancelled) {
+          timer = setTimeout(() => runPoll(true), 5000);
+        }
+      };
+      runPoll(false);
+    }, destination ? 400 : 0);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(debounceTimer);
+      if (timer) clearTimeout(timer);
+    };
+  }, [fetchData, destination]);
+
+  // Carga la lista de destinos reales del catálogo aprovechando los alojamientos cargados
+  // o consultando un lote liviano para el autocompletado sin duplicar peticiones pesadas.
   useEffect(() => {
-    let vivo = true;
-    (async () => {
-      try {
-        const resp = await getAlojamientos({ limit: 500 });
-        const arr = Array.isArray(resp) ? resp : resp?.data || [];
-        const nombres = arr.map((a) => a?.destino).filter(Boolean);
-        if (vivo && nombres.length) setDestinosCatalogo(combinarDestinos(nombres));
-      } catch {
-        /* si falla, el autocompletado usa la lista por defecto */
-      }
-    })();
-    return () => { vivo = false; };
-  }, []);
+    if (alojamientos && alojamientos.length > 0) {
+      const nombres = alojamientos.map((a) => a?.destino).filter(Boolean);
+      if (nombres.length) setDestinosCatalogo(combinarDestinos(nombres));
+    }
+  }, [alojamientos]);
 
   // Accesibilidad WCAG 2.1: Cerrar popovers con tecla Escape
   useEffect(() => {
@@ -460,7 +506,7 @@ export function AlojamientosPage() {
         <form className="bk-searchbox-form" onSubmit={handleSearchSubmit} role="search" aria-label="Búsqueda de alojamientos">
           <div className="bk-searchbox-fields">
             {/* Destino */}
-            <div className="bk-search-field">
+            <div className={`bk-search-field ${destinationError ? 'has-error' : ''}`}>
               <span style={{ color: '#474747', display: 'flex' }} aria-hidden="true">
                 <BedIcon size={22} color="#474747" />
               </span>
@@ -472,6 +518,7 @@ export function AlojamientosPage() {
                   id="bk-destination-input"
                   className="bk-field-input"
                   value={destination}
+                  required
                   onChange={(val) => {
                     setDestination(val);
                     if (val.trim()) setDestinationError('');
@@ -802,20 +849,6 @@ export function AlojamientosPage() {
             >
               Buscar
             </button>
-          </div>
-
-          <div className="bk-work-travel-checkbox">
-            <input
-              type="checkbox"
-              id="work-check"
-              checked={workTravel}
-              onChange={(e) => setWorkTravel(e.target.checked)}
-              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#006ce4' }}
-              aria-label="Viajo por trabajo"
-            />
-            <label htmlFor="work-check" style={{ cursor: 'pointer', fontSize: '14px', color: '#1a1a1a', fontWeight: 500 }}>
-              Viajo por trabajo
-            </label>
           </div>
         </form>
       </div>

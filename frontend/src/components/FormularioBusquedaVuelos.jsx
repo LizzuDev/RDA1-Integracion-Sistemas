@@ -1,5 +1,6 @@
 import { useId, useState, useRef, useEffect } from 'react';
 import { hoyEnIso } from '../services/formato';
+import { SpinnerVuelos } from './SpinnerVuelos';
 import { useTelemetry } from '../hooks/useTelemetry';
 
 // Destinos que las aerolíneas socias responden en sus búsquedas (verificado el 10-11-2026).
@@ -164,6 +165,8 @@ export function FormularioBusquedaVuelos({ onBuscar, cargando, origenInicial = '
 
   const esIdaVuelta = tipoViaje === 'idaVuelta';
   const ISO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+  // Máximo un año desde hoy (las aerolíneas no publican más allá).
+  const maxFecha = (() => { const d = new Date(`${hoyEnIso()}T12:00:00`); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0, 10); })();
 
   function validar() {
     const nuevos = {};
@@ -180,6 +183,8 @@ export function FormularioBusquedaVuelos({ onBuscar, cargando, origenInicial = '
       nuevos.fecha = 'La fecha debe tener el formato YYYY-MM-DD.';
     } else if (fecha < hoyEnIso()) {
       nuevos.fecha = 'La fecha de salida no puede ser anterior a hoy.';
+    } else if (fecha > maxFecha) {
+      nuevos.fecha = 'Solo se puede buscar hasta un año desde hoy.';
     }
 
     if (esIdaVuelta) {
@@ -189,6 +194,8 @@ export function FormularioBusquedaVuelos({ onBuscar, cargando, origenInicial = '
         nuevos.fechaRegreso = 'La fecha debe tener el formato YYYY-MM-DD.';
       } else if (fecha && fechaRegreso < fecha) {
         nuevos.fechaRegreso = 'La fecha de regreso no puede ser anterior a la de salida.';
+      } else if (fechaRegreso > maxFecha) {
+        nuevos.fechaRegreso = 'Solo se puede buscar hasta un año desde hoy.';
       }
     }
 
@@ -313,6 +320,7 @@ export function FormularioBusquedaVuelos({ onBuscar, cargando, origenInicial = '
                 type="date"
                 id={ids.fecha}
                 min={hoyEnIso()}
+                max={maxFecha}
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
               />
@@ -335,6 +343,7 @@ export function FormularioBusquedaVuelos({ onBuscar, cargando, origenInicial = '
                   type="date"
                   id={ids.fechaRegreso}
                   min={fecha || hoyEnIso()}
+                  max={maxFecha}
                   value={fechaRegreso}
                   onChange={(e) => setFechaRegreso(e.target.value)}
                 />
@@ -401,8 +410,8 @@ export function FormularioBusquedaVuelos({ onBuscar, cargando, origenInicial = '
         </div>
 
         {/* BUSCAR */}
-        <button className="av-btn-buscar" type="submit" disabled={cargando}>
-          {cargando ? 'Buscando...' : 'Buscar'}
+        <button className="av-btn-buscar" type="submit" disabled={cargando} aria-busy={cargando}>
+          {cargando ? <><SpinnerVuelos />Buscando vuelos…</> : 'Buscar'}
         </button>
       </div>
 

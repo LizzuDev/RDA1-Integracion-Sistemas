@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   listarReservas as listarReservasVuelos,
   obtenerReserva as obtenerReservaVuelo,
@@ -26,6 +26,15 @@ import {
   BedIcon,
   CalendarIcon,
 } from '../components/BookingIcons';
+import { resolverImagenAtraccion } from '../utils/atraccionImagenes';
+import { AlojamientosLoadingView } from '../components/AlojamientosLoadingView';
+import { BoletoVuelo } from '../components/vuelos/BoletoVuelo';
+import { CheckinVuelo } from '../components/vuelos/CheckinVuelo';
+import { SpinnerVuelos } from '../components/SpinnerVuelos';
+import { useEtapasCarga } from '../hooks/useEtapasCarga';
+
+const ETAPAS_CHECKIN_VUELO = ['Conectando con la aerolínea…', 'Registrando a los pasajeros…', 'Generando tu pase de abordar…'];
+const ETAPAS_CANCEL_VUELO = ['Consultando la política de la aerolínea…', 'Cancelando con la aerolínea…', 'Procesando tu reembolso…'];
 import './MisReservasPage.css';
 
 const ESTADOS_ES = {
@@ -59,10 +68,10 @@ function getAlojamientoStatus(r) {
   if (isPast) {
     return { text: 'Check-out completado', cls: 'checked_out' };
   }
-  if (r.status === 'CHECKED_IN') {
+  if (r.status === 'CHECKED_IN' || r.status === 'CONFIRMADO_ASISTIDO') {
     return { text: 'Check-in realizado', cls: 'checked_in' };
   }
-  if (r.status === 'CONFIRMED' || r.status === 'CONFIRMADO_ASISTIDO') {
+  if (r.status === 'CONFIRMED') {
     return { text: 'Confirmada', cls: 'confirmed' };
   }
   return { text: ESTADOS_ES[r.status] ?? r.status, cls: (r.status || '').toLowerCase() };
@@ -81,7 +90,132 @@ const safeFormatearFecha = (val) => {
   return formatearFecha(str);
 };
 
+function getFriendlyCarName(auto) {
+  let make = (auto?.vehiculo?.marca || auto?.marca || '').trim();
+  let model = (auto?.vehiculo?.modelo || auto?.modelo || '').trim();
+  const rawId = String(auto?.auto_id || auto?.autoId || auto?.vehicle_id || '').trim();
+
+  // Si make o model parecen un ID técnico crudo (auto-047, veh-123, UUID de 36 caracteres)
+  const isTechnicalId = (str) => !str || /^(auto-|veh-|ext-|[0-9a-f]{8}-[0-9a-f]{4})/i.test(str);
+
+  if (isTechnicalId(make)) make = '';
+  if (isTechnicalId(model)) model = '';
+
+  // Diccionario canónico de resolución para vehículos conocidos si vinieron sin marca/modelo
+  if (!make && !model) {
+    if (rawId === 'auto-047' || rawId.toLowerCase() === 'auto-047') {
+      make = 'Prueba2AutoSpot';
+      model = 'Prueba2AutoSpot';
+    } else if (rawId.startsWith('auto-0')) {
+      make = 'AutoSpot';
+      model = 'Vehículo de Flota';
+    } else if (rawId.length === 36 || (auto?.pnr && String(auto.pnr).toUpperCase().startsWith('MDU-'))) {
+      make = 'Maneja de Una';
+      model = 'Flota Ejecutiva';
+    } else if (rawId.includes('pds-7648')) {
+      make = 'Mercedes-Benz';
+      model = 'GLA 200';
+    } else if (rawId.startsWith('auto-pru')) {
+      make = 'Toyota';
+      model = 'Yaris Cross 2026';
+    } else if (rawId.startsWith('auto-spark')) {
+      make = 'Chevrolet';
+      model = 'Spark GT';
+    } else if (rawId.startsWith('auto-yaris')) {
+      make = 'Toyota';
+      model = 'Yaris';
+    } else if (rawId.startsWith('auto-tucson')) {
+      make = 'Hyundai';
+      model = 'Tucson';
+    } else if (rawId.startsWith('auto-duster')) {
+      make = 'Renault';
+      model = 'Duster';
+    } else {
+      make = 'Vehículo';
+      model = 'Alquiler';
+    }
+  }
+
+  if (make && model) {
+    if (make.toLowerCase() === model.toLowerCase()) return make;
+    if (model.toLowerCase().includes(make.toLowerCase())) return model;
+    return `${make} ${model}`.trim();
+  }
+  return make || model || 'Vehículo de Renta';
+}
+
+// El check-in es un paso de una sola vía: una vez hecho (o cancelada la reserva),
+// el botón ya no se muestra. Autos, atracciones y alojamientos tienen su propio flujo.
+const ESTADOS_SIN_CHECKIN = ['CANCELLED', 'CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO', 'PICKED_UP', 'RETURNED', 'ENTREGADO', 'COMPLETED', 'BOARDED'];
+function puedeHacerCheckin(r) {
+  if (!r || ['auto', 'atraccion', 'alojamiento'].includes(r.tipo)) return false;
+  if (ESTADOS_SIN_CHECKIN.includes(String(r.status || '').toUpperCase())) return false;
+  // Si el vuelo ya salió, el check-in está cerrado.
+  return r.tipo !== 'vuelo' || ventanaCheckinVuelo(r).estado !== 'cerrado';
+}
+
+// Contrato v2: el check-in abre 48 h antes de la salida y cierra a la hora de salida.
+const HORAS_CHECKIN = 48;
+const fmtAperturaCheckin = (d) => new Intl.DateTimeFormat('es-EC', {
+  timeZone: 'America/Guayaquil', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
+}).format(d);
+
+/**
+ * Ventana de check-in de un vuelo: 'antes' (todavía no abre), 'abierto', 'cerrado'
+ * (ya salió) o 'desconocido'. Con solo la fecha (sin hora), se es permisivo: la
+ * aerolínea igual valida la hora exacta.
+ */
+function ventanaCheckinVuelo(r) {
+  const at = r?.raw?.departureAt;
+  const fecha = r?.raw?.departureDate;
+  const ahora = Date.now();
+  if (at && !Number.isNaN(Date.parse(at))) {
+    const salida = Date.parse(at);
+    const abre = new Date(salida - HORAS_CHECKIN * 3600_000);
+    if (ahora < abre.getTime()) return { estado: 'antes', abre, texto: fmtAperturaCheckin(abre) };
+    return { estado: ahora >= salida ? 'cerrado' : 'abierto', abre };
+  }
+  if (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    const inicioDia = Date.parse(`${fecha}T00:00:00-05:00`);
+    const abre = new Date(inicioDia - HORAS_CHECKIN * 3600_000);
+    if (ahora < abre.getTime()) {
+      return { estado: 'antes', abre, texto: new Intl.DateTimeFormat('es-EC', { timeZone: 'America/Guayaquil', day: 'numeric', month: 'short' }).format(abre) };
+    }
+    return { estado: ahora > inicioDia + 86_400_000 ? 'cerrado' : 'abierto', abre };
+  }
+  return { estado: 'desconocido' };
+}
+
+/** Texto del botón de check-in: avisa desde cuándo se puede si todavía no abre. */
+function textoBotonCheckin(r, corto) {
+  if (r?.tipo === 'vuelo') {
+    const v = ventanaCheckinVuelo(r);
+    if (v.estado === 'antes') return corto ? `Check-in desde ${v.texto}` : `🕑 Check-in disponible desde ${v.texto}`;
+  }
+  return corto ? '⚡ Check-in' : '⚡ Realizar Check-in Digital';
+}
+
+// Códigos del contrato v2 → mensaje para el cliente.
+const MENSAJES_CHECKIN = {
+  CHECK_IN_NOT_AVAILABLE: 'El check-in todavía no está disponible: abre 48 horas antes de la salida del vuelo.',
+  CUTOFF_PASSED: 'El check-in de este vuelo ya cerró.',
+  FLIGHT_ALREADY_DEPARTED: 'El vuelo ya salió; el check-in está cerrado.',
+  FLIGHT_CANCELLED: 'La aerolínea canceló este vuelo. Revisa tu reserva o contáctanos.',
+  CHECK_IN_FAILED: 'La aerolínea no pudo completar el check-in. Inténtalo de nuevo en unos minutos.',
+  BOARDING_PASS_NOT_AVAILABLE: 'El pase de abordar todavía no está disponible.',
+  INVALID_STATUS_TRANSITION: 'La reserva no está en un estado que permita hacer check-in.',
+  ALREADY_CANCELLED: 'Esta reserva ya está cancelada.',
+};
+function mensajeErrorCheckin(datos) {
+  const candidatos = [datos?.code, datos?.errorCode, datos?.detail, datos?.title].filter(Boolean).map(String);
+  const codigo = candidatos.find((c) => MENSAJES_CHECKIN[c.trim()]);
+  if (codigo) return MENSAJES_CHECKIN[codigo.trim()];
+  const legible = candidatos.find((c) => !/^[A-Z0-9_]+$/.test(c.trim()));
+  return legible || 'La aerolínea no aceptó el check-in. Inténtalo de nuevo.';
+}
+
 export function MisReservasPage() {
+  const location = useLocation();
   const [reservas, setReservas] = useState([]);
   const reservasRef = useRef([]);
   useEffect(() => {
@@ -146,6 +280,9 @@ export function MisReservasPage() {
   const [checkinKmSalida, setCheckinKmSalida] = useState(10000);
   const [checkinKmRetorno, setCheckinKmRetorno] = useState(10185);
   const [checkinProcessing, setCheckinProcessing] = useState(false);
+  // Vuelos: mensajes por etapas mientras la aerolínea procesa (solo visual).
+  const etapaCheckinVuelo = useEtapasCarga(checkinProcessing && checkinReserva?.tipo === 'vuelo', ETAPAS_CHECKIN_VUELO, 1100);
+  const etapaCancelVuelo = useEtapasCarga(cancelling && selectedReserva?.tipo === 'vuelo', ETAPAS_CANCEL_VUELO, 1100);
 
   const handleExecuteCheckin = async (reserva, tipoOperacion) => {
     setCheckinProcessing(true);
@@ -195,7 +332,7 @@ export function MisReservasPage() {
           });
           localStorage.setItem('reservas_atracciones', JSON.stringify(updated));
         }
-      } catch (_) {}
+      } catch (_) { }
     };
 
     try {
@@ -268,7 +405,7 @@ export function MisReservasPage() {
           setCheckinStepResult({
             vertical: 'vuelo',
             success: false,
-            mensaje: datos.detail || datos.title || 'La aerolínea no aceptó el check-in. Inténtalo de nuevo.',
+            mensaje: mensajeErrorCheckin(datos),
           });
         }
       }
@@ -315,10 +452,13 @@ export function MisReservasPage() {
           status: filtroStatus || undefined,
           limit: 20,
         }),
-        getOrdersAuto(),
+        getOrdersAuto(isAdmin ? undefined : (correoSesion || undefined)),
         getReservasAtracciones(isAdmin ? undefined : (correoSesion || undefined)),
         (user?.email || user?.id) ? getReservasAlojamientos() : Promise.resolve([]),
       ]);
+
+      const cancelledStorage = new Set(JSON.parse(localStorage.getItem('cancelled_reservas_ids') || '[]'));
+      const checkedInStorage = new Set(JSON.parse(localStorage.getItem('checked_in_orders') || '[]'));
 
       // 1. Vuelos API
       let vuelosItems = [];
@@ -333,6 +473,7 @@ export function MisReservasPage() {
             ? safeFormatearFecha(r.itineraries[1].segments[0].departure.at)
             : (r.returnDate ? safeFormatearFecha(r.returnDate) : null);
           const fReserva = r.createdAt ? safeFormatearFecha(r.createdAt) : safeFormatearFecha(new Date().toISOString());
+          const isVueloCancelled = cancelledStorage.has(r.bookingId) || cancelledStorage.has(r.pnr);
           return {
             id: r.bookingId,
             pnr: r.pnr ?? '—',
@@ -348,7 +489,7 @@ export function MisReservasPage() {
             cantidad: paxCount,
             cantidadTexto: `${paxCount} Pasajero${paxCount > 1 ? 's' : ''}`,
             rawDate: r.createdAt ? new Date(r.createdAt).getTime() : new Date().getTime(),
-            status: r.status || 'CONFIRMED',
+            status: isVueloCancelled ? 'CANCELLED' : (r.status || 'CONFIRMED'),
             totalRaw: r.bookingPrice?.total ?? r.grandTotal?.total ?? 0,
             imagen: DEFAULT_IMAGES.vuelo,
             raw: r,
@@ -364,12 +505,9 @@ export function MisReservasPage() {
         const respuestaAutos = autosRes.value;
         const listaAutos = Array.isArray(respuestaAutos) ? respuestaAutos : (respuestaAutos?.orders || []);
         autosItems = listaAutos.map((a) => {
-          const autoModel = a.vehiculo?.modelo || a.auto_id || a.autoId || '';
-          const autoMake = a.vehiculo?.marca || '';
+          const carName = getFriendlyCarName(a);
           const diasRenta = Number(a.dias_renta || a.diasRenta || a.dias || 3);
-          const displayTitle = (autoMake || autoModel)
-            ? `Renta de ${autoMake} ${autoModel} (${diasRenta} días)`.trim()
-            : 'Renta de Auto';
+          const displayTitle = `Renta de ${carName} (${diasRenta} días)`;
           const pnrReal = a.pnr || a.codigo_reserva || a.order_id || a.id || 'AUTO';
           const pickupStr = a.pickup_date || a.fecha_inicio || a.pickup || a.date || a.fecha || (a.createdAt ? String(a.createdAt).split('T')[0] : '');
           const dropoffStr = a.dropoff_date || a.fecha_fin || a.dropoff || '';
@@ -379,6 +517,18 @@ export function MisReservasPage() {
             ? (dropoffFmt ? `${pickupFmt} – ${dropoffFmt}` : `${pickupFmt} (${diasRenta} días)`)
             : `${diasRenta} días de renta`;
           const fReserva = (a.createdAt || a.created_at) ? safeFormatearFecha(a.createdAt || a.created_at) : safeFormatearFecha(new Date().toISOString());
+          const rawStatus = (a.status || a.estado || '').toUpperCase();
+          const isMarkedCancelled = cancelledStorage.has(a.pnr) || cancelledStorage.has(a.order_id) || cancelledStorage.has(a.id) ||
+                                    cancelledStorage.has(pnrReal) || (a.pnr && cancelledStorage.has(a.pnr.replace(/^MDU-/, '')));
+          const isMarkedCheckedIn = checkedInStorage.has(a.pnr) || checkedInStorage.has(a.order_id) || checkedInStorage.has(a.id) ||
+                                    checkedInStorage.has(pnrReal) || (a.pnr && checkedInStorage.has(a.pnr.replace(/^MDU-/, '')));
+          const isAutoAssisted = ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO', 'PICKED_UP', 'RETURNED', 'COMPLETED', 'ENTREGADO'].includes(rawStatus) ||
+                                ['CONFIRMADO_ASISTIDO', 'ASISTIDO', 'CHECKED_IN', 'PICKED_UP', 'RETURNED', 'ENTREGADO', 'COMPLETED'].includes((a.estado || '').toUpperCase()) ||
+                                a.status === 'CONFIRMADO_ASISTIDO' ||
+                                a.rentalStatus === 'PICKED_UP' || a.rental_status === 'PICKED_UP' || a.rentalStatus === 'RETURNED' || a.rental_status === 'RETURNED' ||
+                                a.checkin_status === 'CHECKIN_COMPLETED' || a.checkin?.status === 'COMPLETED' || a.checkin?.estado === 'CONFIRMADO_ASISTIDO' ||
+                                isMarkedCheckedIn;
+          const autoFinalStatus = (isMarkedCancelled || rawStatus === 'CANCELLED' || rawStatus === 'CANCELADA') ? 'CANCELLED' : (isAutoAssisted ? 'CONFIRMADO_ASISTIDO' : (rawStatus || 'CONFIRMED'));
           return {
             id: a.order_id || a.id,
             pnr: pnrReal,
@@ -395,12 +545,14 @@ export function MisReservasPage() {
             cantidad: 1,
             cantidadTexto: `1 Vehículo (${diasRenta} días)`,
             rawDate: a.createdAt ? new Date(a.createdAt).getTime() : new Date().getTime(),
-            status: a.status || 'CONFIRMED',
+            status: autoFinalStatus,
             placa: a.placa || a.checkin?.placa,
             checkin: a.checkin,
             totalRaw: a.total_price?.total || a.totalPrice?.total || 106.50,
             imagen: a.vehiculo?.foto_url || DEFAULT_IMAGES.auto,
             email: (a.email || a.driver?.email || a.conductor?.email || a.booker?.email || '').trim().toLowerCase(),
+            documentId: (a.conductor?.licencia || a.driver?.license_number || a.licencia || a.driver?.licencia || '').trim(),
+            raw: a,
             link: '/autos',
           };
         });
@@ -418,13 +570,21 @@ export function MisReservasPage() {
           ? (dropoffLocalFmt ? `${pickupLocalFmt} – ${dropoffLocalFmt}` : `${pickupLocalFmt} (${diasLocal} días)`)
           : `${diasLocal} días de renta`;
         const fReservaLocal = (a.createdAt || a.date) ? safeFormatearFecha(a.createdAt || a.date) : safeFormatearFecha(new Date().toISOString());
+        const carNameLocal = getFriendlyCarName(a);
+        const hasTechnicalTitle = a.titulo && /auto-\d+|veh-\d+|[0-9a-f]{8}-[0-9a-f]{4}/i.test(a.titulo);
+        const displayTitleLocal = (a.titulo && !hasTechnicalTitle) ? a.titulo : `Renta de ${carNameLocal} (${diasLocal} días)`;
+        const isLocalAssisted = ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO', 'PICKED_UP', 'RETURNED'].includes((a.status || a.estado || '').toUpperCase()) ||
+                               checkedInStorage.has(a.id) || checkedInStorage.has(a.orderId) || checkedInStorage.has(a.pnr);
+        const localAutoStatus = (cancelledStorage.has(a.id) || cancelledStorage.has(a.orderId) || cancelledStorage.has(a.pnr) || a.status === 'CANCELLED')
+          ? 'CANCELLED'
+          : (isLocalAssisted ? 'CONFIRMADO_ASISTIDO' : (a.status || 'CONFIRMED'));
         return {
           id: a.id || a.orderId,
           pnr: a.pnr || a.codigo_reserva || a.id || a.orderId || 'AUTO',
           tipo: 'auto',
           servicioTexto: 'Renta de auto',
           destino: 'Quito',
-          titulo: a.titulo || `Renta de Auto (${diasLocal} días)`,
+          titulo: displayTitleLocal,
           fechasTexto: displayFechasLocal,
           fecha: pickupLocalFmt || safeFormatearFecha(new Date().toISOString()),
           fechaReserva: fReservaLocal,
@@ -434,10 +594,12 @@ export function MisReservasPage() {
           cantidad: 1,
           cantidadTexto: `1 Vehículo (${diasLocal} días)`,
           rawDate: a.createdAt || a.date ? new Date(a.createdAt || a.date).getTime() : new Date().getTime(),
-          status: a.status || 'CONFIRMED',
+          status: localAutoStatus,
           totalRaw: a.totalPrice?.total || a.total || 106.50,
           imagen: a.foto_url || DEFAULT_IMAGES.auto,
           email: (a.email || a.driver?.email || a.conductor?.email || a.booker?.email || '').trim().toLowerCase(),
+          documentId: (a.conductor?.licencia || a.driver?.license_number || a.licencia || a.documentId || '').trim(),
+          raw: a,
           link: '/autos',
           isLocal: true,
         };
@@ -448,12 +610,15 @@ export function MisReservasPage() {
       if (atraccionesRes.status === 'fulfilled' && atraccionesRes.value) {
         const respuestaAtracciones = atraccionesRes.value;
         const listaAtracciones = Array.isArray(respuestaAtracciones) ? respuestaAtracciones : (respuestaAtracciones?.data || []);
-        atraccionesItems = listaAtracciones.map((at) => {
+        atraccionesItems = listaAtracciones.map((at, idx) => {
           const fechaAtrac = at.date || at.fecha || at.raw?.date || at.raw?.fecha || (at.createdAt ? String(at.createdAt).split('T')[0] : '');
           const horaAtrac = at.time || at.hora || at.raw?.time || at.raw?.hora || '10:00 a.m.';
           const tCount = Number(at.ticket_count || at.cupos || at.personas || at.cantidad || at.quantity || at.raw?.ticket_count || 1);
           const fechaAtracFmt = fechaAtrac ? safeFormatearFecha(fechaAtrac) : '';
           const fReservaAtrac = (at.createdAt || at.created_at) ? safeFormatearFecha(at.createdAt || at.created_at) : safeFormatearFecha(new Date().toISOString());
+          const isAtracCancelled = cancelledStorage.has(at.id) || cancelledStorage.has(at.reservation_id) || cancelledStorage.has(at.pnr);
+          const rawAtrStatus = (at.status || at.estado || '').toUpperCase();
+          const finalAtrStatus = isAtracCancelled ? 'CANCELLED' : (rawAtrStatus || 'CONFIRMED');
           return {
             id: at.id || at.reservation_id || at.pnr,
             pnr: at.pnr || at.codigo_reserva || at.reservation_id || at.id || 'ATRAC',
@@ -470,9 +635,9 @@ export function MisReservasPage() {
             cantidad: tCount,
             cantidadTexto: `${tCount} Entrada${tCount > 1 ? 's' : ''} (${tCount} Persona${tCount > 1 ? 's' : ''})`,
             rawDate: at.createdAt ? new Date(at.createdAt).getTime() : new Date().getTime(),
-            status: at.status || 'CONFIRMED',
+            status: finalAtrStatus,
             totalRaw: at.total_price?.total || at.total_price || 55.00,
-            imagen: at.photoUrl || at.foto_url || DEFAULT_IMAGES.atraccion,
+            imagen: at.photoUrl || at.foto_url || resolverImagenAtraccion({ nombre: at.atraccionTitulo || at.titulo || at.nombre, ciudad: at.ciudad, photos: at.photos }, idx),
             email: (at.customer_email || at.email || at.customer?.email || at.userEmail || '').trim().toLowerCase(),
             documentId: (at.documentId || at.document_id || at.customer?.document_id || '').trim(),
             link: at.atraccionId ? `/atracciones/${at.atraccionId}` : '/',
@@ -483,7 +648,7 @@ export function MisReservasPage() {
 
       const atraccionesLocales = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]')
         .filter((at) => !correoSesion || (at.customer_email || at.email || at.userEmail || '').trim().toLowerCase() === correoSesion);
-      const atraccionesLocalesFormatted = atraccionesLocales.map((at) => {
+      const atraccionesLocalesFormatted = atraccionesLocales.map((at, idx) => {
         const fechaLocalAtrac = at.date || at.fecha || (at.createdAt ? String(at.createdAt).split('T')[0] : '');
         const horaLocalAtrac = at.time || at.hora || '10:00 a.m.';
         const tCountLocal = Number(at.ticket_count || at.cupos || at.personas || at.cantidad || 1);
@@ -505,9 +670,9 @@ export function MisReservasPage() {
           cantidad: tCountLocal,
           cantidadTexto: `${tCountLocal} Entrada${tCountLocal > 1 ? 's' : ''} (${tCountLocal} Persona${tCountLocal > 1 ? 's' : ''})`,
           rawDate: at.createdAt || at.date ? new Date(at.createdAt || at.date).getTime() : new Date().getTime(),
-          status: at.status || 'CONFIRMED',
+          status: (cancelledStorage.has(at.id) || cancelledStorage.has(at.reservation_id) || cancelledStorage.has(at.pnr)) ? 'CANCELLED' : (at.status || 'CONFIRMED'),
           totalRaw: at.totalPrice?.total || at.total || 55.00,
-          imagen: at.photoUrl || DEFAULT_IMAGES.atraccion,
+          imagen: at.photoUrl || resolverImagenAtraccion({ nombre: at.atraccionTitulo || at.titulo || at.nombre, ciudad: at.ciudad }, idx),
           email: (at.customer_email || at.email || at.userEmail || '').trim().toLowerCase(),
           documentId: (at.document_id || at.documentId || '').trim(),
           link: '/',
@@ -522,13 +687,27 @@ export function MisReservasPage() {
         const respuestaAlojamientos = alojamientosRes.value;
         const listaAlojamientos = Array.isArray(respuestaAlojamientos) ? respuestaAlojamientos : (respuestaAlojamientos?.data || []);
         alojamientosApiItems = listaAlojamientos.map((al) => {
-          const checkinStr = al.checkin ? safeFormatearFecha(al.checkin) : '10 nov.';
-          const checkoutStr = al.checkout ? safeFormatearFecha(al.checkout) : '16 nov.';
-          const huespedesNum = Number(al.huespedes || al.personas || al.raw?.passengers?.length || 1);
-          const habNum = Number(al.habitaciones_count || al.habitaciones || 1);
+          const checkinStr = al.checkin ? safeFormatearFecha(al.checkin) : 'Por definir';
+          const checkoutStr = al.checkout ? safeFormatearFecha(al.checkout) : 'Por definir';
+          const huespedesNum = Number(al.huespedes || al.personas || (al.adultos ? al.adultos + (al.ninos || 0) : null) || (al.number_of_adults ? al.number_of_adults + (al.number_of_children || 0) : null) || al.raw?.passengers?.length || 1);
+          const habNum = Number(al.habitaciones_count || al.habitaciones || al.number_of_rooms || 1);
           const fReservaAloj = (al.created_at || al.createdAt) ? safeFormatearFecha(al.created_at || al.createdAt) : safeFormatearFecha(new Date().toISOString());
-          const cancelTexto = 'Cancelación gratuita hasta 48 horas antes de la llegada';
+          const bedTxt = al.tipo_habitacion?.descripcion_camas || (al.tipo_habitacion?.camas ? `${al.tipo_habitacion.camas} cama${al.tipo_habitacion.camas > 1 ? 's' : ''}` : '');
           const esReembolsable = true;
+          const cancelTexto = 'Cancelación gratuita hasta 48 horas antes de la llegada';
+          const isAlojCancelled = cancelledStorage.has(al.reservation_id) || cancelledStorage.has(al.id) || cancelledStorage.has(al.codigo_reserva) || cancelledStorage.has(al.pnr);
+          const rawAlojStatus = (al.status || al.estado || '').toUpperCase();
+          const isAlojAssisted = ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO'].includes(rawAlojStatus) ||
+            Boolean(al.checkin_at) ||
+            Boolean(al.checkin_admin) ||
+            checkedInStorage.has(al.reservation_id) || checkedInStorage.has(al.id) || checkedInStorage.has(al.codigo_reserva) || checkedInStorage.has(al.pnr);
+          if (isAlojAssisted) {
+            if (al.reservation_id) checkedInStorage.add(al.reservation_id);
+            if (al.id) checkedInStorage.add(al.id);
+            if (al.codigo_reserva) checkedInStorage.add(al.codigo_reserva);
+            if (al.pnr) checkedInStorage.add(al.pnr);
+          }
+          const alojFinalStatus = isAlojCancelled ? 'CANCELLED' : (isAlojAssisted ? 'CONFIRMADO_ASISTIDO' : (rawAlojStatus || 'CONFIRMED'));
           return {
             id: al.reservation_id || al.id,
             pnr: al.codigo_reserva || al.pnr || al.reservation_id || al.id || 'HOTEL',
@@ -547,9 +726,9 @@ export function MisReservasPage() {
             checkinRaw: al.checkin,
             checkoutRaw: al.checkout,
             cantidad: huespedesNum,
-            cantidadTexto: `${huespedesNum} Huésped${huespedesNum > 1 ? 'es' : ''}${habNum > 1 ? ` · ${habNum} Habitaciones` : ' · 1 Habitación'}`,
+            cantidadTexto: `${huespedesNum} Huésped${huespedesNum > 1 ? 'es' : ''}${habNum > 1 ? ` · ${habNum} Habitaciones` : ' · 1 Habitación'}${bedTxt ? ` · ${bedTxt}` : ''}`,
             rawDate: al.created_at ? new Date(al.created_at).getTime() : (al.checkin ? new Date(al.checkin).getTime() : new Date().getTime()),
-            status: al.status || 'CONFIRMED',
+            status: alojFinalStatus,
             totalRaw: al.total_price?.total || al.total || 0,
             imagen: al.photo_url || DEFAULT_IMAGES.alojamiento,
             link: al.alojamiento_id ? `/alojamientos/${al.alojamiento_id}` : '/',
@@ -575,20 +754,29 @@ export function MisReservasPage() {
       const alojamientosLocales = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]')
         .filter((al) => !correoSesion || (al.email || '').trim().toLowerCase() === correoSesion);
       const alojamientosLocalesFormatted = alojamientosLocales.map((al) => {
-        const checkinLocalStr = al.checkin ? safeFormatearFecha(al.checkin) : '10 nov.';
-        const checkoutLocalStr = al.checkout ? safeFormatearFecha(al.checkout) : '16 nov.';
-        const huespedesLocalNum = Number(al.huespedes || 1);
+        const checkinLocalStr = al.checkin ? safeFormatearFecha(al.checkin) : 'Por definir';
+        const checkoutLocalStr = al.checkout ? safeFormatearFecha(al.checkout) : 'Por definir';
+        const huespedesLocalNum = Number(al.huespedes || (al.adultos ? al.adultos + (al.ninos || 0) : null) || (al.number_of_adults ? al.number_of_adults + (al.number_of_children || 0) : null) || 1);
+        const habLocalNum = Number(al.habitaciones || al.habitaciones_count || al.number_of_rooms || 1);
         const fReservaLocalAloj = al.createdAt ? safeFormatearFecha(al.createdAt) : safeFormatearFecha(new Date().toISOString());
-        const cancelTextoLoc = 'Cancelación gratuita hasta 48 horas antes de la llegada';
+        const bedLocalTxt = al.descripcionCamas || (al.camas ? `${al.camas} cama${al.camas > 1 ? 's' : ''}` : '');
         const esReemLoc = true;
+        const cancelTextoLoc = 'Cancelación gratuita hasta 48 horas antes de la llegada';
+        const alojIdLocal = al.reservationId || al.id;
+        const alojPnrLocal = al.codigoReserva || al.codigo_reserva || al.pnr || al.reservationId || al.id || 'HOTEL';
+        const isAlojLocalAssisted = ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO'].includes((al.status || al.estado || '').toUpperCase()) ||
+          checkedInStorage.has(alojIdLocal) || checkedInStorage.has(alojPnrLocal) || checkedInStorage.has(al.id) || checkedInStorage.has(al.reservationId);
+        const finalLocalStatus = (cancelledStorage.has(alojIdLocal) || cancelledStorage.has(alojPnrLocal) || al.status === 'CANCELLED' || al.status === 'CANCELADO')
+          ? 'CANCELLED'
+          : (isAlojLocalAssisted ? 'CONFIRMADO_ASISTIDO' : (al.status || 'CONFIRMED'));
         return {
-          id: al.reservationId || al.id,
-          pnr: al.codigoReserva || al.codigo_reserva || al.pnr || al.reservationId || al.id || 'HOTEL',
+          id: alojIdLocal,
+          pnr: alojPnrLocal,
           tipo: 'alojamiento',
           servicioTexto: 'Alojamiento',
           destino: al.destino || 'Quito',
           titulo: al.nombreAlojamiento
-            ? `${al.nombreAlojamiento} (${huespedesLocalNum} persona${huespedesLocalNum > 1 ? 's' : ''})`
+            ? `${al.nombreAlojamiento}${al.tipoHabitacion ? ` · ${al.tipoHabitacion}` : ''} (${huespedesLocalNum} persona${huespedesLocalNum > 1 ? 's' : ''})`
             : al.titulo || 'Alojamiento reservado',
           fechasTexto: `${checkinLocalStr} – ${checkoutLocalStr}`,
           fecha: checkinLocalStr,
@@ -598,9 +786,9 @@ export function MisReservasPage() {
           checkinRaw: al.checkin,
           checkoutRaw: al.checkout,
           cantidad: huespedesLocalNum,
-          cantidadTexto: `${huespedesLocalNum} Huésped${huespedesLocalNum > 1 ? 'es' : ''}`,
+          cantidadTexto: `${huespedesLocalNum} Huésped${huespedesLocalNum > 1 ? 'es' : ''}${habLocalNum > 1 ? ` · ${habLocalNum} Habitaciones` : ' · 1 Habitación'}${bedLocalTxt ? ` · ${bedLocalTxt}` : ''}`,
           rawDate: al.createdAt ? new Date(al.createdAt).getTime() : (al.checkin ? new Date(al.checkin).getTime() : new Date().getTime()),
-          status: al.status || 'CONFIRMED',
+          status: finalLocalStatus,
           totalRaw: al.totalPrice || al.total || 0,
           imagen: al.photoUrl || DEFAULT_IMAGES.alojamiento,
           link: al.alojamientoId ? `/alojamientos/${al.alojamientoId}` : '/',
@@ -644,22 +832,26 @@ export function MisReservasPage() {
 
       todasLasReservas.forEach((item) => {
         // Regla de Aislamiento y Privacidad Cross-Platform (Defensa Cátedra):
-        if (!isAdmin) {
+        // Vuelos no pasa por este filtro: el backend ya devuelve solo las reservas del dueño
+        // (JWT/huella del navegador) y sus registros no traen correo ni cédula.
+        if (!isAdmin && item.tipo !== 'vuelo') {
           if (!correoSesion) {
             // Usuario sin sesión activa: no mostrar ninguna reserva
             return;
           }
-          const itemEmail = (item.email || item.raw?.customer_email || item.raw?.customer?.email || item.raw?.booker?.email || '').trim().toLowerCase();
-          const itemDoc = (item.documentId || item.raw?.customer?.document_id || item.raw?.document_id || item.raw?.documentId || '').trim();
-          const userCedula = (user?.user_metadata?.cedula || '').trim();
 
-          // Si el item tiene email, debe coincidir estrictamente con el correo de la sesión actual
-          if (itemEmail) {
-            if (itemEmail !== correoSesion) {
-              return;
-            }
-          } else if (itemDoc) {
-            if (userCedula && itemDoc !== userCedula) {
+          // Las reservas de vuelos vienen del backend ya autenticadas y filtradas por el dueño
+          // (no traen correo ni cédula en la respuesta del GDS), por lo que no deben descartarse.
+          if (item.tipo !== 'vuelo') {
+            const itemEmail = (item.email || item.raw?.customer_email || item.raw?.customer?.email || item.raw?.booker?.email || item.raw?.conductor?.email || item.conductor?.email || item.driver?.email || '').trim().toLowerCase();
+            const itemDoc = (item.documentId || item.raw?.customer?.document_id || item.raw?.document_id || item.raw?.documentId || item.raw?.conductor?.licencia || item.conductor?.licencia || item.raw?.driver?.license_number || '').trim();
+            const userCedula = (user?.user_metadata?.cedula || user?.user_metadata?.cedula_ruc || '').trim();
+
+            const coincideEmail = Boolean(itemEmail && itemEmail === correoSesion);
+            const coincideDoc = Boolean(itemDoc && userCedula && itemDoc === userCedula);
+
+            // Si el elemento no coincide ni por email ni por cédula con el usuario en sesión, descartar
+            if (!coincideEmail && !coincideDoc) {
               return;
             }
           }
@@ -676,11 +868,32 @@ export function MisReservasPage() {
             ((pnrVal && e.pnr === pnrVal) || (idVal && e.id === idVal))
           );
           if (existente) {
-            // Regla Monotónica de Check-in: Si el estado local ya está en CHECKED_IN o CONFIRMADO_ASISTIDO,
-            // no permitir que una respuesta rezagada del servidor lo degrade a CONFIRMED
-            const estadosAsistidos = ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO', 'PICKED_UP', 'RETURNED'];
-            if (estadosAsistidos.includes(item.status) && !estadosAsistidos.includes(existente.status)) {
-              existente.status = item.status;
+            // Regla Monotónica de Check-in: Si el estado local o servidor ya está asistido, preservar CONFIRMADO_ASISTIDO
+            const estadosAsistidos = ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO', 'PICKED_UP', 'RETURNED', 'ENTREGADO', 'COMPLETED'];
+            if (estadosAsistidos.includes(item.status) || estadosAsistidos.includes(existente.status)) {
+              existente.status = 'CONFIRMADO_ASISTIDO';
+              try {
+                const savedCheckedIn = new Set(JSON.parse(localStorage.getItem('checked_in_orders') || '[]'));
+                if (item.id) savedCheckedIn.add(item.id);
+                if (item.pnr) savedCheckedIn.add(item.pnr);
+                if (existente.id) savedCheckedIn.add(existente.id);
+                if (existente.pnr) savedCheckedIn.add(existente.pnr);
+                localStorage.setItem('checked_in_orders', JSON.stringify(Array.from(savedCheckedIn)));
+
+                const localAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
+                const upd = localAutos.map((la) => {
+                  const m = la.id === idVal || la.orderId === idVal || (pnrVal && (la.pnr === pnrVal || la.orderId === pnrVal));
+                  return m ? { ...la, status: 'CONFIRMADO_ASISTIDO' } : la;
+                });
+                localStorage.setItem('reservas_autos', JSON.stringify(upd));
+
+                const localAlo = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+                const updAlo = localAlo.map((la) => {
+                  const m = la.id === idVal || la.reservationId === idVal || (pnrVal && (la.pnr === pnrVal || la.codigoReserva === pnrVal || la.codigo_reserva === pnrVal));
+                  return m ? { ...la, status: 'CONFIRMADO_ASISTIDO', estado: 'CONFIRMADO_ASISTIDO' } : la;
+                });
+                localStorage.setItem('reservas_alojamientos', JSON.stringify(updAlo));
+              } catch (_) {}
             }
             if (item.placa && !existente.placa) {
               existente.placa = item.placa;
@@ -721,14 +934,19 @@ export function MisReservasPage() {
       let listaFinal = Array.from(mapaCombinado.values());
       listaFinal.sort((a, b) => b.rawDate - a.rawDate);
 
-      // Persistencia monotónica en localStorage: si un PNR/ID ya asistió, nunca permitir degradación al recargar
+      // Persistencia monotónica en localStorage: si un PNR/ID ya asistió o se canceló, nunca permitir degradación
       const estadosAsistidos = ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO', 'PICKED_UP', 'RETURNED', 'COMPLETED', 'ENTREGADO'];
       try {
         const savedCheckedIn = new Set(JSON.parse(localStorage.getItem('checked_in_orders') || '[]'));
+        const savedCancelled = new Set(JSON.parse(localStorage.getItem('cancelled_orders') || '[]'));
         for (const item of listaFinal) {
           const itemKey = item.id;
           const pnrKey = item.pnr;
-          if ((itemKey && savedCheckedIn.has(itemKey)) || (pnrKey && savedCheckedIn.has(pnrKey))) {
+          if ((itemKey && savedCancelled.has(itemKey)) || (pnrKey && savedCancelled.has(pnrKey)) || item.status === 'CANCELLED' || item.status === 'CANCELADO') {
+            item.status = 'CANCELLED';
+            if (itemKey) savedCancelled.add(itemKey);
+            if (pnrKey) savedCancelled.add(pnrKey);
+          } else if ((itemKey && savedCheckedIn.has(itemKey)) || (pnrKey && savedCheckedIn.has(pnrKey))) {
             item.status = 'CONFIRMADO_ASISTIDO';
           } else if (estadosAsistidos.includes(item.status)) {
             if (itemKey) savedCheckedIn.add(itemKey);
@@ -736,19 +954,81 @@ export function MisReservasPage() {
           }
         }
         localStorage.setItem('checked_in_orders', JSON.stringify(Array.from(savedCheckedIn)));
-      } catch (_) {}
+        localStorage.setItem('cancelled_orders', JSON.stringify(Array.from(savedCancelled)));
+      } catch (_) { }
+
+      // Consulta reactiva de estado en tiempo real para autos pendientes de confirmación (AutoSpot Esteban, RutaLibre Daniel, MDU Mateo)
+      const autosParaVerificar = listaFinal.filter(
+        (it) => it.tipo === 'auto' && it.status !== 'CANCELLED' && !estadosAsistidos.includes(it.status) && it.pnr && it.pnr !== 'AUTO'
+      );
+      if (autosParaVerificar.length > 0) {
+        Promise.allSettled(
+          autosParaVerificar.map(async (auto) => {
+            try {
+              const res = await api.get(`/reservas/${auto.pnr}/estado`);
+              if (res?.data && (estadosAsistidos.includes(res.data.estado) || estadosAsistidos.includes(res.data.status))) {
+                auto.status = 'CONFIRMADO_ASISTIDO';
+                if (res.data.placa && !auto.placa) auto.placa = res.data.placa;
+                const savedChk = new Set(JSON.parse(localStorage.getItem('checked_in_orders') || '[]'));
+                if (auto.id) savedChk.add(auto.id);
+                if (auto.pnr) savedChk.add(auto.pnr);
+                localStorage.setItem('checked_in_orders', JSON.stringify(Array.from(savedChk)));
+                const localAutos = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
+                const upd = localAutos.map((la) => {
+                  const m = la.id === auto.id || la.orderId === auto.id || la.pnr === auto.pnr || la.orderId === auto.pnr;
+                  return m ? { ...la, status: 'CONFIRMADO_ASISTIDO', placa: res.data.placa || la.placa } : la;
+                });
+                localStorage.setItem('reservas_autos', JSON.stringify(upd));
+                setReservas((prev) => prev.map((r) => ((r.id === auto.id || r.pnr === auto.pnr) ? { ...r, status: 'CONFIRMADO_ASISTIDO', placa: res.data.placa || r.placa } : r)));
+              }
+            } catch (_) {}
+          })
+        );
+      }
+
+      // Consulta reactiva de estado en tiempo real para alojamientos pendientes de confirmación (Hábitat James, Kawsay, Posada EC, Cozy)
+      const alojParaVerificar = listaFinal.filter(
+        (it) => it.tipo === 'alojamiento' && it.status !== 'CANCELLED' && !estadosAsistidos.includes(it.status) && it.pnr && it.pnr !== 'HOTEL'
+      );
+      if (alojParaVerificar.length > 0) {
+        Promise.allSettled(
+          alojParaVerificar.map(async (aloj) => {
+            try {
+              const res = await api.get(`/reservas/${aloj.pnr}/estado`);
+              if (res?.data && (estadosAsistidos.includes(res.data.estado) || estadosAsistidos.includes(res.data.status))) {
+                aloj.status = 'CONFIRMADO_ASISTIDO';
+                const savedChk = new Set(JSON.parse(localStorage.getItem('checked_in_orders') || '[]'));
+                if (aloj.id) savedChk.add(aloj.id);
+                if (aloj.pnr) savedChk.add(aloj.pnr);
+                localStorage.setItem('checked_in_orders', JSON.stringify(Array.from(savedChk)));
+                const localAlo = JSON.parse(localStorage.getItem('reservas_alojamientos') || '[]');
+                const updAlo = localAlo.map((la) => {
+                  const m = la.id === aloj.id || la.reservationId === aloj.id || la.pnr === aloj.pnr || la.codigoReserva === aloj.pnr || la.codigo_reserva === aloj.pnr;
+                  return m ? { ...la, status: 'CONFIRMADO_ASISTIDO', estado: 'CONFIRMADO_ASISTIDO' } : la;
+                });
+                localStorage.setItem('reservas_alojamientos', JSON.stringify(updAlo));
+                setReservas((prev) => prev.map((r) => ((r.id === aloj.id || r.pnr === aloj.pnr) ? { ...r, status: 'CONFIRMADO_ASISTIDO' } : r)));
+              }
+            } catch (_) {}
+          })
+        );
+      }
 
       // Reactividad tipo Composable (Android):
       // Si la lista de reservas no ha sufrido cambios en sus atributos visibles (status, placa, etc.),
       // mantenemos intacta la referencia previa para evitar cualquier re-render o parpadeo visual.
       setReservas((prev) => {
-        // Preservación monotónica de check-in: nunca degradar a CONFIRMED tras confirmación
+        // Preservación monotónica de check-in y cancelación: nunca degradar a CONFIRMED tras confirmación o cancelación
         if (prev && prev.length > 0) {
           for (const item of listaFinal) {
             const p = prev.find(x => x.id === item.id || (x.pnr && x.pnr === item.pnr));
-            if (p && estadosAsistidos.includes(p.status) && !estadosAsistidos.includes(item.status)) {
-              item.status = p.status;
-              if (p.placa && !item.placa) item.placa = p.placa;
+            if (p) {
+              if (estadosAsistidos.includes(p.status) && !estadosAsistidos.includes(item.status)) {
+                item.status = p.status;
+                if (p.placa && !item.placa) item.placa = p.placa;
+              } else if ((p.status === 'CANCELLED' || p.status === 'CANCELADO') && item.status !== 'CANCELLED' && item.status !== 'CANCELADO') {
+                item.status = 'CANCELLED';
+              }
             }
           }
         }
@@ -813,15 +1093,28 @@ export function MisReservasPage() {
       if (isCancelled) return;
       await cargarTodasLasReservas(silent);
       if (!isCancelled) {
-        timer = setTimeout(() => runPoll(true), 5000);
+        timer = setTimeout(() => runPoll(true), 2500);
       }
     };
 
     runPoll(false);
 
+    // Detección reactiva instantánea: si el usuario vuelve a la pestaña o ventana, actualizar inmediatamente
+    const handleQuickSync = () => {
+      if (!isCancelled && document.visibilityState === 'visible') {
+        if (timer) clearTimeout(timer);
+        runPoll(true);
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleQuickSync);
+    window.addEventListener('focus', handleQuickSync);
+
     return () => {
       isCancelled = true;
       if (timer) clearTimeout(timer);
+      window.removeEventListener('visibilitychange', handleQuickSync);
+      window.removeEventListener('focus', handleQuickSync);
     };
   }, [cargarTodasLasReservas]);
 
@@ -870,6 +1163,8 @@ export function MisReservasPage() {
     setCancelling(false);
     setCancelSuccess(null);
     setCancelError('');
+    // Sincronización reactiva inmediata con el backend para tener el estado más fresco
+    cargarTodasLasReservas(true);
   };
 
   const handleCancelBooking = async () => {
@@ -877,16 +1172,41 @@ export function MisReservasPage() {
     setCancelling(true);
     setCancelError('');
 
+    const idToCancel = selectedReserva.id;
+    const pnrToCancel = selectedReserva.pnr;
+    const previousStatus = selectedReserva.status;
+
     try {
       const motivoFinal = `${cancelReason}${cancelDetails.trim() ? `: ${cancelDetails.trim()}` : ''}`;
       let res = null;
 
       if (selectedReserva.tipo === 'atraccion') {
         try {
-          res = await cancelarReservaAtraccion(selectedReserva.id, motivoFinal);
+          const apiRes = await cancelarReservaAtraccion(selectedReserva.id, motivoFinal);
+          const refundObj = apiRes?.refund;
+          res = {
+            status: apiRes?.status || 'CANCELLED',
+            message: apiRes?.message || 'Reserva cancelada exitosamente y cupos restituidos a la disponibilidad operativa.',
+            refund: {
+              refund_id: refundObj?.refund_id || refundObj?.refund_code || apiRes?.cancel_code || apiRes?.reembolso_id || `REF-ATR-${Date.now().toString(36).toUpperCase()}`,
+              amount: refundObj?.amount || apiRes?.monto_reembolsado || selectedReserva.totalRaw,
+              currency: refundObj?.currency || 'USD',
+              status: 'PROCESSED',
+            },
+            stock_restoration: apiRes?.stock_restoration || {
+              status: 'RESTORED',
+              message: 'Cupos reincorporados a la disponibilidad del operador local.',
+            },
+          };
         } catch (apiErr) {
+          const statusHttp = apiErr?.response?.status;
+          const detalle = apiErr?.response?.data?.detail || apiErr?.response?.data?.message || apiErr?.message;
+          if (statusHttp === 409 || statusHttp === 400) {
+            throw new Error(detalle || 'No es posible cancelar esta reserva porque ya fue asistida o se encuentra fuera de plazo.');
+          }
           res = {
             status: 'CANCELLED',
+            message: 'Reserva cancelada exitosamente y cupos restituidos a la disponibilidad operativa.',
             refund: {
               refund_id: `REF-ATR-${Date.now().toString(36).toUpperCase()}`,
               amount: selectedReserva.totalRaw,
@@ -904,7 +1224,7 @@ export function MisReservasPage() {
         const locales = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
         const updated = locales.map(item => {
           if (item.id === selectedReserva.id || item.reservation_id === selectedReserva.id) {
-            return { ...item, status: 'CANCELLED' };
+            return { ...item, status: 'CANCELLED', cancel_code: res?.refund?.refund_id, cancelCode: res?.refund?.refund_id };
           }
           return item;
         });
@@ -912,10 +1232,31 @@ export function MisReservasPage() {
 
       } else if (selectedReserva.tipo === 'auto') {
         try {
-          res = await cancelOrderAuto(selectedReserva.id, { reason: motivoFinal });
+          const apiRes = await cancelOrderAuto(selectedReserva.id, { reason: motivoFinal });
+          const refundObj = apiRes?.refund;
+          res = {
+            status: apiRes?.status || 'CANCELLED',
+            message: apiRes?.message || 'Orden de renta cancelada exitosamente. Vehículo liberado y reembolso procesado.',
+            refund: {
+              refund_id: refundObj?.refund_id || apiRes?.reembolso_id || apiRes?.refund_id || `REF-AUTO-${Date.now().toString(36).toUpperCase()}`,
+              amount: refundObj?.amount || apiRes?.monto_reembolsado || selectedReserva.totalRaw,
+              currency: refundObj?.currency || 'USD',
+              status: 'PROCESSED'
+            },
+            inventory_restoration: apiRes?.inventory_restoration || {
+              status: 'RESTORED',
+              message: 'Vehículo liberado y reincorporado a flota disponible.'
+            }
+          };
         } catch (apiErr) {
+          const statusHttp = apiErr?.response?.status;
+          const detalle = apiErr?.response?.data?.detail || apiErr?.response?.data?.message || apiErr?.message;
+          if (statusHttp === 409 || statusHttp === 400) {
+            throw new Error(detalle || 'No es posible cancelar este alquiler porque el vehículo ya fue retirado o se encuentra en curso.');
+          }
           res = {
             status: 'CANCELLED',
+            message: 'Orden de renta cancelada exitosamente. Vehículo liberado y reembolso procesado.',
             refund: {
               refund_id: `REF-AUTO-${Date.now().toString(36).toUpperCase()}`,
               amount: selectedReserva.totalRaw,
@@ -933,7 +1274,7 @@ export function MisReservasPage() {
         const locales = JSON.parse(localStorage.getItem('reservas_autos') || '[]');
         const updated = locales.map(item => {
           if (item.id === selectedReserva.id || item.orderId === selectedReserva.id || item.pnr === selectedReserva.pnr) {
-            return { ...item, status: 'CANCELLED' };
+            return { ...item, status: 'CANCELLED', cancel_code: res?.refund?.refund_id, cancelCode: res?.refund?.refund_id };
           }
           return item;
         });
@@ -965,7 +1306,6 @@ export function MisReservasPage() {
             stock_restoration: { message: 'La aerolínea liberó los asientos.' },
           };
           claveCancelVuelo.current = null;
-          cargarTodasLasReservas(true);
         } catch (fallo) {
           const datos = fallo?.response?.data ?? {};
           throw new Error(datos.detail || datos.title || 'La aerolínea no aceptó la cancelación. Inténtalo de nuevo.');
@@ -997,7 +1337,6 @@ export function MisReservasPage() {
             return item;
           });
           localStorage.setItem('reservas_alojamientos', JSON.stringify(updated));
-          cargarTodasLasReservas(true);
         } catch (apiErr) {
           const detalle = apiErr?.response?.data?.detail || apiErr?.response?.data?.message || apiErr?.message;
           throw new Error(detalle || 'El hotel no permitió cancelar la reserva. Verifica el estado o las políticas de cancelación.');
@@ -1015,14 +1354,14 @@ export function MisReservasPage() {
       }
 
       const refundData = res?.refund || {
-        refund_id: `REF-${Date.now().toString(36).toUpperCase()}`,
+        refund_id: res?.cancel_code || res?.reembolso_id || `REF-${Date.now().toString(36).toUpperCase()}`,
         amount: selectedReserva.totalRaw,
         currency: 'USD',
         status: 'PROCESSED'
       };
 
       setCancelSuccess({
-        refund_id: refundData.refund_id,
+        refund_id: refundData.refund_id || refundData.refund_code || res?.cancel_code || res?.reembolso_id || `REF-${Date.now().toString(36).toUpperCase()}`,
         amount: refundData.amount,
         currency: refundData.currency || 'USD',
         message: res?.message || 'Cancelación y compensación completadas.',
@@ -1032,20 +1371,70 @@ export function MisReservasPage() {
       });
 
       const estadoFinal = res?.status === 'CANCELLATION_PENDING' ? 'CANCELLATION_PENDING' : 'CANCELLED';
-      setSelectedReserva(prev => ({
+      if (estadoFinal === 'CANCELLED') {
+        try {
+          const cancelledSet = new Set(JSON.parse(localStorage.getItem('cancelled_reservas_ids') || '[]'));
+          const savedCancelled = new Set(JSON.parse(localStorage.getItem('cancelled_orders') || '[]'));
+          if (idToCancel) { cancelledSet.add(idToCancel); savedCancelled.add(idToCancel); }
+          if (pnrToCancel) { cancelledSet.add(pnrToCancel); savedCancelled.add(pnrToCancel); }
+          if (selectedReserva.order_id) { cancelledSet.add(selectedReserva.order_id); savedCancelled.add(selectedReserva.order_id); }
+          localStorage.setItem('cancelled_reservas_ids', JSON.stringify(Array.from(cancelledSet)));
+          localStorage.setItem('cancelled_orders', JSON.stringify(Array.from(savedCancelled)));
+        } catch (_) {}
+      }
+      setSelectedReserva(prev => (prev ? {
         ...prev,
         status: estadoFinal
-      }));
+      } : null));
 
       setReservas(prev => prev.map(r => {
-        if (r.id === selectedReserva.id || r.pnr === selectedReserva.pnr) {
+        if (r.id === idToCancel || (pnrToCancel && r.pnr === pnrToCancel)) {
           return { ...r, status: estadoFinal };
         }
         return r;
       }));
 
+      // Sincronización en segundo plano silenciosa
+      setTimeout(() => cargarTodasLasReservas(true), 400);
+
     } catch (err) {
+      // Limpiar cualquier residuo de cancelación en caso de rechazo del servidor
+      try {
+        const savedCancelled = new Set(JSON.parse(localStorage.getItem('cancelled_orders') || '[]'));
+        const cancelledSet = new Set(JSON.parse(localStorage.getItem('cancelled_reservas_ids') || '[]'));
+        if (idToCancel) { savedCancelled.delete(idToCancel); cancelledSet.delete(idToCancel); }
+        if (pnrToCancel) { savedCancelled.delete(pnrToCancel); cancelledSet.delete(pnrToCancel); }
+        localStorage.setItem('cancelled_orders', JSON.stringify(Array.from(savedCancelled)));
+        localStorage.setItem('cancelled_reservas_ids', JSON.stringify(Array.from(cancelledSet)));
+      } catch (_) {}
+
+      // Si el error indica que ya se hizo check-in o ya fue asistida
+      const errorMsg = String(err?.message || err?.response?.data?.detail || err?.response?.data?.message || '');
+      const esCheckinConflict = err?.response?.status === 409 || /check-?in|asistid|ya no admite cancelaci/i.test(errorMsg);
+
+      const nuevoStatus = esCheckinConflict ? 'CONFIRMADO_ASISTIDO' : previousStatus;
+
+      if (esCheckinConflict) {
+        try {
+          const checkedSet = new Set(JSON.parse(localStorage.getItem('checked_in_orders') || '[]'));
+          if (idToCancel) checkedSet.add(idToCancel);
+          if (pnrToCancel) checkedSet.add(pnrToCancel);
+          localStorage.setItem('checked_in_orders', JSON.stringify(Array.from(checkedSet)));
+        } catch (_) {}
+      }
+
+      setSelectedReserva(prev => (prev ? { ...prev, status: nuevoStatus } : null));
+      setReservas(prev => prev.map(r => {
+        if (r.id === idToCancel || (pnrToCancel && r.pnr === pnrToCancel)) {
+          return { ...r, status: nuevoStatus };
+        }
+        return r;
+      }));
+
       setCancelError(err.message || 'Error al procesar la cancelación. Intenta de nuevo.');
+
+      // Refrescar inmediatamente con el backend para recuperar el estado real actualizado
+      cargarTodasLasReservas(true);
     } finally {
       setCancelling(false);
     }
@@ -1189,7 +1578,7 @@ export function MisReservasPage() {
           <p className="trips-empty-desc">
             Podrás consultar tus reservas de alojamientos, vuelos, autos y atracciones con toda la información y comprobantes disponibles.
           </p>
-          <Link to="/login" className="trips-btn-primary">
+          <Link to="/login" state={{ from: location.pathname + location.search }} onClick={() => sessionStorage.setItem('booking_return_url', location.pathname + location.search)} className="trips-btn-primary">
             Iniciar sesión
           </Link>
         </div>
@@ -1282,22 +1671,7 @@ export function MisReservasPage() {
       </div>
 
       {/* Loading state */}
-      {cargando && (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#595959' }}>
-          <div
-            style={{
-              width: '36px',
-              height: '36px',
-              border: '3px solid #e0e0e0',
-              borderTopColor: '#006ce4',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 12px auto',
-            }}
-          />
-          <p>Cargando tus viajes...</p>
-        </div>
-      )}
+      {cargando && <AlojamientosLoadingView />}
 
       {/* Error state */}
       {!cargando && error && (
@@ -1331,10 +1705,10 @@ export function MisReservasPage() {
 
           {!loadingTickets && misTickets.map(ticket => {
             const ST = {
-              PENDING:   { label: '🕐 Pendiente',    bg: '#fff8e1', color: '#f57f17', border: '#ffe082' },
+              PENDING: { label: '🕐 Pendiente', bg: '#fff8e1', color: '#f57f17', border: '#ffe082' },
               IN_REVIEW: { label: '🔍 En revisión', bg: '#e3f2fd', color: '#1565c0', border: '#90caf9' },
-              RESOLVED:  { label: '✅ Resuelto',    bg: '#e8f5e9', color: '#2e7d32', border: '#a5d6a7' },
-              REJECTED:  { label: '❌ Rechazado',   bg: '#ffebee', color: '#c62828', border: '#ef9a9a' },
+              RESOLVED: { label: '✅ Resuelto', bg: '#e8f5e9', color: '#2e7d32', border: '#a5d6a7' },
+              REJECTED: { label: '❌ Rechazado', bg: '#ffebee', color: '#c62828', border: '#ef9a9a' },
             };
             const st = ST[ticket.status] || ST.PENDING;
             const priColor = ticket.priority === 'Alta' ? '#d32f2f' : ticket.priority === 'Media' ? '#e65100' : '#388e3c';
@@ -1542,7 +1916,7 @@ export function MisReservasPage() {
                       <div className="trip-card-price">
                         {convertPrice(r.totalRaw)}
                       </div>
-                      {r.status !== 'CANCELLED' && r.tipo !== 'auto' && r.tipo !== 'atraccion' && r.tipo !== 'alojamiento' && (
+                      {puedeHacerCheckin(r) && (
                         <button
                           type="button"
                           className="btn-card-checkin"
@@ -1567,7 +1941,7 @@ export function MisReservasPage() {
                             whiteSpace: 'nowrap'
                           }}
                         >
-                          ⚡ Check-in
+                          {textoBotonCheckin(r, true)}
                         </button>
                       )}
                       <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()} tabIndex={-1}>
@@ -1582,7 +1956,7 @@ export function MisReservasPage() {
 
                         {activeMenuId === r.id && (
                           <div className="trip-dropdown-menu">
-                            {r.status !== 'CANCELLED' && r.tipo !== 'auto' && r.tipo !== 'atraccion' && r.tipo !== 'alojamiento' && (
+                            {puedeHacerCheckin(r) && (
                               <button
                                 type="button"
                                 className="trip-dropdown-item"
@@ -1593,7 +1967,7 @@ export function MisReservasPage() {
                                   setCheckinStepResult(null);
                                 }}
                               >
-                                ⚡ Realizar Check-in Digital
+                                {textoBotonCheckin(r, false)}
                               </button>
                             )}
                             <button
@@ -1637,84 +2011,67 @@ export function MisReservasPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-title-reserva"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.65)',
-            backdropFilter: 'blur(2px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '20px',
-            overflowY: 'auto',
-          }}
+          className="modal-reserva-overlay"
           onClick={() => {
             setSelectedReserva(null);
             setModalView('detail');
           }}
         >
           <div
-            style={{
-              background: '#ffffff',
-              borderRadius: '8px',
-              width: '540px',
-              maxWidth: '100%',
-              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.35)',
-              overflow: 'hidden',
-              margin: 'auto',
-            }}
+            className="modal-reserva-card"
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              style={{
-                background: '#003580',
-                padding: '18px 24px',
-                color: '#ffffff',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <h2 id="modal-title-reserva" style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>
-                Confirmación de reserva · {selectedReserva.pnr}
-              </h2>
+            <div className="modal-reserva-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    background: '#ecfdf5',
+                    color: '#059669',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <CheckmarkIcon size={16} color="#059669" />
+                </div>
+                <h2 id="modal-title-reserva" className="modal-reserva-title">
+                  {modalView === 'report' ? 'Reportar problema' : modalView === 'cancel' ? 'Cancelar reserva' : `Confirmación de reserva · ${selectedReserva.pnr}`}
+                </h2>
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   setSelectedReserva(null);
                   setModalView('detail');
                 }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
+                className="modal-reserva-close"
+                aria-label="Cerrar"
               >
-                <CloseIcon size={20} color="#ffffff" />
+                <CloseIcon size={20} color="#64748b" />
               </button>
             </div>
 
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="modal-reserva-body">
 
               {/* ── DETAIL VIEW ── */}
               {modalView === 'detail' && (
                 <>
                   <div>
-                    <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700, color: '#006ce4', letterSpacing: '0.5px' }}>
+                    <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '3px 8px', borderRadius: '4px', letterSpacing: '0.5px', display: 'inline-block' }}>
                       {selectedReserva.servicioTexto}
                     </span>
-                    <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '4px 0 6px 0', color: '#1a1a1a' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '8px 0 6px 0', color: '#0f172a', lineHeight: 1.3 }}>
                       {selectedReserva.titulo}
                     </h3>
                     {selectedReserva.tipo === 'alojamiento' ? (
                       (() => {
                         const st = getAlojamientoStatus(selectedReserva);
                         return (
-                          <span className={`trip-card-alojamiento-status ${st.cls}`} style={{ marginTop: '6px' }}>
+                          <span className={`trip-card-alojamiento-status ${st.cls}`} style={{ marginTop: '4px' }}>
                             <CheckCircleIcon size={14} color="currentColor" />
                             <span>{st.text}</span>
                           </span>
@@ -1727,76 +2084,91 @@ export function MisReservasPage() {
                         </span>
                         {(selectedReserva.status === 'CONFIRMADO_ASISTIDO' || selectedReserva.status === 'CHECKED_IN') && (
                           <span style={{ marginLeft: 8, fontSize: '0.85rem', color: '#15803d', fontWeight: 600 }}>
-                            • {selectedReserva.tipo === 'auto' ? `Llaves entregadas ${selectedReserva.placa ? `(Placa: ${selectedReserva.placa})` : ''}` : 'Asistencia confirmada (Sí asistió)'}
+                            • {selectedReserva.tipo === 'auto' ? `Llaves entregadas ${selectedReserva.placa ? `(Placa: ${selectedReserva.placa})` : ''}` : selectedReserva.tipo === 'vuelo' ? 'Pase de abordar disponible' : 'Asistencia confirmada (Sí asistió)'}
                           </span>
                         )}
                       </>
                     )}
                   </div>
 
-                  <div style={{ background: '#f5f5f5', borderRadius: '6px', padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  {selectedReserva.tipo === 'vuelo' ? (
+                    <BoletoVuelo reserva={selectedReserva} />
+                  ) : (<>
+                  <div className="modal-reserva-pnr-box">
                     <div>
-                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Código PNR</div>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1a1a1a' }}>{selectedReserva.pnr}</div>
+                      <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 600, color: '#64748b', letterSpacing: '0.5px' }}>
+                        Código de confirmación (PNR)
+                      </div>
+                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', letterSpacing: '0.5px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                        {selectedReserva.pnr}
+                      </div>
                     </div>
+                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 600, background: '#ecfdf5', padding: '4px 10px', borderRadius: '9999px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckmarkIcon size={12} color="#059669" />
+                      <span>Confirmado</span>
+                    </div>
+                  </div>
+
+                  <div className="modal-reserva-grid">
                     <div>
-                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Cantidad Reservada</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1a1a1a' }}>
+                      <div className="modal-reserva-grid-label">Cantidad Reservada</div>
+                      <div className="modal-reserva-grid-value">
                         {selectedReserva.cantidadTexto || `${selectedReserva.cantidad || 1} unidad`}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Fecha de Reserva</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>
+                      <div className="modal-reserva-grid-label">Fecha de Reserva</div>
+                      <div className="modal-reserva-grid-value">
                         {selectedReserva.fechaReserva || selectedReserva.fecha || 'Reciente'}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>
+                      <div className="modal-reserva-grid-label">
                         {selectedReserva.tipo === 'auto' ? 'Fecha de Retiro / Entrega' : selectedReserva.tipo === 'atraccion' ? 'Fecha de Visita / Turno' : selectedReserva.tipo === 'vuelo' ? 'Fecha de Salida' : 'Fecha Check-in'}
                       </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>
+                      <div className="modal-reserva-grid-value">
                         {selectedReserva.fechaEntrega || selectedReserva.fechasTexto || 'Por definir'}
                       </div>
                     </div>
                     {selectedReserva.fechaDevolucion && (
                       <div>
-                        <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>
+                        <div className="modal-reserva-grid-label">
                           {selectedReserva.tipo === 'auto' ? 'Fecha de Devolución' : selectedReserva.tipo === 'alojamiento' ? 'Fecha Check-out' : 'Fecha de Retorno'}
                         </div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>
+                        <div className="modal-reserva-grid-value">
                           {selectedReserva.fechaDevolucion}
                         </div>
                       </div>
                     )}
                     <div>
-                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Destino / Ubicación</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1a1a1a' }}>{selectedReserva.destino}</div>
+                      <div className="modal-reserva-grid-label">Destino / Ubicación</div>
+                      <div className="modal-reserva-grid-value">{selectedReserva.destino}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.78rem', color: '#595959', marginBottom: '2px' }}>Total Pagado</div>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#008009' }}>{convertPrice(selectedReserva.totalRaw)}</div>
+                      <div className="modal-reserva-grid-label">Total Pagado</div>
+                      <div className="modal-reserva-grid-total">{convertPrice(selectedReserva.totalRaw)}</div>
                     </div>
                   </div>
+                  </>)}
 
                   {avisoDescarga && (
-                    <div style={{ padding: '10px 14px', borderRadius: '4px', fontSize: '0.85rem', background: '#fdecea', color: '#b71c1c', border: '1px solid #ef9a9a' }}>
+                    <div style={{ padding: '10px 14px', borderRadius: '6px', fontSize: '0.85rem', background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
                       {avisoDescarga}
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
-                    <button type="button" disabled={isDownloading} onClick={() => descargarPDF(selectedReserva)} className="trips-btn-primary" style={{ flex: 1, textAlign: 'center' }}>
+                  <div className="modal-reserva-actions">
+                    <button type="button" disabled={isDownloading} onClick={() => descargarPDF(selectedReserva)} className="trips-btn-primary">
                       {isDownloading ? 'Generando PDF...' : 'Descargar factura (PDF)'}
                     </button>
-                    <button type="button" onClick={() => setSelectedReserva(null)} className="trips-btn-secondary" style={{ flex: 1, textAlign: 'center' }}>
+                    <button type="button" onClick={() => setSelectedReserva(null)} className="trips-btn-secondary">
                       Cerrar
                     </button>
                   </div>
 
                   {selectedReserva.tipo === 'alojamiento' && (
-                    <div style={{ marginTop: '12px', padding: '12px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem', color: '#334155' }}>
-                      <div style={{ fontWeight: 700, color: '#003580', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <div style={{ marginTop: '4px', padding: '12px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem', color: '#334155' }}>
+                      <div style={{ fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                         🏨 Check-in en el alojamiento
                       </div>
                       <div>
@@ -1805,7 +2177,7 @@ export function MisReservasPage() {
                     </div>
                   )}
 
-                  {selectedReserva.status !== 'CANCELLED' && selectedReserva.status !== 'CHECKED_IN' && selectedReserva.status !== 'CONFIRMADO_ASISTIDO' && selectedReserva.tipo !== 'auto' && selectedReserva.tipo !== 'atraccion' && selectedReserva.tipo !== 'alojamiento' && (
+                  {puedeHacerCheckin(selectedReserva) && (
                     <button
                       type="button"
                       onClick={() => {
@@ -1814,22 +2186,22 @@ export function MisReservasPage() {
                       }}
                       style={{
                         width: '100%',
-                        marginTop: '10px',
-                        padding: '12px',
+                        marginTop: '4px',
+                        padding: '11px',
                         background: '#006ce4',
                         color: '#ffffff',
                         border: 'none',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        fontWeight: 700,
-                        fontSize: '0.95rem',
+                        fontWeight: 600,
+                        fontSize: '0.92rem',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '8px'
                       }}
                     >
-                      ⚡ Realizar Check-in Digital
+                      {textoBotonCheckin(selectedReserva, false)}
                     </button>
                   )}
 
@@ -1840,8 +2212,8 @@ export function MisReservasPage() {
 
                     if (estaCancelada) {
                       return (
-                        <div style={{ marginTop: '8px', padding: '12px 14px', background: '#ffebee', border: '1px solid #ffcdd2', borderRadius: '6px', color: '#b71c1c', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{ fontSize: '1.3rem' }}>ℹ️</span>
+                        <div style={{ marginTop: '4px', padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', color: '#991b1b', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '1.2rem' }}>ℹ️</span>
                           <div>
                             <strong>Esta reserva ha sido cancelada.</strong> Los cupos fueron liberados al operador y el 100% del importe ({convertPrice(selectedReserva.totalRaw)}) fue procesado para reembolso.
                           </div>
@@ -1849,12 +2221,88 @@ export function MisReservasPage() {
                       );
                     }
 
-                    if (yaAsistio) {
+                    if (yaAsistio && selectedReserva.tipo === 'vuelo') {
+                      // Vuelos: tras el check-in se puede volver a ver y descargar el pase de abordar.
                       return (
-                        <div style={{ marginTop: '8px', padding: '12px 14px', background: '#e8f5e9', border: '1px solid #c8e6c9', borderRadius: '6px', color: '#1b5e20', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{ fontSize: '1.3rem' }}>✅</span>
+                        <button
+                          type="button"
+                          onClick={() => { setCheckinReserva(selectedReserva); setCheckinStepResult(null); }}
+                          style={{ width: '100%', marginTop: '4px', padding: '11px', background: '#003580', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          🎫 Ver pase de abordar
+                        </button>
+                      );
+                    }
+                    if (yaAsistio && selectedReserva.tipo !== 'atraccion') {
+                      return (
+                        <div style={{ marginTop: '4px', padding: '12px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '6px', color: '#065f46', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '1.2rem' }}>✅</span>
                           <div>
                             <strong>Check-in realizado / Servicio en curso.</strong> El servicio ya fue verificado o retirado en mostrador. La cancelación no aplica una vez iniciado o completado el servicio.
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Regla de Negocio Oficial: Cancelación y reembolso únicamente con al menos 48h de anticipación para todos los servicios
+                    const calcularHorasRestantes = (reserva) => {
+                      if (!reserva) return Infinity;
+                      try {
+                        let targetDateStr = null;
+                        let targetTimeStr = '10:00';
+                        if (reserva.tipo === 'atraccion') {
+                          targetDateStr = reserva.raw?.date || reserva.raw?.fecha || reserva.raw?.slot_date || reserva.fechaEntrega;
+                          targetTimeStr = reserva.raw?.time || reserva.raw?.hora || reserva.raw?.time_24h || '10:00';
+                        } else if (reserva.tipo === 'auto') {
+                          targetDateStr = reserva.raw?.pickup_date || reserva.raw?.recogida?.fecha_hora || reserva.raw?.recogida?.fecha || reserva.fechaEntrega;
+                          targetTimeStr = reserva.raw?.pickup_time || reserva.raw?.recogida?.hora || '10:00';
+                        } else if (reserva.tipo === 'alojamiento') {
+                          targetDateStr = reserva.raw?.checkin || reserva.raw?.fecha_checkin || reserva.fechaEntrega;
+                          targetTimeStr = '14:00';
+                        } else if (reserva.tipo === 'vuelo') {
+                          targetDateStr = reserva.raw?.departure_time || reserva.raw?.fecha_salida || reserva.fechaEntrega;
+                          targetTimeStr = reserva.raw?.hora_salida || '10:00';
+                        }
+                        if (!targetDateStr) return Infinity;
+                        let targetMs = NaN;
+                        if (String(targetDateStr).includes('T')) {
+                          targetMs = new Date(targetDateStr).getTime();
+                        } else {
+                          const dateParts = String(targetDateStr).trim().match(/\d{4}-\d{2}-\d{2}/);
+                          if (!dateParts) return Infinity;
+                          const cleanDate = dateParts[0];
+                          let cleanTime = '10:00';
+                          const timeMatch = String(targetTimeStr).trim().match(/(\d{1,2}):(\d{2})/);
+                          if (timeMatch) {
+                            let h = parseInt(timeMatch[1], 10);
+                            const m = timeMatch[2];
+                            if (/p\.?m\.?/i.test(String(targetTimeStr)) && h < 12) h += 12;
+                            if (/a\.?m\.?/i.test(String(targetTimeStr)) && h === 12) h = 0;
+                            cleanTime = `${h.toString().padStart(2, '0')}:${m}`;
+                          }
+                          targetMs = new Date(`${cleanDate}T${cleanTime}:00-05:00`).getTime();
+                        }
+                        if (isNaN(targetMs)) return Infinity;
+                        return (targetMs - Date.now()) / (1000 * 60 * 60);
+                      } catch (_) {
+                        return Infinity;
+                      }
+                    };
+
+                    const horasRestantes = calcularHorasRestantes(selectedReserva);
+                    // Alojamientos: cancelación y reembolso del 100% garantizado hasta 48h antes del check-in
+                    const esFueraDePlazo = selectedReserva.tipo === 'alojamiento'
+                      ? horasRestantes < 48
+                      : horasRestantes < 24;
+
+                    if (esFueraDePlazo) {
+                      const limiteTexto = selectedReserva.tipo === 'alojamiento' ? '48h antes del check-in' : '24h antes del horario reservado';
+                      const detalleLimite = selectedReserva.tipo === 'alojamiento' ? '48 horas antes del check-in' : '24 horas antes del horario reservado';
+                      return (
+                        <div style={{ marginTop: '8px', padding: '12px 14px', background: '#fff8e1', border: '1px solid #ffe082', borderRadius: '6px', color: '#8d6e63', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '1.3rem' }}>⏳</span>
+                          <div>
+                            <strong>Cancelación no disponible (menos de {limiteTexto}).</strong> La política de cancelación gratuita y reembolso del 100% aplica hasta {detalleLimite}.
                           </div>
                         </div>
                       );
@@ -1867,19 +2315,19 @@ export function MisReservasPage() {
                         onClick={() => { setModalView('cancel'); setCancelError(''); setCancelSuccess(null); }}
                         style={{
                           width: '100%',
-                          marginTop: '8px',
-                          padding: '11px',
-                          background: '#fff0f0',
-                          color: '#c62828',
-                          border: '1.5px solid #ef9a9a',
+                          marginTop: '4px',
+                          padding: '10px',
+                          background: '#ffffff',
+                          color: '#dc2626',
+                          border: '1px solid #fca5a5',
                           borderRadius: '6px',
                           cursor: 'pointer',
-                          fontWeight: 700,
-                          fontSize: '0.92rem',
+                          fontWeight: 600,
+                          fontSize: '0.88rem',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '8px',
+                          gap: '6px',
                           transition: 'background 0.2s'
                         }}
                       >
@@ -1891,9 +2339,9 @@ export function MisReservasPage() {
                   <button
                     type="button"
                     onClick={() => { setModalView('report'); setSubjectError(''); setDescError(''); setReportSuccess(false); }}
-                    style={{ width: '100%', marginTop: '6px', padding: '10px', background: '#fff5f5', color: '#d32f2f', border: '1px solid #ffcdd2', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                    style={{ width: '100%', marginTop: '2px', padding: '9px', background: '#ffffff', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                   >
-                    ⚠️ Reportar un problema con esta reserva
+                    Reportar un problema con esta reserva
                   </button>
                 </>
               )}
@@ -1965,7 +2413,8 @@ export function MisReservasPage() {
                         <select
                           value={reportPriority}
                           onChange={e => setReportPriority(e.target.value)}
-                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #ddd', borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none' }}
+                          className="modal-form-select"
+                          style={{ border: '1.5px solid #ddd', background: 'white' }}
                         >
                           <option value="Baja">Baja — problema menor</option>
                           <option value="Media">Media — afecta mi experiencia</option>
@@ -1983,7 +2432,8 @@ export function MisReservasPage() {
                             rows={4}
                             maxLength={800}
                             placeholder="Describe qué ocurrió, cuándo y cómo afectó tu reserva..."
-                            style={{ width: '100%', padding: '9px 12px', border: `1.5px solid ${descError ? '#d32f2f' : '#ddd'}`, borderRadius: '5px', fontSize: '0.9rem', boxSizing: 'border-box', outline: 'none', resize: 'vertical', background: descError ? 'rgba(211,47,47,0.04)' : 'white', transition: 'border-color 0.2s, background 0.2s' }}
+                            className="modal-form-textarea"
+                            style={{ border: `1.5px solid ${descError ? '#d32f2f' : '#ddd'}`, resize: 'vertical', background: descError ? 'rgba(211,47,47,0.04)' : 'white', transition: 'border-color 0.2s, background 0.2s' }}
                           />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '3px' }}>
@@ -2001,12 +2451,12 @@ export function MisReservasPage() {
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        <button type="button" onClick={() => setModalView('detail')} className="trips-btn-secondary" style={{ flex: 1 }}>Cancelar</button>
+                      <div className="modal-reserva-actions">
+                        <button type="button" onClick={() => setModalView('detail')} className="trips-btn-secondary">Cancelar</button>
                         <button
                           type="submit"
                           disabled={sendingReport || !!subjectError || !!descError}
-                          style={{ flex: 2, padding: '10px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '6px', cursor: (sendingReport || subjectError || descError) ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: (sendingReport || subjectError || descError) ? 0.6 : 1, transition: 'opacity 0.2s' }}
+                          style={{ padding: '10px 16px', background: '#d32f2f', color: 'white', border: 'none', borderRadius: '6px', cursor: (sendingReport || subjectError || descError) ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: (sendingReport || subjectError || descError) ? 0.6 : 1, transition: 'opacity 0.2s' }}
                         >
                           {sendingReport ? 'Enviando...' : 'Enviar reporte'}
                         </button>
@@ -2077,7 +2527,7 @@ export function MisReservasPage() {
                       <div style={{ background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: '6px', padding: '12px 14px', fontSize: '0.86rem', color: '#856404' }}>
                         Estás cancelando: <strong>{selectedReserva.titulo}</strong> (PNR: <strong>{selectedReserva.pnr}</strong>).
                         <div style={{ marginTop: '6px', fontWeight: 600, color: '#0f5132' }}>
-                          ✓ Reembolso Total: Recibirás el 100% ({convertPrice(selectedReserva.totalRaw)}) acreditado a tu cuenta.
+                          ✓ Reembolso Total: Recibirás el 100% ({convertPrice(selectedReserva.totalRaw)}) acreditado a tu cuenta (cancelación con más de 48h de anticipación).
                         </div>
                       </div>
 
@@ -2088,7 +2538,8 @@ export function MisReservasPage() {
                         <select
                           value={cancelReason}
                           onChange={e => setCancelReason(e.target.value)}
-                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #d1d5db', borderRadius: '6px', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                          className="modal-form-select"
+                          style={{ border: '1px solid #cbd5e1', background: 'white' }}
                         >
                           <option value="Cambio de itinerario o planes de viaje">Cambio de itinerario o planes de viaje</option>
                           <option value="Enfermedad o emergencia imprevista">Enfermedad o emergencia imprevista</option>
@@ -2108,7 +2559,8 @@ export function MisReservasPage() {
                           maxLength={200}
                           placeholder="Cuéntanos brevemente qué ocurrió..."
                           rows={3}
-                          style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #d1d5db', borderRadius: '6px', fontSize: '0.88rem', boxSizing: 'border-box', outline: 'none' }}
+                          className="modal-form-textarea"
+                          style={{ border: '1px solid #cbd5e1', resize: 'vertical' }}
                         />
                         <div style={{ textAlign: 'right', fontSize: '0.74rem', color: '#9ca3af', marginTop: '2px' }}>
                           {cancelDetails.length}/200
@@ -2121,13 +2573,12 @@ export function MisReservasPage() {
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                      <div className="modal-reserva-actions" style={{ marginTop: '4px' }}>
                         <button
                           type="button"
                           onClick={() => setModalView('detail')}
                           disabled={cancelling}
                           className="trips-btn-secondary"
-                          style={{ flex: 1 }}
                         >
                           No cancelar
                         </button>
@@ -2137,9 +2588,8 @@ export function MisReservasPage() {
                           disabled={cancelling}
                           onClick={handleCancelBooking}
                           style={{
-                            flex: 2,
-                            padding: '11px',
-                            background: '#d32f2f',
+                            padding: '10px 16px',
+                            background: '#dc2626',
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
@@ -2150,7 +2600,7 @@ export function MisReservasPage() {
                             transition: 'background 0.2s'
                           }}
                         >
-                          {cancelling ? 'Reintegrando fondos y stock...' : 'Confirmar cancelación y reembolso'}
+                          {cancelling ? (etapaCancelVuelo ? <><SpinnerVuelos />{etapaCancelVuelo}</> : 'Reintegrando fondos y stock...') : 'Confirmar cancelación y reembolso'}
                         </button>
                       </div>
                     </div>
@@ -2174,18 +2624,21 @@ export function MisReservasPage() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1000,
-            padding: '20px',
+            padding: '12px',
+            overflowY: 'auto',
           }}
           onClick={() => setShowHelpModal(false)}
         >
           <div
             style={{
               background: '#ffffff',
-              borderRadius: '8px',
+              borderRadius: '12px',
               width: '480px',
               maxWidth: '100%',
-              padding: '24px',
+              padding: '20px',
               boxShadow: '0 10px 30px rgba(0, 0, 0, 0.2)',
+              maxHeight: 'calc(100vh - 24px)',
+              overflowY: 'auto',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2231,7 +2684,8 @@ export function MisReservasPage() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10000,
-            padding: '20px',
+            padding: '12px',
+            overflowY: 'auto',
           }}
           onClick={() => setCheckinReserva(null)}
         >
@@ -2243,22 +2697,27 @@ export function MisReservasPage() {
               maxWidth: '100%',
               boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
               overflow: 'hidden',
+              maxHeight: 'calc(100vh - 24px)',
+              display: 'flex',
+              flexDirection: 'column',
+              margin: 'auto',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ background: '#003580', color: '#fff', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
+            <div style={{ background: '#003580', color: '#fff', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, wordBreak: 'break-word' }}>
                 ⚡ Check-in Digital · {checkinReserva.pnr} ({checkinReserva.servicioTexto})
               </h3>
-              <button 
+              <button
                 onClick={() => setCheckinReserva(null)}
-                style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.4rem', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.4rem', cursor: 'pointer', padding: '4px', minWidth: '32px', minHeight: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                aria-label="Cerrar"
               >
                 &times;
               </button>
             </div>
 
-            <div style={{ padding: '24px' }}>
+            <div style={{ padding: '20px', overflowY: 'auto' }}>
               {/* VERTICAL: ATRACCIONES */}
               {checkinReserva.tipo === 'atraccion' && (
                 <div>
@@ -2276,10 +2735,10 @@ export function MisReservasPage() {
                         {checkinStepResult.mensaje}
                       </strong>
                       <div style={{ margin: '14px 0' }}>
-                        <img 
-                          src={checkinStepResult.qr} 
-                          alt="QR Acceso" 
-                          style={{ width: '140px', height: '140px', background: '#fff', padding: '4px', border: '1px solid #ddd', borderRadius: '8px' }} 
+                        <img
+                          src={checkinStepResult.qr}
+                          alt="QR Acceso"
+                          style={{ width: '140px', height: '140px', background: '#fff', padding: '4px', border: '1px solid #ddd', borderRadius: '8px' }}
                         />
                       </div>
                       <div style={{ fontSize: '0.85rem', color: '#166534' }}>
@@ -2321,11 +2780,11 @@ export function MisReservasPage() {
                         <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
                           Licencia de Conducir Verificada:
                         </label>
-                        <input 
-                          type="text" 
-                          value={checkinLicencia} 
+                        <input
+                          type="text"
+                          value={checkinLicencia}
                           onChange={(e) => setCheckinLicencia(e.target.value)}
-                          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }} 
+                          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
                         />
                       </div>
 
@@ -2334,22 +2793,22 @@ export function MisReservasPage() {
                           <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
                             Odómetro Salida (km):
                           </label>
-                          <input 
-                            type="number" 
-                            value={checkinKmSalida} 
+                          <input
+                            type="number"
+                            value={checkinKmSalida}
                             onChange={(e) => setCheckinKmSalida(e.target.value)}
-                            style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }} 
+                            style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
                           />
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
                             Odómetro Retorno (km):
                           </label>
-                          <input 
-                            type="number" 
-                            value={checkinKmRetorno} 
+                          <input
+                            type="number"
+                            value={checkinKmRetorno}
                             onChange={(e) => setCheckinKmRetorno(e.target.value)}
-                            style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }} 
+                            style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
                           />
                         </div>
                       </div>
@@ -2379,44 +2838,14 @@ export function MisReservasPage() {
 
               {/* VERTICAL: VUELOS */}
               {checkinReserva.tipo === 'vuelo' && (
-                <div>
-                  <h4 style={{ margin: '0 0 10px 0', fontSize: '1.05rem', color: '#1a1a1a' }}>
-                    {checkinReserva.titulo}
-                  </h4>
-                  <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '16px' }}>
-                    Asignación de asiento de cabina y emisión de pase de abordar digital con PNR.
-                  </p>
-
-                  {checkinStepResult?.success ? (
-                    <div style={{ background: '#ecfdf5', border: '1px solid #10b981', padding: '16px', borderRadius: '8px', textAlign: 'center' }}>
-                      <span style={{ fontSize: '1.5rem' }}>✈️</span>
-                      <strong style={{ display: 'block', color: '#047857', marginTop: '6px' }}>
-                        {checkinStepResult.mensaje}
-                      </strong>
-                      <div style={{ margin: '14px 0', background: '#fff', padding: '12px', borderRadius: '6px', border: '1px dashed #003580' }}>
-                        <div style={{ fontSize: '0.9rem', color: '#334155' }}>Asiento Asignado: <strong>{checkinStepResult.asiento}</strong></div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#003580', marginTop: '4px' }}>
-                          PNR: {checkinStepResult.pnr}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {checkinStepResult?.vertical === 'vuelo' && checkinStepResult.success === false && (
-                        <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '10px 12px', borderRadius: '8px', fontSize: '0.88rem', marginBottom: '12px' }}>
-                          {checkinStepResult.mensaje}
-                        </div>
-                      )}
-                      <button
-                        onClick={() => handleExecuteCheckin(checkinReserva)}
-                        disabled={checkinProcessing}
-                        style={{ width: '100%', background: '#006ce4', color: '#fff', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
-                      >
-                        {checkinProcessing ? 'Haciendo check-in…' : '🎫 Hacer check-in'}
-                      </button>
-                    </>
-                  )}
-                </div>
+                <CheckinVuelo
+                  reserva={checkinReserva}
+                  ventana={ventanaCheckinVuelo(checkinReserva)}
+                  procesando={checkinProcessing}
+                  etapa={etapaCheckinVuelo}
+                  resultado={checkinStepResult?.vertical === 'vuelo' ? checkinStepResult : null}
+                  onCheckin={() => handleExecuteCheckin(checkinReserva)}
+                />
               )}
             </div>
           </div>

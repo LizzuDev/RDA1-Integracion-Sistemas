@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../services/api';
-import { ProcesoEnVivo } from './ProcesoEnVivo';
+import { MonitoreoVuelos } from './monitoreo/MonitoreoVuelos';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
+import { ActualizadoHace } from './panelUtils';
 
 /**
  * Vista de Vuelos en "Servicios & Prov." del admin: el proceso de reserva con aerolíneas
@@ -85,10 +87,10 @@ function estados(d) {
 function fta(d) {
   const aerolineas = d?.aerolineas ?? [];
   const lineas = [];
-  const clases = { EN_LINEA: [], CAIDA: [], SIN_VERIFICAR: [], APAGADA: [] };
+  const clases = { EN_LINEA: [], SIN_INTEGRACION: [], CAIDA: [], SIN_VERIFICAR: [], APAGADA: [] };
   aerolineas.forEach((a, i) => {
     const id = `AL${i}`;
-    const icono = { EN_LINEA: '🟢', CAIDA: '🔴', SIN_VERIFICAR: '⚪', APAGADA: '⛔' }[a.estado] || '⚪';
+    const icono = { EN_LINEA: '🟢', SIN_INTEGRACION: '🟡', CAIDA: '🔴', SIN_VERIFICAR: '⚪', APAGADA: '⛔' }[a.estado] || '⚪';
     lineas.push(`  G2 --> ${id}["${icono} ${limpio(a.nombre)}"]`);
     clases[a.estado]?.push(id);
   });
@@ -120,10 +122,12 @@ ${lineas.join('\n') || '  G2 --> SIN(("Registrar aerolíneas en Servicios & Prov
   classDef vivo fill:#e3f4e8,stroke:#0d7a2f,color:#0b3d1a
   classDef caido fill:#fde7e5,stroke:#b42318,color:#5c120c
   classDef neutro fill:#f1f1ef,stroke:#898781,color:#3a3a38
+  classDef aviso fill:#fdf1dc,stroke:#9a5b00,color:#4a2c00
   class TOP top
   class G0,G1,G2,G4,G5 gate
   class B1,B2,B3,E1,E2,F1,F2 base
 ${clases.EN_LINEA.length ? `  class ${clases.EN_LINEA.join(',')} vivo` : ''}
+${clases.SIN_INTEGRACION.length ? `  class ${clases.SIN_INTEGRACION.join(',')} aviso` : ''}
 ${clases.CAIDA.length ? `  class ${clases.CAIDA.join(',')} caido` : ''}
 ${[...clases.SIN_VERIFICAR, ...clases.APAGADA].length ? `  class ${[...clases.SIN_VERIFICAR, ...clases.APAGADA].join(',')} neutro` : ''}`;
 }
@@ -296,13 +300,14 @@ export function ProcesosTab({ refreshKey = 0 }) {
   const [error, setError] = useState(null);
   const [cargando, setCargando] = useState(true);
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
+  const cargar = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) setCargando(true);
     setError(null);
     try {
       const { data } = await api.get('/admin/procesos/vuelos');
       setDatos(data);
     } catch (e) {
+      if (silencioso) throw e;
       setError(e?.response?.data?.detail || e?.response?.data?.message || e?.message || 'No se pudieron cargar los datos del proceso.');
     } finally {
       setCargando(false);
@@ -312,6 +317,9 @@ export function ProcesosTab({ refreshKey = 0 }) {
   useEffect(() => {
     cargar();
   }, [cargar, refreshKey]);
+
+  // Se actualiza solo cada 5 s (sin botón).
+  const auto = useAutoRefresh(cargar, 5000);
 
   const enVivo = activo === 'vivo';
   const grafo = GRAFOS.find((g) => g.id === activo) || GRAFOS[0];
@@ -323,7 +331,7 @@ export function ProcesosTab({ refreshKey = 0 }) {
     { label: 'Reservas con aerolíneas socias', valor: (datos?.totalReservas ?? 0).toLocaleString('es-EC') },
     { label: 'Valor reservado', valor: usd(datos?.cobrado), nota: 'suma de todas las reservas' },
     { label: 'Reembolsado', valor: usd(datos?.reembolsado) },
-    { label: 'Aerolíneas en línea', valor: `${enLinea} / ${aero.length}`, nota: 'según el último ping real' },
+    { label: 'Aerolíneas integradas', valor: `${enLinea} / ${aero.length}`, nota: 'token + contrato v2, se comprueba cada 10 s' },
     { label: 'Fuente de vuelos', valor: datos?.fuente === 'local' ? 'Base local' : datos?.fuente === 'mixto' ? 'Mixta' : 'Aerolíneas', nota: `timeout ${datos?.timeoutMs ?? 8000} ms por aerolínea` },
   ];
 
@@ -334,10 +342,7 @@ export function ProcesosTab({ refreshKey = 0 }) {
           <h2 style={{ margin: 0, fontSize: '1.25rem', color: T.azul }}>Proceso de reserva de vuelos</h2>
           <div style={{ fontSize: '0.8rem', color: T.muted }}>Búsqueda, hold, cobro, reserva y cancelación con las aerolíneas socias · 4 grafos de análisis de fallas</div>
         </div>
-        <button type="button" onClick={cargar} disabled={cargando}
-          style={{ border: `1px solid ${T.border}`, background: T.surface, borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: '0.8rem' }}>
-          {cargando ? '⏳' : '↻'} Actualizar datos
-        </button>
+        <ActualizadoHace ultima={auto.ultima} fallos={auto.fallos} cada={5000} />
       </div>
 
       {error && (
@@ -357,7 +362,7 @@ export function ProcesosTab({ refreshKey = 0 }) {
       </div>
 
       <div role="tablist" aria-label="Tipo de grafo" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {[{ id: 'vivo', tab: '🔴 Flujo en vivo' }, ...GRAFOS].map((g) => (
+        {[{ id: 'vivo', tab: '📈 Monitoreo en vivo' }, ...GRAFOS].map((g) => (
           <button
             key={g.id}
             role="tab"
@@ -374,7 +379,7 @@ export function ProcesosTab({ refreshKey = 0 }) {
         ))}
       </div>
 
-      {enVivo && <ProcesoEnVivo aerolineas={aero} />}
+      {enVivo && <MonitoreoVuelos aerolineas={aero} />}
 
       {!enVivo && (
       <section style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px', display: 'grid', gap: 14 }}>

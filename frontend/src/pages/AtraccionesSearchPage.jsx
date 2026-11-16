@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { getAtracciones } from '../services/atraccionesApi';
 import { api } from '../services/api';
 import { formatearMoneda } from '../services/formato';
+import { AtraccionesLoadingView } from '../components/AtraccionesLoadingView';
+import { resolverImagenAtraccion } from '../utils/atraccionImagenes';
 
 export function AtraccionesSearchPage() {
   const [searchParams] = useSearchParams();
@@ -19,46 +21,85 @@ export function AtraccionesSearchPage() {
   const limit = 5;
 
   // Filtros obligatorios de Cátedra RDA2 (§6 - GAP-FRONT-02)
-  const [arbolCategorias, setArbolCategorias] = useState([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
   const [filtroComida, setFiltroComida] = useState(false);
   const [filtroTransporte, setFiltroTransporte] = useState(false);
   const [filtroGuia, setFiltroGuia] = useState(false);
   const [criterioOrden, setCriterioOrden] = useState('favoritos'); // 'favoritos' | 'precio_bajo' | 'mejores_comentarios'
 
-  useEffect(() => {
-    async function fetchArbol() {
-      try {
-        const res = await api.get('/atracciones/categorias/arbol');
-        setArbolCategorias(Array.isArray(res) ? res : res.data || []);
-      } catch (e) {
-        setArbolCategorias([
-          { id: 'cat-1', nombre: 'Aventura y Montaña', hijos: [{ id: 'sub-1', nombre: 'Volcanes Cotopaxi / Chimborazo' }] },
-          { id: 'cat-2', nombre: 'Patrimonio Cultural', hijos: [{ id: 'sub-2', nombre: 'Centro Histórico Colonial' }] },
-          { id: 'cat-3', nombre: 'Naturaleza y Selva', hijos: [{ id: 'sub-3', nombre: 'Tours Baños / Amazonía' }] },
-        ]);
-      }
-    }
-    fetchArbol();
-  }, []);
+  const isFetchingRef = useRef(false);
 
-  const fetchData = useCallback(async (query) => {
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(async (query, isSilent = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (!isSilent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const result = await getAtracciones({ page: 1, limit: 100 });
       let items = result.data || result;
       if (!Array.isArray(items)) items = [];
-      setAtracciones(items);
+      setAtracciones((prev) => {
+        if (prev && prev.length === items.length) {
+          let hasDiff = false;
+          for (let i = 0; i < items.length; i++) {
+            const p = prev[i];
+            const n = items[i];
+            const pId = p.id || p._id || p.atraccion_id;
+            const nId = n.id || n._id || n.atraccion_id;
+            const pPrice = typeof p.price === 'object' ? p.price?.total : (p.precio || p.price);
+            const nPrice = typeof n.price === 'object' ? n.price?.total : (n.precio || n.price);
+            const pStock = p.cupos || p.cupos_disponibles || p.stock;
+            const nStock = n.cupos || n.cupos_disponibles || n.stock;
+            if (
+              pId !== nId ||
+              pPrice !== nPrice ||
+              pStock !== nStock ||
+              (p.nombre || p.name) !== (n.nombre || n.name) ||
+              (p.ciudad || p.city) !== (n.ciudad || n.city)
+            ) {
+              hasDiff = true;
+              break;
+            }
+          }
+          if (!hasDiff) return prev;
+        }
+        return items;
+      });
+      if (isSilent) setError(null);
     } catch (err) {
-      setError('Error al cargar atracciones.');
+      console.warn('[AtraccionesSearchPage] Error transitorio en refresco silencioso:', err?.message || err);
+      if (!isSilent) {
+        setError('Error al cargar atracciones.');
+      }
     } finally {
-      setLoading(false);
+      isFetchingRef.current = false;
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   }, []);
 
+  // Polling silencioso en segundo plano cada 8 segundos
   useEffect(() => {
-    fetchData(destinoOriginal);
+    let timer = null;
+    let isCancelled = false;
+
+    const runPoll = async (silent) => {
+      if (isCancelled) return;
+      await fetchData(destinoOriginal, silent);
+      if (!isCancelled) {
+        timer = setTimeout(() => runPoll(true), 8000);
+      }
+    };
+
+    runPoll(false);
+
+    return () => {
+      isCancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [fetchData, destinoOriginal]);
 
   const handleSearch = () => {
@@ -120,6 +161,10 @@ export function AtraccionesSearchPage() {
   const totalCalculatedPages = Math.max(1, Math.ceil(sortedItems.length / limit));
   const displayedItems = sortedItems.slice((page - 1) * limit, page * limit);
 
+  if (loading && atracciones.length === 0) {
+    return <AtraccionesLoadingView titulo={busqueda ? `Buscando ofertas y experiencias en ${busqueda}...` : 'Buscando las mejores ofertas y experiencias...'} />;
+  }
+
   return (
     <div className="search-page-wrapper">
       {/* HEADER BUSCADOR REDUCIDO */}
@@ -157,75 +202,8 @@ export function AtraccionesSearchPage() {
           <div className="sidebar-box">
             <h3>Filtrar por:</h3>
             
-            {/* ÁRBOL JERÁRQUICO RECURSIVO DE CATEGORÍAS (GAP-FRONT-02) */}
-            <div className="filter-group">
-              <h4 style={{ color: '#003580', marginBottom: '8px' }}>🌲 Categorías Oficiales (RDA2 §6)</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <button
-                  type="button"
-                  onClick={() => setCategoriaSeleccionada('')}
-                  style={{
-                    textAlign: 'left',
-                    background: categoriaSeleccionada === '' ? '#eff6ff' : 'transparent',
-                    border: 'none',
-                    padding: '6px 8px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '0.82rem',
-                    fontWeight: categoriaSeleccionada === '' ? 700 : 400,
-                    color: categoriaSeleccionada === '' ? '#006ce4' : '#374151',
-                  }}
-                >
-                  📁 Todas las Categorías
-                </button>
-                {arbolCategorias.map((cat) => (
-                  <div key={cat.id} style={{ marginLeft: '4px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setCategoriaSeleccionada(cat.nombre)}
-                      style={{
-                        textAlign: 'left',
-                        background: categoriaSeleccionada === cat.nombre ? '#eff6ff' : 'transparent',
-                        border: 'none',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.82rem',
-                        fontWeight: categoriaSeleccionada === cat.nombre ? 700 : 500,
-                        color: categoriaSeleccionada === cat.nombre ? '#006ce4' : '#1f2937',
-                        width: '100%',
-                      }}
-                    >
-                      📂 {cat.nombre}
-                    </button>
-                    {(cat.hijos || []).map((hijo) => (
-                      <button
-                        key={hijo.id}
-                        type="button"
-                        onClick={() => setCategoriaSeleccionada(hijo.nombre)}
-                        style={{
-                          textAlign: 'left',
-                          marginLeft: '14px',
-                          background: categoriaSeleccionada === hijo.nombre ? '#eff6ff' : 'transparent',
-                          border: 'none',
-                          padding: '3px 6px',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.78rem',
-                          color: categoriaSeleccionada === hijo.nombre ? '#006ce4' : '#4b5563',
-                          width: 'calc(100% - 14px)',
-                        }}
-                      >
-                        ↳ {hijo.nombre}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* INCLUSIONES OBLIGATORIAS DE CÁTEDRA (GAP-FRONT-02) */}
-            <div className="filter-group" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
+            <div className="filter-group">
               <h4 style={{ color: '#047857', marginBottom: '8px' }}>✨ Inclusiones del Servicio</h4>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', marginBottom: '8px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={filtroComida} onChange={(e) => setFiltroComida(e.target.checked)} />
@@ -239,12 +217,6 @@ export function AtraccionesSearchPage() {
                 <input type="checkbox" checked={filtroGuia} onChange={(e) => setFiltroGuia(e.target.checked)} />
                 🧭 Guía Oficial Certificado
               </label>
-            </div>
-
-            <div className="filter-group" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
-              <h4>Ver resultados con</h4>
-              <label><input type="checkbox" /> Cancelación gratis</label>
-              <label><input type="checkbox" /> Accesible silla de ruedas</label>
             </div>
           </div>
         </aside>
@@ -290,11 +262,20 @@ export function AtraccionesSearchPage() {
               ) : (
                 displayedItems.map((a, idx) => {
                   const navigateToDetail = () => window.location.href = `/atracciones/${a.id}`;
-                  const fotoUrl = a.photos?.[0]?.url || a.foto_url || a.fotos_urls?.[0] || 'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800';
+                  const fotoIndex = idx + (page - 1) * limit;
+                  const fotoUrl = resolverImagenAtraccion(a, fotoIndex);
                   return (
                     <div key={a.id} className="search-result-card" onClick={navigateToDetail} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateToDetail(); } }} style={{cursor: 'pointer'}}>
                       <div className="sr-image">
-                        <img loading="lazy" src={fotoUrl} onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800'; }} alt={a.name || a.nombre} />
+                        <img 
+                          loading="lazy" 
+                          src={fotoUrl} 
+                          onError={(e) => { 
+                            e.target.onerror = null; 
+                            e.target.src = resolverImagenAtraccion(a, fotoIndex + 3); 
+                          }} 
+                          alt={a.name || a.nombre} 
+                        />
                       </div>
                       <div className="sr-content">
                         <div className="sr-main-info">

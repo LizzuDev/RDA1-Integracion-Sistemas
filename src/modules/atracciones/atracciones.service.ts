@@ -25,6 +25,36 @@ import { InventoryService } from '../inventory/inventory.service';
 import * as crypto from 'crypto';
 import { TraceContextService } from '../../core/tracing/trace-context.service';
 
+const DILAN_KNOWN_IDS = new Set([
+  '4fcd5948-9325-4833-9eae-feaafe9c0e41',
+  '20c52405-22a1-4919-a2ec-38531768e505',
+  '55884089-db9c-497d-b13f-fd9647b37d33',
+  '02f18a7b-b36c-482e-803c-d13ad2209d58',
+  '58da47b1-1d9f-4088-a3ec-52e61f8fe9c3',
+  '18fc67dd-b014-4e45-ba03-375a53cafcd6',
+  'a2c575b0-9a46-4fd8-a81a-1c25683af025',
+  'f80548ce-daaa-428f-90e0-1f9cace5aaf9',
+  'f6ba30ba-eece-44e5-9913-61b8c29dffd6',
+  'be4cdc05-3d72-4262-b1d6-63671bc52ccf',
+  'c1196d64-da06-4d5a-aae9-80630514ef30',
+  '26722574-3859-458c-850e-d30d592fab0c',
+  '70f87807-b9e9-489f-a8f2-1e8d47a56690',
+  'a3c21dc2-7d89-41ba-80ed-3c9c89ae21ac',
+  'c823084b-51ae-420e-974f-c62a63dd1089',
+  '5e9af02e-ec3f-4017-a2d9-5c50e61162b6',
+  '90fae681-3124-4159-a5a5-ea125a9fdd28',
+  '9e34398d-4193-4ca0-b572-8108d4af7113',
+  'bb357068-35f7-46c0-9113-652c51ba6d40',
+  '105e8cb1-e9c5-4c63-9ad6-d56e06f239b3',
+  '9c46547c-475d-4854-8d5f-f74df176bfe1',
+  'd44e170e-47fc-41d2-a31a-848293f2099b',
+  '91f4eb02-f50b-4483-b508-f6b436202c18',
+  '0aa62c9e-4aa3-44c2-aae4-964fa13b46fb',
+  '6f035852-c8a8-49b1-a771-1b34b07e972d',
+  'b9aed2c5-30ae-409a-88e8-3ae875acb2e3',
+  'd6dbff2c-b984-4f3f-aada-577a5305b158',
+]);
+
 @Injectable()
 export class AtraccionesService implements OnModuleInit {
   private readonly logger = new Logger(AtraccionesService.name);
@@ -33,10 +63,15 @@ export class AtraccionesService implements OnModuleInit {
   async onModuleInit() {
     try {
       await this.dataSource.query(`ALTER TABLE schema_atracciones.atracciones_reservas ALTER COLUMN turno_id DROP NOT NULL`);
-    } catch (_) {}
+    } catch (_) { }
     try {
       await this.dataSource.query(`ALTER TABLE schema_atracciones.atracciones_reservas ALTER COLUMN cliente_id DROP NOT NULL`);
-    } catch (_) {}
+    } catch (_) { }
+
+    // Sincronización inicial en segundo plano para poblar fotos de socios al arrancar
+    setTimeout(() => {
+      this.syncAllCatalogs(true).catch(() => { });
+    }, 2000);
   }
 
   constructor(
@@ -314,11 +349,31 @@ export class AtraccionesService implements OnModuleInit {
       precio = Number(item.precio_unitario_adulto || item.precio_base || item.precio);
     }
 
-    const photo =
-      (item.photos && item.photos[0]) ||
-      (item.fotos_urls && item.fotos_urls[0]) ||
-      item.foto_url ||
-      'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800';
+    const rawList = item.photos || item.fotos_urls || (item.foto_url ? [item.foto_url] : []);
+    const fotosExtraidas: string[] = [];
+
+    if (Array.isArray(rawList)) {
+      for (const p of rawList) {
+        const u = typeof p === 'string' ? p : p?.url;
+        if (typeof u === 'string' && u.startsWith('http') && !u.includes('[object') && !fotosExtraidas.includes(u)) {
+          fotosExtraidas.push(u);
+        }
+      }
+    } else if (typeof rawList === 'string' && rawList.startsWith('http')) {
+      fotosExtraidas.push(rawList);
+    }
+
+    if (fotosExtraidas.length === 0) {
+      if (item.foto_url && typeof item.foto_url === 'string' && item.foto_url.startsWith('http')) {
+        fotosExtraidas.push(item.foto_url);
+      } else {
+        fotosExtraidas.push(
+          'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800&auto=format&fit=crop',
+          'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=800&auto=format&fit=crop',
+          'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop',
+        );
+      }
+    }
 
     const ciudad =
       item.ciudad ||
@@ -395,7 +450,7 @@ export class AtraccionesService implements OnModuleInit {
         puntoEncuentro,
         lat,
         lon,
-        [photo],
+        fotosExtraidas,
         inclusiones,
         provCod,
       ],
@@ -438,10 +493,11 @@ export class AtraccionesService implements OnModuleInit {
           },
         ),
       );
-      const items = Array.isArray(data) ? data : (data?.items || data?.data || []);
+      const items = Array.isArray(data) ? data : (data?.data || data?.items || []);
       for (const item of items) {
         await this.upsertPartnerAttraction(item, 'NODE_ATR_DILAN');
       }
+      this.logger.log(`[Dilan Catalog] Sincronizadas ${items.length} atracciones de Descubre EC (NODE_ATR_DILAN).`);
     } catch (e: any) {
       this.logger.warn(`Error al sincronizar catálogo con Dilan: ${e.message}`);
     }
@@ -457,9 +513,25 @@ export class AtraccionesService implements OnModuleInit {
         }),
       );
       const items = Array.isArray(data) ? data : (data?.items || data?.data || []);
-      for (const item of items) {
-        await this.upsertPartnerAttraction(item, 'NODE_ATR_MOLINA');
-      }
+      // Enriquecer fotos reales consultando el detalle de cada atracción de Michael en paralelo
+      await Promise.allSettled(
+        items.map(async (item) => {
+          if (!item.photos || item.photos.length === 0) {
+            try {
+              const detailRes = await firstValueFrom(
+                this.httpService.get(`https://tourgirls-gateway-mm.azurewebsites.net/api/v3/atracciones/${item.id}`, {
+                  headers: { 'X-API-Key': 'Bw_Y7_TsbB7DcETwoa-mw6xSunT_rP5nHf_ZitpfB2w' },
+                  timeout: 4000,
+                }),
+              );
+              if (detailRes.data?.photos && Array.isArray(detailRes.data.photos) && detailRes.data.photos.length > 0) {
+                item.photos = detailRes.data.photos;
+              }
+            } catch (_) { }
+          }
+          await this.upsertPartnerAttraction(item, 'NODE_ATR_MOLINA');
+        }),
+      );
     } catch (e: any) {
       this.logger.warn(`Error al sincronizar catálogo con Michael: ${e.message}`);
     }
@@ -530,10 +602,13 @@ export class AtraccionesService implements OnModuleInit {
   }
 
   private lastGlobalSync = 0;
-  async syncAllCatalogs(): Promise<void> {
+  private isSyncingCatalogs = false;
+  async syncAllCatalogs(force = false): Promise<void> {
     const now = Date.now();
-    if (now - this.lastGlobalSync < 15000) return; // 15s throttle
+    if (this.isSyncingCatalogs) return;
+    if (!force && now - this.lastGlobalSync < 30000) return; // 30s throttle
     this.lastGlobalSync = now;
+    this.isSyncingCatalogs = true;
     try {
       await Promise.allSettled([
         this.syncArielCatalog(),
@@ -542,7 +617,10 @@ export class AtraccionesService implements OnModuleInit {
         this.syncAlissonCatalog(),
         this.syncGloriaCatalog(),
       ]);
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      this.isSyncingCatalogs = false;
+    }
   }
 
   // ============================================================================
@@ -566,7 +644,7 @@ export class AtraccionesService implements OnModuleInit {
             this.logger.log(`[Cross-Platform Ariel] Cliente ya existía en Ariel por cédula: ${JSON.stringify(checkRes.data)}`);
             return checkRes.data;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // 2. Consultar por email si no se encontró por identificación
@@ -585,7 +663,7 @@ export class AtraccionesService implements OnModuleInit {
             this.logger.log(`[Cross-Platform Ariel] Cliente ya existía en Ariel por email: ${JSON.stringify(checkEmailRes.data)}`);
             return checkEmailRes.data;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
     } catch (e: any) {
       this.logger.debug(`[Cross-Platform Ariel] Error consultando cliente previo: ${e.message}`);
@@ -639,7 +717,7 @@ export class AtraccionesService implements OnModuleInit {
           this.logger.log(`[Cross-Platform Dilan] Turista ya registrado en Descubre EC: ${JSON.stringify(checkRes.data)}`);
           return checkRes.data;
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // 2. Si no existe, crearlo en Dilan
@@ -690,7 +768,7 @@ export class AtraccionesService implements OnModuleInit {
           this.logger.log(`[Cross-Platform Michael] Cliente ya registrado en TourGirls: ${JSON.stringify(checkRes.data)}`);
           return checkRes.data;
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // 2. Si no existe, crearlo en Michael
@@ -741,7 +819,7 @@ export class AtraccionesService implements OnModuleInit {
           this.logger.log(`[Cross-Platform Alisson] Cliente ya registrado en Alisson: ${JSON.stringify(checkRes.data)}`);
           return checkRes.data;
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // 2. Si no existe, crearlo en Alisson
@@ -798,7 +876,7 @@ export class AtraccionesService implements OnModuleInit {
                 data.client_id || data.id || `GLORIA-${customer.identificacion}`,
                 JSON.stringify({ alias_email: data.email || customer.email, identificacion: customer.identificacion, origen: 'GLORIA_EXISTENTE' }),
               ],
-            ).catch(() => {});
+            ).catch(() => { });
           }
           return {
             nombre: data.nombre || customer.nombre,
@@ -808,7 +886,7 @@ export class AtraccionesService implements OnModuleInit {
             client_id: data.client_id || data.id,
           };
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // 2. Si no se encontró por identificación, buscar por email
@@ -827,7 +905,7 @@ export class AtraccionesService implements OnModuleInit {
             client_id: data.client_id || data.id,
           };
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // 3. Si no existe ni por identificación ni por email, crearlo en Gloria
@@ -886,8 +964,8 @@ export class AtraccionesService implements OnModuleInit {
   // ============================================================================
   async findAll(query: PaginationQueryDto): Promise<any> {
     this.logger.log(`Consultando catálogo en schema_atracciones.atracciones_items`);
-    // Sincronizar catálogos en tiempo real con todos los socios
-    await this.syncAllCatalogs();
+    // Sincronizar catálogos en segundo plano sin bloquear la respuesta HTTP
+    this.syncAllCatalogs().catch((err) => this.logger.warn(`Sync background warning: ${err.message}`));
 
     const take = Number(query.limit) || 100;
     const skip = ((Number(query.page) || 1) - 1) * take;
@@ -919,8 +997,8 @@ export class AtraccionesService implements OnModuleInit {
 
   async search(dto: SearchAtraccionesRequestDto): Promise<any> {
     this.logger.log('Búsqueda avanzada de atracciones con filtros', dto);
-    // Sincronizar catálogos en tiempo real con todos los socios
-    await this.syncAllCatalogs();
+    // Sincronizar catálogos en segundo plano sin bloquear la respuesta HTTP
+    this.syncAllCatalogs().catch((err) => this.logger.warn(`Sync background warning: ${err.message}`));
 
     const take = Number((dto as any).limit) || 50;
     const page = Number((dto as any).page) || 1;
@@ -964,7 +1042,7 @@ export class AtraccionesService implements OnModuleInit {
     this.logger.log(`Consultando detalle de atracción ${id} en schema_atracciones`);
     let item = await this.atraccionRepo.findOne({ where: [{ id }, { slug: id }] });
 
-    if (!item) {
+    if (!item || !item.fotosUrls || item.fotosUrls.length === 0) {
       // Probar directamente por ID contra todos los socios en PARALELO ultra rápido (3500ms timeout)
       const partnersToProbe = [
         { code: 'NODE_ATR_MOLINA', url: `https://tourgirls-gateway-mm.azurewebsites.net/api/v3/atracciones/${id}`, key: 'Bw_Y7_TsbB7DcETwoa-mw6xSunT_rP5nHf_ZitpfB2w' },
@@ -988,11 +1066,20 @@ export class AtraccionesService implements OnModuleInit {
             if (!rawItem.id) rawItem.id = id;
             await this.upsertPartnerAttraction(rawItem, partner.code);
           }
-        } catch (_) {}
+        } catch (_) { }
       });
 
       await Promise.allSettled(probePromises);
       item = await this.atraccionRepo.findOne({ where: [{ id }, { slug: id }] });
+    }
+
+    if (item && (!item.fotosUrls || item.fotosUrls.length === 0)) {
+      item.fotosUrls = [
+        'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop',
+      ];
+      this.atraccionRepo.update(item.id, { fotosUrls: item.fotosUrls }).catch(() => { });
     }
 
     if (!item) {
@@ -1020,7 +1107,7 @@ export class AtraccionesService implements OnModuleInit {
             ratings: { score: 9.8, number_of_reviews: 142 },
           };
         }
-      } catch (e) {}
+      } catch (e) { }
       throw new HttpException('Atracción no encontrada', HttpStatus.NOT_FOUND);
     }
 
@@ -1053,31 +1140,52 @@ export class AtraccionesService implements OnModuleInit {
 
     let item = await this.atraccionRepo.findOne({ where: [{ id }, { slug: id }] });
     if (!item) {
-      await this.findOne(id).catch(() => {});
+      await this.findOne(id).catch(() => { });
       item = await this.atraccionRepo.findOne({ where: [{ id }, { slug: id }] });
     }
 
     const partnerCode = item?.proveedorCodigo || '';
 
+    const gloriaKnownIds = new Set([
+      '1bb26d24-f79d-4833-b9da-a35b8d5ef44d',
+      '6e97ed14-3094-4e49-a093-452f028bee97',
+      '6f163ba9-f1c1-4593-8100-92390373688c',
+      'cc25f94a-7246-41a0-8832-7ca662277107',
+      '772f0145-fdf7-4f3f-bc97-d402f5607854',
+      'df3d1877-88f8-4183-805d-ced39a36811d',
+    ]);
+
     let isAlisson = partnerCode === 'NODE_ATR_ALISSON';
     let isMichael = partnerCode === 'NODE_ATR_MOLINA';
-    let isGloria = partnerCode === 'NODE_ATR_GLORIA';
+    let isGloria = partnerCode === 'NODE_ATR_GLORIA' || gloriaKnownIds.has(id);
     let isDilan = partnerCode === 'NODE_ATR_DILAN';
     let isAriel = partnerCode === 'NODE_ATR_ARIEL';
 
     if (!isAlisson && !isMichael && !isGloria && !isDilan && !isAriel) {
-      if (id === '1bb26d24-f79d-4833-b9da-a35b8d5ef44d') {
-        isGloria = true;
-      } else if (id.startsWith('6f03') || id === '6f035852-c8a8-49b1-a771-1b34b07e972d') {
+      if (DILAN_KNOWN_IDS.has(id) || id.startsWith('6f03') || id === '6f035852-c8a8-49b1-a771-1b34b07e972d') {
         isDilan = true;
+      } else if (gloriaKnownIds.has(id)) {
+        isGloria = true;
       } else if (id.startsWith('PRhu') || id === 's7PpJcyvtY2Q') {
         isAlisson = true;
       } else if (id === 'rLohsmEh6809') {
         isMichael = true;
-      } else if (id.startsWith('0bef') || id.length > 30 || id.includes('-')) {
-        isAriel = true;
       } else if (id.length === 12) {
         isMichael = true;
+      } else if (id.includes('-')) {
+        // Consultar rápidamente si existe en el catálogo de Gloria antes de asumir Ariel
+        try {
+          const { data: gData } = await firstValueFrom(
+            this.httpService.get(`https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v3/atracciones/${id}`, { timeout: 1500 })
+          );
+          if (gData && (gData.id || gData.nombre || gData.name)) {
+            isGloria = true;
+          } else {
+            isAriel = true;
+          }
+        } catch (_) {
+          isAriel = true;
+        }
       }
     }
 
@@ -1172,6 +1280,37 @@ export class AtraccionesService implements OnModuleInit {
     }
 
     if (isGloria) {
+      // 1. Consultar cupos y aforo real configurado en el endpoint admin de Gloria
+      let adminSlotsMap = new Map<string, { total: number; available: number }>();
+      try {
+        const token = await this.getGloriaToken();
+        if (token) {
+          const { data: cuposData } = await firstValueFrom(
+            this.httpService.get(
+              `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v2/atracciones/admin/${id}/cupos`,
+              {
+                params: { desde: targetDate, hasta: targetDate },
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 4000,
+              },
+            ),
+          );
+          if (Array.isArray(cuposData?.slots)) {
+            for (const s of cuposData.slots) {
+              if (s.date === targetDate && s.timeSlot) {
+                adminSlotsMap.set(s.timeSlot.slice(0, 5), {
+                  total: Number(s.total ?? 10),
+                  available: Number(s.available ?? 10),
+                });
+              }
+            }
+          }
+        }
+      } catch (err: any) {
+        this.logger.debug(`[Gloria] Error consultando admin cupos para enriquecer: ${err.message}`);
+      }
+
+      // 2. Consultar disponibilidad pública v3 de Gloria
       try {
         const { data } = await firstValueFrom(
           this.httpService.get(
@@ -1186,21 +1325,40 @@ export class AtraccionesService implements OnModuleInit {
         if (data && Array.isArray(data.horarios) && data.horarios.length > 0) {
           const dateCompact = targetDate.replace(/-/g, '');
           const mappedSlots = data.horarios.map((h: any) => {
-            const timeRaw = h.hora || '09:16:00';
+            const timeRaw = h.hora || '09:00:00';
             const timeCompact = timeRaw.replace(/[^0-9]/g, '').slice(0, 4);
             const timeFormatted = timeRaw.slice(0, 5);
+            const adminInfo = adminSlotsMap.get(timeFormatted);
+            let availSpots = adminInfo !== undefined
+              ? adminInfo.available
+              : (typeof h.available_spots === 'number'
+                ? h.available_spots
+                : (typeof h.cupos_disponibles === 'number'
+                  ? h.cupos_disponibles
+                  : (h.disponible ? 15 : 0)));
+            let totalSpots = adminInfo !== undefined
+              ? adminInfo.total
+              : (typeof h.total_spots === 'number'
+                ? h.total_spots
+                : (typeof h.capacidad_total === 'number'
+                  ? h.capacidad_total
+                  : (typeof h.available_spots === 'number' ? h.available_spots : availSpots)));
+
+            availSpots = Math.min(availSpots, totalSpots);
+            const isAvail = h.disponible !== false && availSpots > 0;
             return {
               id: `slot-${dateCompact}-${timeCompact}`,
               slot_id: `slot-${dateCompact}-${timeCompact}`,
               time: timeFormatted,
               hora: timeFormatted,
               hora_inicio: timeFormatted,
-              capacidad_total: 20,
-              cupos_totales: 20,
-              cupos: h.disponible ? 20 : 0,
-              cupos_disponibles: h.disponible ? 20 : 0,
-              status: h.disponible ? 'DISPONIBLE' : 'AGOTADO',
-              estado: h.disponible ? 'DISPONIBLE' : 'AGOTADO',
+              capacidad_total: totalSpots,
+              cupos_totales: totalSpots,
+              cupos: availSpots,
+              cupos_disponibles: availSpots,
+              available_spots: availSpots,
+              status: isAvail ? 'DISPONIBLE' : 'AGOTADO',
+              estado: isAvail ? 'DISPONIBLE' : 'AGOTADO',
               precio_adulto_slot: 25,
             };
           });
@@ -1235,15 +1393,16 @@ export class AtraccionesService implements OnModuleInit {
 
           const slots = cuposData?.slots || [];
           const dateSlots = slots.filter((s: any) => s.date === targetDate);
-          const activeSlots = dateSlots.length > 0 ? dateSlots : slots;
+          const activeSlots = dateSlots.length > 0 ? dateSlots : [];
 
           if (activeSlots.length > 0) {
             const dateCompact = targetDate.replace(/-/g, '');
             const mappedSlots = activeSlots.map((s: any) => {
               const timeSlot = s.timeSlot || '09:16';
               const timeCompact = timeSlot.replace(/[^0-9]/g, '').slice(0, 4);
-              const avail = Number(s.available ?? 5);
-              const tot = Number(s.total ?? 5);
+              let avail = Number(s.available ?? 15);
+              let tot = Number(s.total ?? 15);
+              avail = Math.min(avail, tot);
               return {
                 id: s.slotId || `slot-${dateCompact}-${timeCompact}`,
                 slot_id: s.slotId || `slot-${dateCompact}-${timeCompact}`,
@@ -1254,6 +1413,7 @@ export class AtraccionesService implements OnModuleInit {
                 cupos_totales: tot,
                 cupos: avail,
                 cupos_disponibles: avail,
+                available_spots: avail,
                 status: avail > 0 ? 'DISPONIBLE' : 'AGOTADO',
                 estado: avail > 0 ? 'DISPONIBLE' : 'AGOTADO',
                 precio_adulto_slot: 25,
@@ -1402,7 +1562,7 @@ export class AtraccionesService implements OnModuleInit {
               if (inserted && inserted.length > 0) {
                 turnoId = inserted[0].id;
               }
-            } catch (_) {}
+            } catch (_) { }
 
             mappedSlots.push({
               id: turnoId,
@@ -1461,13 +1621,14 @@ export class AtraccionesService implements OnModuleInit {
 
     // Si no existen turnos en la base para esa fecha, generar slots predeterminados en memoria
     if (!turnos || turnos.length === 0) {
-      let s09 = 14, s11 = 3, s14 = 18;
+      const fallbackCap = isGloria ? 5 : Number((item as any)?.capacidadMaxima || (item as any)?.capacidad || 20);
+      let s09 = Math.min(14, fallbackCap), s11 = Math.min(3, fallbackCap), s14 = Math.min(18, fallbackCap);
       if (this.inventoryService) {
         const grpcStock = this.inventoryService.getInventory(id, targetDate);
         grpcStock.forEach((s) => {
-          if (s.time_slot.includes('09')) s09 = s.available_units;
-          if (s.time_slot.includes('11')) s11 = s.available_units;
-          if (s.time_slot.includes('14') || s.time_slot.includes('02')) s14 = s.available_units;
+          if (s.time_slot.includes('09')) s09 = Math.min(s.available_units, fallbackCap);
+          if (s.time_slot.includes('11')) s11 = Math.min(s.available_units, fallbackCap);
+          if (s.time_slot.includes('14') || s.time_slot.includes('02')) s14 = Math.min(s.available_units, fallbackCap);
         });
       }
 
@@ -1480,8 +1641,8 @@ export class AtraccionesService implements OnModuleInit {
           hora_inicio: '09:00 a.m.',
           time_24h: '09:00:00',
           hora_24h: '09:00:00',
-          capacidad_total: 20,
-          cupos_totales: 20,
+          capacidad_total: fallbackCap,
+          cupos_totales: fallbackCap,
           cupos_disponibles: s09,
           status: s09 <= 0 ? 'AGOTADO' : (s09 <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'),
           estado: s09 <= 0 ? 'AGOTADO' : (s09 <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'),
@@ -1496,8 +1657,8 @@ export class AtraccionesService implements OnModuleInit {
           hora_inicio: '11:30 a.m.',
           time_24h: '11:30:00',
           hora_24h: '11:30:00',
-          capacidad_total: 20,
-          cupos_totales: 20,
+          capacidad_total: fallbackCap,
+          cupos_totales: fallbackCap,
           cupos_disponibles: s11,
           status: s11 <= 0 ? 'AGOTADO' : (s11 <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'),
           estado: s11 <= 0 ? 'AGOTADO' : (s11 <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'),
@@ -1512,8 +1673,8 @@ export class AtraccionesService implements OnModuleInit {
           hora_inicio: '02:30 p.m.',
           time_24h: '14:30:00',
           hora_24h: '14:30:00',
-          capacidad_total: 20,
-          cupos_totales: 20,
+          capacidad_total: fallbackCap,
+          cupos_totales: fallbackCap,
           cupos_disponibles: s14,
           status: s14 <= 0 ? 'AGOTADO' : (s14 <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'),
           estado: s14 <= 0 ? 'AGOTADO' : (s14 <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'),
@@ -1563,6 +1724,32 @@ export class AtraccionesService implements OnModuleInit {
       time_slots: mappedSlots,
       turnos: mappedSlots,
     };
+  }
+
+  normalizarHoraParaDilan(timeInput?: string, slotId?: string): string {
+    if (slotId) {
+      const mSlot = slotId.match(/^slot-\d{8}-(\d{2})(\d{2})$/);
+      if (mSlot) return `${mSlot[1]}:${mSlot[2]}:00`;
+    }
+    if (!timeInput) return '09:00:00';
+    const raw = timeInput.trim();
+    const m12 = raw.match(/^(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?)$/i);
+    if (m12) {
+      let h = parseInt(m12[1], 10);
+      const min = m12[2];
+      const isPm = m12[3].toLowerCase().startsWith('p');
+      if (isPm && h < 12) h += 12;
+      if (!isPm && h === 12) h = 0;
+      return `${h.toString().padStart(2, '0')}:${min}:00`;
+    }
+    const m24 = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (m24) {
+      const h = m24[1].padStart(2, '0');
+      const min = m24[2];
+      const sec = m24[3] || '00';
+      return `${h}:${min}:${sec}`;
+    }
+    return '09:00:00';
   }
 
   // ============================================================================
@@ -1647,10 +1834,10 @@ export class AtraccionesService implements OnModuleInit {
         '074de7b3-3707-4742-bb73-c5ab659f539a',
         '1563d2a6-65ed-4d4f-a06d-48a6b3ed4ca5',
       ];
-      if (gloriaKnownIds.includes(id)) {
-        isGloriaAttr = true;
-      } else if (id.startsWith('6f03') || id === '6f035852-c8a8-49b1-a771-1b34b07e972d') {
+      if (DILAN_KNOWN_IDS.has(id) || id.startsWith('6f03') || id === '6f035852-c8a8-49b1-a771-1b34b07e972d') {
         isDilanAttr = true;
+      } else if (gloriaKnownIds.includes(id)) {
+        isGloriaAttr = true;
       } else if (id.startsWith('PRhu') || id === 's7PpJcyvtY2Q') {
         isAlissonAttr = true;
       } else if (id === 'rLohsmEh6809') {
@@ -1678,36 +1865,41 @@ export class AtraccionesService implements OnModuleInit {
       const dateStr = dto.date || dto.fecha || new Date().toISOString().split('T')[0];
       const timeRaw = (dto.time || dto.hora || '09:00 a.m.').trim();
 
-      // Normalizar hora para TourGirls considerando formato 24h y slots
+      let slotIdMichael = dto.slot_id && dto.slot_id.startsWith('slot-') ? dto.slot_id : null;
+      let finalDate = dateStr;
       let timeFormatted = timeRaw;
-      if (timeRaw.includes('a.m.') || timeRaw.includes('p.m.')) {
-        timeFormatted = timeRaw;
-      } else {
-        const timeMatch = timeRaw.match(/^(\d{1,2}):(\d{2})/);
-        if (timeMatch) {
-          const hour = parseInt(timeMatch[1], 10);
-          const min = timeMatch[2];
-          if (hour === 0) {
-            timeFormatted = `12:${min} a.m.`;
-          } else if (hour === 12) {
-            timeFormatted = `12:${min} p.m.`;
-          } else if (hour > 12) {
-            const h12 = String(hour - 12).padStart(2, '0');
-            timeFormatted = `${h12}:${min} p.m.`;
-          } else {
-            const h12 = String(hour).padStart(2, '0');
-            timeFormatted = `${h12}:${min} a.m.`;
-          }
-        } else {
-          timeFormatted = `${timeRaw} a.m.`;
-        }
-      }
 
-      const dateCompact = dateStr.replace(/-/g, '');
-      const timeCompact = timeRaw.replace(/[^0-9]/g, '').slice(0, 4).padEnd(4, '0');
-      const slotIdMichael = dto.slot_id && dto.slot_id.startsWith('slot-')
-        ? dto.slot_id
-        : `slot-${dateCompact}-${timeCompact}`;
+      // Si tenemos un slot_id con formato canónico slot-YYYYMMDD-HHMM, derivar fecha y hora exacta del slot
+      const slotMatch = slotIdMichael ? slotIdMichael.match(/slot-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})/) : null;
+      if (slotMatch) {
+        finalDate = `${slotMatch[1]}-${slotMatch[2]}-${slotMatch[3]}`;
+        const sHour = parseInt(slotMatch[4], 10);
+        const sMin = slotMatch[5];
+        if (sHour === 0) timeFormatted = `12:${sMin} a.m.`;
+        else if (sHour === 12) timeFormatted = `12:${sMin} p.m.`;
+        else if (sHour > 12) timeFormatted = `${String(sHour - 12).padStart(2, '0')}:${sMin} p.m.`;
+        else timeFormatted = `${String(sHour).padStart(2, '0')}:${sMin} a.m.`;
+      } else {
+        // Fallback: calcular hora 24h y generar slot_id
+        let hour24 = 9;
+        let minStr = '00';
+        const isPm = /p\.m\.|pm/i.test(timeRaw);
+        const isAm = /a\.m\.|am/i.test(timeRaw);
+        const numMatch = timeRaw.match(/(\d{1,2}):(\d{2})/);
+        if (numMatch) {
+          let h = parseInt(numMatch[1], 10);
+          minStr = numMatch[2];
+          if (isPm && h < 12) h += 12;
+          if (isAm && h === 12) h = 0;
+          hour24 = h;
+        }
+        const hCompact = String(hour24).padStart(2, '0');
+        slotIdMichael = `slot-${dateStr.replace(/-/g, '')}-${hCompact}${minStr}`;
+        if (hour24 === 0) timeFormatted = `12:${minStr} a.m.`;
+        else if (hour24 === 12) timeFormatted = `12:${minStr} p.m.`;
+        else if (hour24 > 12) timeFormatted = `${String(hour24 - 12).padStart(2, '0')}:${minStr} p.m.`;
+        else timeFormatted = `${String(hour24).padStart(2, '0')}:${minStr} a.m.`;
+      }
 
       const clientName = dto.customer_name || dto.customer?.full_name || 'Cliente Booking Central';
       const clientEmail = dto.customer_email || dto.customer?.email || 'turista@booking.local';
@@ -1728,12 +1920,12 @@ export class AtraccionesService implements OnModuleInit {
       const michaelPayload = {
         atraccion_id: id,
         slot_id: slotIdMichael,
-        date: dateStr,
+        date: finalDate,
         time: timeFormatted,
-        adult_count: adultCount,
+        adult_count: adultCount + seniorCount + infantCount,
         child_count: childCount,
-        senior_count: seniorCount,
-        infant_count: infantCount,
+        senior_count: 0,
+        infant_count: 0,
         customer: {
           full_name: clientName,
           email: clientEmail,
@@ -1764,17 +1956,47 @@ export class AtraccionesService implements OnModuleInit {
         );
         michaelRes = response.data;
       } catch (err: any) {
-        this.logger.error(`Error reservando en API de Michael: ${JSON.stringify(err.response?.data || err.message)}`);
-        if (err.response?.status === 409 || err.response?.data?.code === 'OUT_OF_STOCK') {
+        // Salvaguarda: si Michael rechaza por desglose etario, reintentar unificando a entradas generales
+        if ((childCount > 0 || seniorCount > 0 || infantCount > 0) && err.response?.status !== 409) {
+          try {
+            this.logger.warn(`[Michael Fallback] Reintentando reserva unificando a entradas generales (${totalTickets} personas)`);
+            const fallbackPayload = {
+              ...michaelPayload,
+              adult_count: totalTickets,
+              child_count: 0,
+              senior_count: 0,
+              infant_count: 0,
+            };
+            const fbRes = await firstValueFrom(
+              this.httpService.post(
+                'https://tourgirls-gateway-mm.azurewebsites.net/api/v3/reservas',
+                fallbackPayload,
+                {
+                  headers: {
+                    'X-API-Key': 'Bw_Y7_TsbB7DcETwoa-mw6xSunT_rP5nHf_ZitpfB2w',
+                    'Idempotency-Key': crypto.randomUUID(),
+                    'Content-Type': 'application/json',
+                  },
+                  timeout: 30000,
+                },
+              ),
+            );
+            michaelRes = fbRes.data;
+          } catch (_) { }
+        }
+        if (!michaelRes) {
+          this.logger.error(`Error reservando en API de Michael: ${JSON.stringify(err.response?.data || err.message)}`);
+          if (err.response?.status === 409 || err.response?.data?.code === 'OUT_OF_STOCK') {
+            throw new HttpException(
+              err.response.data || { message: 'Sin cupos disponibles en la atracción de TourGirls' },
+              HttpStatus.CONFLICT,
+            );
+          }
           throw new HttpException(
-            err.response.data || { message: 'Sin cupos disponibles en la atracción de TourGirls' },
-            HttpStatus.CONFLICT,
+            `Error en socio de atracciones (Michael - TourGirls): ${err.response?.data?.detail || err.response?.data?.message || err.message}`,
+            HttpStatus.BAD_GATEWAY,
           );
         }
-        throw new HttpException(
-          `Error en socio de atracciones (Michael - TourGirls): ${err.response?.data?.detail || err.response?.data?.message || err.message}`,
-          HttpStatus.BAD_GATEWAY,
-        );
       }
 
       const reservationCode = michaelRes?.reservation_code || michaelRes?.external_order_id || `DEC-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -1791,7 +2013,7 @@ export class AtraccionesService implements OnModuleInit {
           [id, dateStr, timeFormatted, totalTickets],
         );
         if (tRows && tRows.length > 0) localTurnoId = tRows[0].id;
-      } catch (_) {}
+      } catch (_) { }
 
       const voucherQr = michaelRes?.voucher_qr_payload || `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><rect width="220" height="220" fill="%23ffffff"/><text x="20" y="35" font-family="sans-serif" font-size="12" fill="%23003580" font-weight="bold">TOURGIRLS VOUCHER</text><text x="20" y="70" font-family="sans-serif" font-size="16" font-weight="bold" fill="%23000000">${reservationCode}</text><text x="20" y="105" font-family="sans-serif" font-size="12" fill="%23333333">Titular: ${clientName}</text><text x="20" y="130" font-family="sans-serif" font-size="12" fill="%23555555">Fecha: ${dateStr} | ${timeFormatted}</text><text x="20" y="155" font-family="sans-serif" font-size="12" fill="%23555555">Tickets: ${totalTickets} personas</text><text x="20" y="190" font-family="sans-serif" font-size="14" font-weight="bold" fill="%2328a745">✔ VOUCHER VALIDO</text></svg>`;
 
@@ -1900,10 +2122,10 @@ export class AtraccionesService implements OnModuleInit {
         slot_id: slotIdAlisson,
         date: dateStr,
         time: timeFormatted,
-        adult_count: adultCount,
-        child_count: childCount,
-        senior_count: seniorCount,
-        infant_count: infantCount,
+        adult_count: totalTickets,
+        child_count: 0,
+        senior_count: 0,
+        infant_count: 0,
         customer: {
           full_name: safeFullName,
           nombre_completo: safeFullName,
@@ -1973,19 +2195,19 @@ export class AtraccionesService implements OnModuleInit {
           [id, dateStr, timeFormatted, totalTickets],
         );
         if (tRows && tRows.length > 0) localTurnoId = tRows[0].id;
-      } catch (_) {}
+      } catch (_) { }
 
       if (!localTurnoId) {
         try {
           const anyTurno = await this.dataSource.query(`SELECT id FROM schema_atracciones.atracciones_turnos_aforo WHERE atraccion_id = $1 LIMIT 1`, [id]);
           if (anyTurno && anyTurno.length > 0) localTurnoId = anyTurno[0].id;
-        } catch (_) {}
+        } catch (_) { }
       }
       if (!localTurnoId) {
         try {
           const anyGlobalTurno = await this.dataSource.query(`SELECT id FROM schema_atracciones.atracciones_turnos_aforo LIMIT 1`);
           if (anyGlobalTurno && anyGlobalTurno.length > 0) localTurnoId = anyGlobalTurno[0].id;
-        } catch (_) {}
+        } catch (_) { }
       }
 
       const voucherQr = `${alissonRes?.voucher_qr_payload || ''} ${alissonRes?.reservation_id || ''} ${reservationCode}`;
@@ -2045,40 +2267,78 @@ export class AtraccionesService implements OnModuleInit {
         timeClean = `${hours.toString().padStart(2, '0')}:${mins}`;
       }
 
-      // Resolver el horario exacto del catálogo de Gloria consultando los cupos reales
+      // Resolver el horario exacto del catálogo de Gloria consultando los cupos y horarios reales (v3 público y v2 admin)
       try {
-        const token = await this.getGloriaToken();
-        if (token) {
-          const { data: cuposData } = await firstValueFrom(
-            this.httpService.get(
-              `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v2/atracciones/admin/${id}/cupos`,
-              {
-                params: { desde: dateStr, hasta: dateStr },
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 4000,
-              },
-            ),
-          );
-          const scheduleTimes: string[] = cuposData?.schedule_times || [];
-          if (scheduleTimes.length > 0 && !scheduleTimes.includes(timeClean)) {
-            // Buscar el turno con cupos disponibles para la fecha, o el primer turno configurado
-            const matchingSlot = cuposData.slots?.find((s: any) => s.date === dateStr && s.available >= totalTickets)
-              || cuposData.slots?.find((s: any) => s.date === dateStr);
-            if (matchingSlot?.timeSlot) {
-              this.logger.log(`[Gloria] Ajustando turno ${timeClean} -> ${matchingSlot.timeSlot} según cupos reales de Gloria`);
-              timeClean = matchingSlot.timeSlot;
-            } else if (scheduleTimes[0]) {
-              timeClean = scheduleTimes[0];
+        const { data: dispData } = await firstValueFrom(
+          this.httpService.get(
+            `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v3/atracciones/${id}/disponibilidad`,
+            {
+              params: { fecha: dateStr },
+              timeout: 4000,
+            },
+          ),
+        );
+        if (dispData?.horarios && Array.isArray(dispData.horarios)) {
+          const availableSlots = dispData.horarios.filter((h: any) => h.disponible !== false);
+          const timeFormattedList = availableSlots.map((h: any) => (h.hora || '').slice(0, 5));
+          if (timeFormattedList.includes(timeClean)) {
+            this.logger.log(`[Gloria] Horario ${timeClean} validado y confirmado disponible en Gloria v3`);
+          } else if (timeFormattedList.length > 0) {
+            this.logger.log(`[Gloria] Horario ${timeClean} no disponible en lista v3, ajustando a disponible: ${timeFormattedList[0]}`);
+            timeClean = timeFormattedList[0];
+          }
+
+          // Validar cupos disponibles antes de despachar a Gloria
+          const chosenSlot = dispData.horarios.find((h: any) => (h.hora || '').slice(0, 5) === timeClean);
+          if (chosenSlot && typeof chosenSlot.available_spots === 'number') {
+            if (chosenSlot.available_spots < totalTickets) {
+              throw new HttpException(
+                {
+                  type: 'https://booking.epn.edu.ec/errors/out-of-stock',
+                  title: 'Cupos Insuficientes',
+                  status: HttpStatus.CONFLICT,
+                  statusCode: HttpStatus.CONFLICT,
+                  message: `El turno seleccionado (${timeClean}) solo dispone de ${chosenSlot.available_spots} cupo(s) disponible(s). Solicitaste ${totalTickets} boletos.`,
+                  detail: `Cupos disponibles: ${chosenSlot.available_spots}, solicitados: ${totalTickets}`,
+                  code: 'OUT_OF_STOCK',
+                },
+                HttpStatus.CONFLICT,
+              );
             }
           }
         }
       } catch (err: any) {
-        this.logger.debug(`[Gloria] No se pudo consultar cupos admin: ${err.message}`);
+        if (err instanceof HttpException) throw err;
+        this.logger.debug(`[Gloria] No se pudo consultar disponibilidad v3: ${err.message}`);
+        try {
+          const token = await this.getGloriaToken();
+          if (token) {
+            const { data: cuposData } = await firstValueFrom(
+              this.httpService.get(
+                `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v2/atracciones/admin/${id}/cupos`,
+                {
+                  params: { desde: dateStr, hasta: dateStr },
+                  headers: { Authorization: `Bearer ${token}` },
+                  timeout: 4000,
+                },
+              ),
+            );
+            const scheduleTimes: string[] = cuposData?.schedule_times || [];
+            if (scheduleTimes.length > 0 && !scheduleTimes.includes(timeClean)) {
+              const matchingSlot = cuposData.slots?.find((s: any) => s.date === dateStr && s.available >= totalTickets)
+                || cuposData.slots?.find((s: any) => s.date === dateStr);
+              if (matchingSlot?.timeSlot) {
+                this.logger.log(`[Gloria] Ajustando turno ${timeClean} -> ${matchingSlot.timeSlot} según cupos reales de Gloria`);
+                timeClean = matchingSlot.timeSlot;
+              } else if (scheduleTimes[0]) {
+                timeClean = scheduleTimes[0];
+              }
+            }
+          }
+        } catch (e: any) {
+          this.logger.debug(`[Gloria] Fallback cupos admin: ${e.message}`);
+        }
       }
-
-      // Si no coincidió y es horario por defecto antiguo, normalizar a los horarios reales de la atracción (09:16 y 16:15)
-      if (timeClean === '09:00') timeClean = '09:16';
-      if (timeClean === '17:30' || timeClean === '16:00') timeClean = '16:15';
 
       const clientName = dto.customer_name || dto.customer?.full_name || 'Cliente Booking Central';
       const clientEmail = dto.customer_email || dto.customer?.email || 'turista@booking.local';
@@ -2214,14 +2474,14 @@ export class AtraccionesService implements OnModuleInit {
         const tRows = await this.dataSource.query(
           `INSERT INTO schema_atracciones.atracciones_turnos_aforo 
              (atraccion_id, fecha, hora_inicio, hora_fin, capacidad_total, cupos_disponibles, estado)
-           VALUES ($1, $2, $3, '12:00 p.m.', 20, 20, 'DISPONIBLE')
+           VALUES ($1, $2, $3, '12:00 p.m.', 15, GREATEST(0, 15 - $4), 'DISPONIBLE')
            ON CONFLICT (atraccion_id, fecha, hora_inicio) DO UPDATE SET
              cupos_disponibles = GREATEST(0, schema_atracciones.atracciones_turnos_aforo.cupos_disponibles - $4)
            RETURNING id`,
           [id, dateStr, timeClean, totalTickets],
         );
         if (tRows && tRows.length > 0) localTurnoId = tRows[0].id;
-      } catch (_) {}
+      } catch (_) { }
 
       const voucherQr = `DESCUBRE-EC-${reservationCode}-${id}-${dateStr}`;
 
@@ -2267,13 +2527,13 @@ export class AtraccionesService implements OnModuleInit {
 
     if (isDilanAttr) {
       const dateStr = dto.date || dto.fecha || new Date().toISOString().split('T')[0];
-      const timeRaw = (dto.time || dto.hora || '09:00 a.m.').trim();
-      const timeFormatted = timeRaw.includes('a.m.') || timeRaw.includes('p.m.') ? timeRaw : `${timeRaw} a.m.`;
+      const timeRaw = (dto.time || dto.hora || '09:00:00').trim();
       const dateCompact = dateStr.replace(/-/g, '');
       const timeCompact = timeRaw.replace(/[^0-9]/g, '').slice(0, 4).padEnd(4, '0');
       const slotIdDilan = dto.slot_id && dto.slot_id.startsWith('slot-')
         ? dto.slot_id
         : `slot-${dateCompact}-${timeCompact}`;
+      const timeFormatted = this.normalizarHoraParaDilan(timeRaw, slotIdDilan);
 
       const clientName = dto.customer_name || dto.customer?.full_name || 'Cliente Booking Central';
       const clientEmail = dto.customer_email || dto.customer?.email || 'turista@booking.local';
@@ -2297,10 +2557,10 @@ export class AtraccionesService implements OnModuleInit {
         slot_id: slotIdDilan,
         date: dateStr,
         time: timeFormatted,
-        adult_count: adultCount,
-        child_count: childCount,
-        senior_count: seniorCount,
-        infant_count: infantCount,
+        adult_count: totalTickets,
+        child_count: 0,
+        senior_count: 0,
+        infant_count: 0,
         customer: {
           full_name: clientName,
           email: clientEmail,
@@ -2357,7 +2617,7 @@ export class AtraccionesService implements OnModuleInit {
           [id, dateStr, timeFormatted, totalTickets],
         );
         if (tRows && tRows.length > 0) localTurnoId = tRows[0].id;
-      } catch (_) {}
+      } catch (_) { }
 
       const voucherQr = dilanRes?.voucher_qr_payload || `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><rect width="220" height="220" fill="%23ffffff"/><text x="20" y="35" font-family="sans-serif" font-size="12" fill="%23003580" font-weight="bold">DESCUBRE EC VOUCHER</text><text x="20" y="70" font-family="sans-serif" font-size="16" font-weight="bold" fill="%23000000">${reservationCode}</text><text x="20" y="105" font-family="sans-serif" font-size="12" fill="%23333333">Titular: ${clientName}</text><text x="20" y="130" font-family="sans-serif" font-size="12" fill="%23555555">Fecha: ${dateStr} | ${timeFormatted}</text><text x="20" y="155" font-family="sans-serif" font-size="12" fill="%23555555">Tickets: ${totalTickets} personas</text><text x="20" y="190" font-family="sans-serif" font-size="14" font-weight="bold" fill="%2328a745">✔ VOUCHER VALIDO</text></svg>`;
 
@@ -2399,7 +2659,7 @@ export class AtraccionesService implements OnModuleInit {
         partner_response: dilanRes,
       };
     }
-    
+
     if (isArielAttr) {
       const dateStr = dto.date || dto.fecha || new Date().toISOString().split('T')[0];
       const timeRaw = (dto.time || dto.hora || '09:00').trim();
@@ -2429,10 +2689,10 @@ export class AtraccionesService implements OnModuleInit {
         slot_id: slotIdAriel,
         date: dateStr,
         time: time24,
-        adult_count: adultCount,
-        child_count: childCount,
-        senior_count: seniorCount,
-        infant_count: infantCount,
+        adult_count: totalTickets,
+        child_count: 0,
+        senior_count: 0,
+        infant_count: 0,
         customer: {
           full_name: clientName,
           email: clientEmail,
@@ -2504,7 +2764,7 @@ export class AtraccionesService implements OnModuleInit {
           [id, dateStr, time24, totalTickets],
         );
         if (tRows && tRows.length > 0) localTurnoId = tRows[0].id;
-      } catch (_) {}
+      } catch (_) { }
 
       const voucherQr = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><rect width="220" height="220" fill="%23ffffff"/><text x="20" y="35" font-family="sans-serif" font-size="12" fill="%23003580" font-weight="bold">BOOKING ATRACCIONES QR</text><text x="20" y="70" font-family="sans-serif" font-size="16" font-weight="bold" fill="%23000000">${reservationCode}</text><text x="20" y="105" font-family="sans-serif" font-size="12" fill="%23333333">Titular: ${dto.customer_name}</text><text x="20" y="130" font-family="sans-serif" font-size="12" fill="%23555555">Fecha: ${dateStr} | ${time24}</text><text x="20" y="155" font-family="sans-serif" font-size="12" fill="%23555555">Tickets: ${totalTickets} personas</text><text x="20" y="190" font-family="sans-serif" font-size="14" font-weight="bold" fill="%2328a745">✔ VOUCHER VALIDO</text></svg>`;
 
@@ -2868,7 +3128,7 @@ export class AtraccionesService implements OnModuleInit {
           [apiKey],
         );
         if (found && found.length > 0) isAuthorized = true;
-      } catch (_) {}
+      } catch (_) { }
     }
 
     if (!isAuthorized) {
@@ -2893,8 +3153,8 @@ export class AtraccionesService implements OnModuleInit {
 
     if (!reserva) {
       const all = await this.reservaRepo.find();
-      reserva = all.find((r) => 
-        r.id === reservationId || 
+      reserva = all.find((r) =>
+        r.id === reservationId ||
         r.id.startsWith(reservationId) ||
         r.idempotencyKey === reservationId ||
         (reservationId.length === 10 && r.documentId === reservationId) ||
@@ -2904,28 +3164,35 @@ export class AtraccionesService implements OnModuleInit {
       ) || null;
     }
 
-    // Si la reserva no existía aún en la base local (creada en la tienda de Gloria), auto-sincronizarla para no fallar
     if (!reserva) {
-      this.logger.log(`[Check-in Atracciones] Reserva '${reservationId}' no existía en Booking Central. Auto-sincronizando desde socio Descubre EC...`);
-      const docVal = docInput || (reservationId.length === 10 ? reservationId : '1755073481');
-      reserva = this.reservaRepo.create({
-        id: reservationId,
-        idempotencyKey: `idemp-gloria-${reservationId}`,
-        atraccionId: '1563d2a6-65ed-4d4f-a06d-48a6b3ed4ca5',
-        customerName: (dto as any).titular_nombre || (dto as any).cliente_nombre || 'Turista Descubre EC',
-        customerEmail: (dto as any).cliente_email || 'turista@booking.local',
-        customerPhone: '+593991234567',
-        documentId: docVal,
-        date: new Date().toISOString().split('T')[0],
-        time: '09:00',
-        ticketCount: (dto as any).asistentes_reales || 1,
-        subtotal: 55.0,
-        totalAmount: 55.0,
-        status: 'CONFIRMED',
-        voucherQrPayload: `DESCUBRE-EC-${reservationId}`,
-        guiaOficialAsignado: dto.guia_asignado || (dto as any).guia_codigo || 'Carlos Villacís',
-      });
-      await this.reservaRepo.save(reserva);
+      this.logger.warn(`[Check-in Atracciones] Reserva '${reservationId}' no encontrada en Booking Central: 404`);
+      throw new HttpException(
+        {
+          type: 'https://descubre-ec.com/errores/not-found',
+          title: 'Reserva No Encontrada',
+          status: HttpStatus.NOT_FOUND,
+          detail: `No se encontró ninguna reserva activa con el identificador '${reservationId}'.`,
+          instance: `/api/v3/atracciones/reservas/${reservationId}/checkin`,
+          code: 'NOT_FOUND',
+          timestamp: new Date().toISOString(),
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (reserva.status === 'CANCELLED' || reserva.status === 'CANCELADO') {
+      throw new HttpException(
+        {
+          type: 'https://descubre-ec.com/errores/conflict',
+          title: 'Conflicto de Estado',
+          status: HttpStatus.CONFLICT,
+          detail: `La reserva '${reservationId}' se encuentra cancelada y no admite check-in.`,
+          code: 'INVALID_STATUS',
+          instance: `/api/v3/atracciones/reservas/${reservationId}/checkin`,
+          timestamp: new Date().toISOString(),
+        },
+        HttpStatus.CONFLICT,
+      );
     }
 
     // 3. Proceder con el check-in presencial
@@ -2944,7 +3211,7 @@ export class AtraccionesService implements OnModuleInit {
         aggregateId: reserva.id,
         payload: { reserva_id: reserva.id, documento: dto.documento_identidad, guia, checkin_at: checkinTime },
       });
-    } catch (e) {}
+    } catch (e) { }
 
     this.winstonLogger.logAudit('CHECKIN_ATRACCION_VALIDADO', {
       reserva_id: reservationId,
@@ -2983,8 +3250,8 @@ export class AtraccionesService implements OnModuleInit {
     let reserva = await this.reservaRepo.findOne({ where: { id: reservationId } });
     if (!reserva) {
       const all = await this.reservaRepo.find();
-      reserva = all.find((r) => 
-        r.id === reservationId || 
+      reserva = all.find((r) =>
+        r.id === reservationId ||
         r.id.startsWith(reservationId) ||
         r.idempotencyKey === reservationId ||
         r.cancelCode === reservationId ||
@@ -2993,23 +3260,80 @@ export class AtraccionesService implements OnModuleInit {
     }
 
     if (reserva && reserva.status === 'CANCELLED') {
+      const existingCancelCode = reserva.cancelCode || `REF-ATR-${reserva.id.slice(0, 8).toUpperCase()}`;
+      const amount = Number(reserva.totalAmount || 55.0);
       return {
         reservation_id: reservationId,
         status: 'CANCELLED',
+        cancel_code: existingCancelCode,
+        reembolso_id: existingCancelCode,
+        monto_reembolsado: amount,
+        refund: {
+          refund_id: existingCancelCode,
+          refund_code: existingCancelCode,
+          status: 'PROCESSED',
+          amount,
+          currency: 'USD',
+          message: 'La reserva ya fue cancelada previamente. El reembolso ya fue emitido.',
+        },
+        stock_restoration: {
+          status: 'RESTORED',
+          restored_spots: reserva.ticketCount || 0,
+          message: 'Cupos reincorporados a la disponibilidad del operador local.',
+        },
         message: 'La reserva ya fue cancelada previamente. El reembolso ya fue emitido.',
-        cancel_code: reserva.cancelCode || `REF-ATR-${reserva.id}`,
       };
     }
 
-    // Regla de Negocio: Si el servicio ya fue asistido o completado, no se puede cancelar
+    // Regla de Negocio: Si el servicio ya fue completado en el pasado, no se puede cancelar
     const currentStatus = (reserva?.status || '').toUpperCase();
-    if (['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO', 'COMPLETED'].includes(currentStatus)) {
+    if (['COMPLETED', 'FINALIZADO'].includes(currentStatus)) {
       throw new HttpException({
         type: 'https://api.booking.local/errors/conflict',
         title: 'Cancelación No Permitida',
         status: HttpStatus.CONFLICT,
-        detail: 'No es posible cancelar una reserva de atracción que ya fue confirmada o asistida.',
+        message: 'No es posible cancelar una reserva de atracción que ya fue completada.',
+        detail: 'No es posible cancelar una reserva de atracción que ya fue completada.',
+        code: 'CANCELLATION_NOT_ALLOWED',
       }, HttpStatus.CONFLICT);
+    }
+
+    // Regla de Negocio Oficial RDA2: Validación de fecha para cancelaciones
+    if (reserva?.date) {
+      try {
+        const rawTime = (reserva.time || '10:00').trim().split(' ')[0];
+        const cleanTime = rawTime.length === 5 ? rawTime : '10:00';
+        const dateOnly = reserva.date.includes('T') ? reserva.date.split('T')[0] : reserva.date;
+        // La operación de atracciones se rige por la hora local de Ecuador (UTC-5)
+        const eventDateStr = `${dateOnly}T${cleanTime}:00-05:00`;
+        const eventTime = new Date(eventDateStr).getTime();
+        if (!isNaN(eventTime)) {
+          const diffHours = (eventTime - Date.now()) / (1000 * 60 * 60);
+          if (diffHours < 24) {
+            throw new HttpException({
+              type: 'https://booking.epn.edu.ec/errors/cancellation-window-closed',
+              title: 'Cancelación Fuera de Plazo',
+              status: HttpStatus.CONFLICT,
+              statusCode: HttpStatus.CONFLICT,
+              message: 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación al horario reservado.',
+              detail: 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación al horario reservado.',
+              code: 'CANCELLATION_WINDOW_CLOSED',
+            }, HttpStatus.CONFLICT);
+          }
+          if (diffHours < 0 && ['CONFIRMADO_ASISTIDO', 'CHECKED_IN', 'ASISTIDO'].includes(currentStatus)) {
+            throw new HttpException({
+              type: 'https://api.booking.local/errors/conflict',
+              title: 'Cancelación No Permitida',
+              status: HttpStatus.CONFLICT,
+              message: 'El evento u horario reservado ya concluyó. No es posible cancelar un servicio que ya finalizó.',
+              detail: 'El evento u horario reservado ya concluyó. No es posible cancelar un servicio que ya finalizó.',
+              code: 'CANCELLATION_NOT_ALLOWED',
+            }, HttpStatus.CONFLICT);
+          }
+        }
+      } catch (err: any) {
+        if (err instanceof HttpException) throw err;
+      }
     }
 
     const cancelCode = `REF-ATR-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -3017,52 +3341,6 @@ export class AtraccionesService implements OnModuleInit {
     const partnerCancelId = reserva?.cancelCode || reservationId;
     const partnerUrlIcs = reserva?.icsCalendarUrl || '';
     const atraccionId = reserva?.atraccionId || '';
-
-    if (reserva) {
-      reserva.status = 'CANCELLED';
-      reserva.motivoCancelacion = dto?.reason || 'Cancelación solicitada por el usuario';
-      reserva.cancelCode = cancelCode;
-      await this.reservaRepo.save(reserva);
-
-      // Restituir cupos en TurnoAforo
-      if (reserva.turnoId) {
-        const turno = await this.turnoRepo.findOne({ where: { id: reserva.turnoId } });
-        if (turno) {
-          turno.cuposDisponibles += reserva.ticketCount;
-          if (turno.estado === 'AGOTADO' && turno.cuposDisponibles > 0) {
-            turno.estado = turno.cuposDisponibles <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE';
-          }
-          await this.turnoRepo.save(turno);
-        }
-      }
-
-      // Restituir cupos en base de datos concurrentemente (SQL directo idempotente)
-      if (this.dataSource && this.dataSource.isInitialized && reserva.atraccionId && reserva.date) {
-        try {
-          const rawTime = (reserva.time || '10:00').trim();
-          await this.dataSource.query(
-            `UPDATE schema_atracciones.atracciones_turnos_aforo
-             SET cupos_disponibles = LEAST(capacidad_total, cupos_disponibles + $1),
-                 estado = CASE 
-                   WHEN (cupos_disponibles + $1) > 5 THEN 'DISPONIBLE'
-                   WHEN (cupos_disponibles + $1) > 0 THEN 'ULTIMOS_CUPOS'
-                   ELSE 'DISPONIBLE'
-                 END
-             WHERE atraccion_id = $2 AND fecha = $3 AND (hora_inicio = $4 OR hora_inicio LIKE $5)`,
-            [reserva.ticketCount, reserva.atraccionId, reserva.date, rawTime, `${rawTime.split(' ')[0]}%`],
-          );
-        } catch (_) {}
-      }
-
-      // Evento Outbox
-      try {
-        await this.outboxRepo.save({
-          eventType: 'ATRACCION_RESERVA_CANCELADA',
-          aggregateId: reserva.id,
-          payload: { reserva_id: reserva.id, cancel_code: cancelCode, refund_amount: refundAmount },
-        });
-      } catch (e) {}
-    }
 
     // Compensación Saga: Identificación unívoca del socio y notificación externa para liberar stock
     let atraccion = reserva ? await this.atraccionRepo.findOne({ where: { id: reserva.atraccionId } }) : null;
@@ -3096,8 +3374,11 @@ export class AtraccionesService implements OnModuleInit {
       urlIcs.includes('tourgirls') ||
       partnerCancelId.startsWith('TG-') ||
       guiaLower.includes('tourgirls') ||
+      guiaLower.includes('molina') ||
       atraccionId === 'Fy6d7XTppVZ5' ||
-      atraccionId === 'rLohsmEh6809';
+      atraccionId === 'rLohsmEh6809' ||
+      atraccionId === '1X755jE2isp4' ||
+      (reserva?.voucherQrPayload || '').toUpperCase().includes('TOURGIRLS');
 
     if (isGloria) {
       try {
@@ -3108,27 +3389,56 @@ export class AtraccionesService implements OnModuleInit {
         try {
           await firstValueFrom(
             this.httpService.post(
-              `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v3/atracciones/reservas/${partnerCancelId}/cancel`,
+              `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v2/atracciones/reservas/${partnerCancelId}/cancel`,
               { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
               { headers, timeout: 6000 },
             ),
           );
           this.logger.log(`[Gloria Cancel] Reserva ${partnerCancelId} cancelada exitosamente en ms-catalog`);
         } catch (err1: any) {
-          if (err1.response?.status === 404 && partnerCancelId !== reservationId) {
-            await firstValueFrom(
-              this.httpService.post(
-                `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v3/atracciones/reservas/${reservationId}/cancel`,
-                { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
-                { headers, timeout: 6000 },
-              ),
-            );
-            this.logger.log(`[Gloria Cancel] Reserva ${reservationId} cancelada exitosamente en ms-catalog (fallback id)`);
+          if (err1.response?.status === 409 || err1.status === 409 || err1.response?.data?.code === 'CANCELLATION_WINDOW_CLOSED') {
+            const detail = err1.response?.data?.detail || err1.response?.data?.message || 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación.';
+            throw new HttpException({
+              type: 'https://booking.epn.edu.ec/errors/cancellation-window-closed',
+              title: 'Cancelación Fuera de Plazo',
+              status: HttpStatus.CONFLICT,
+              statusCode: HttpStatus.CONFLICT,
+              message: detail,
+              detail: detail,
+              code: 'CANCELLATION_WINDOW_CLOSED',
+            }, HttpStatus.CONFLICT);
+          }
+          if ((err1.response?.status === 404 || err1.response?.status === 400) && partnerCancelId !== reservationId) {
+            try {
+              await firstValueFrom(
+                this.httpService.post(
+                  `https://ms-catalog.yellowsky-d7d7b363.brazilsouth.azurecontainerapps.io/api/v2/atracciones/reservas/${reservationId}/cancel`,
+                  { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
+                  { headers, timeout: 6000 },
+                ),
+              );
+              this.logger.log(`[Gloria Cancel] Reserva ${reservationId} cancelada exitosamente en ms-catalog (fallback id)`);
+            } catch (err2: any) {
+              if (err2.response?.status === 409 || err2.status === 409 || err2.response?.data?.code === 'CANCELLATION_WINDOW_CLOSED') {
+                const detail = err2.response?.data?.detail || err2.response?.data?.message || 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación.';
+                throw new HttpException({
+                  type: 'https://booking.epn.edu.ec/errors/cancellation-window-closed',
+                  title: 'Cancelación Fuera de Plazo',
+                  status: HttpStatus.CONFLICT,
+                  statusCode: HttpStatus.CONFLICT,
+                  message: detail,
+                  detail: detail,
+                  code: 'CANCELLATION_WINDOW_CLOSED',
+                }, HttpStatus.CONFLICT);
+              }
+              throw err2;
+            }
           } else {
             throw err1;
           }
         }
       } catch (err: any) {
+        if (err instanceof HttpException) throw err;
         this.logger.warn(`[Gloria Cancel] Error notificando cancelación a ms-catalog: ${err.message}`);
       }
     } else if (isAriel) {
@@ -3137,30 +3447,36 @@ export class AtraccionesService implements OnModuleInit {
           'X-API-Key': 'atr-ariel-ecua-travel-2026',
           'Content-Type': 'application/json',
         };
-        try {
-          await firstValueFrom(
-            this.httpService.post(
-              `https://ecuatravel-atracciones-api.azurewebsites.net/api/v3/reservas/${partnerCancelId}/cancel`,
-              { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
-              { headers: arielHeaders, timeout: 6000 },
-            ),
-          );
-          this.logger.log(`[Ariel Cancel] Reserva ${partnerCancelId} cancelada exitosamente en Ecuatravel`);
-        } catch (err1: any) {
-          if (err1.response?.status === 404 && partnerCancelId !== reservationId) {
+        const qrMatch = (reserva?.voucherQrPayload || '').match(/ECT-[A-Z0-9]+/);
+        const targetArielId = (reservationId && reservationId.startsWith('ECT-'))
+          ? reservationId
+          : (reserva?.id && reserva.id.startsWith('ECT-') ? reserva.id : (partnerCancelId && partnerCancelId.startsWith('ECT-') ? partnerCancelId : (qrMatch ? qrMatch[0] : null)));
+        if (targetArielId) {
+          try {
             await firstValueFrom(
               this.httpService.post(
-                `https://ecuatravel-atracciones-api.azurewebsites.net/api/v3/reservas/${reservationId}/cancel`,
-                { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
+                `https://ecuatravel-atracciones-api.azurewebsites.net/api/v3/reservas/${targetArielId}/cancel`,
+                { reason: dto?.reason || 'Cancelación solicitada por el usuario', solicitante: dto?.solicitante || 'SAGA_ORCHESTRATOR' },
                 { headers: arielHeaders, timeout: 6000 },
               ),
             );
-            this.logger.log(`[Ariel Cancel] Reserva ${reservationId} cancelada exitosamente en Ecuatravel (fallback id)`);
-          } else {
-            throw err1;
+            this.logger.log(`[Ariel Cancel] Reserva ${targetArielId} cancelada exitosamente en Ecuatravel`);
+          } catch (err1: any) {
+            if (err1.response?.status === 409 || err1.status === 409) {
+              const detail = err1.response?.data?.detail || err1.response?.data?.message || 'Cancelación fuera de plazo en socio.';
+              throw new HttpException({
+                status: HttpStatus.CONFLICT,
+                statusCode: HttpStatus.CONFLICT,
+                message: detail,
+                detail: detail,
+                code: 'CANCELLATION_WINDOW_CLOSED',
+              }, HttpStatus.CONFLICT);
+            }
+            this.logger.warn(`[Ariel Cancel] Aviso de API externa Ariel: ${err1.response?.status || err1.message}`);
           }
         }
       } catch (err: any) {
+        if (err instanceof HttpException) throw err;
         this.logger.warn(`[Ariel Cancel] Error notificando cancelación a Ariel: ${err.message}`);
       }
     } else if (isAlisson) {
@@ -3180,6 +3496,16 @@ export class AtraccionesService implements OnModuleInit {
           );
           this.logger.log(`[Alisson Cancel] Reserva ${alissonTargetId} cancelada exitosamente en Alisson (/atracciones/reservas)`);
         } catch (err1: any) {
+          if (err1.response?.status === 409 || err1.status === 409) {
+            const detail = err1.response?.data?.detail || err1.response?.data?.message || 'Cancelación fuera de plazo en socio.';
+            throw new HttpException({
+              status: HttpStatus.CONFLICT,
+              statusCode: HttpStatus.CONFLICT,
+              message: detail,
+              detail: detail,
+              code: 'CANCELLATION_WINDOW_CLOSED',
+            }, HttpStatus.CONFLICT);
+          }
           if (err1.response?.status === 404) {
             await firstValueFrom(
               this.httpService.post(
@@ -3194,30 +3520,47 @@ export class AtraccionesService implements OnModuleInit {
           }
         }
       } catch (err: any) {
+        if (err instanceof HttpException) throw err;
         this.logger.warn(`[Alisson Cancel] Error notificando cancelación a Alisson: ${err.message}`);
       }
     } else if (isMichael) {
       try {
         const michaelHeaders = {
           'X-API-Key': 'Bw_Y7_TsbB7DcETwoa-mw6xSunT_rP5nHf_ZitpfB2w',
+          'Idempotency-Key': crypto.randomUUID(),
+          'X-Correlation-Id': cId || crypto.randomUUID(),
           'Content-Type': 'application/json',
+        };
+        const michaelBody = {
+          reason: dto?.reason || 'Cancelación solicitada por el usuario',
+          solicitante: dto?.solicitante || 'SAGA_ORCHESTRATOR',
         };
         const michaelTargetId = partnerCancelId || reservationId;
         try {
           await firstValueFrom(
             this.httpService.post(
               `https://tourgirls-gateway-mm.azurewebsites.net/api/v3/atracciones/reservas/${michaelTargetId}/cancel`,
-              { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
+              michaelBody,
               { headers: michaelHeaders, timeout: 5000 },
             ),
           );
           this.logger.log(`[Michael Cancel] Reserva ${michaelTargetId} cancelada exitosamente en TourGirls (/atracciones/reservas)`);
         } catch (err1: any) {
+          if (err1.response?.status === 409 || err1.status === 409) {
+            const detail = err1.response?.data?.detail || err1.response?.data?.message || 'Cancelación fuera de plazo en socio TourGirls.';
+            throw new HttpException({
+              status: HttpStatus.CONFLICT,
+              statusCode: HttpStatus.CONFLICT,
+              message: detail,
+              detail: detail,
+              code: 'CANCELLATION_WINDOW_CLOSED',
+            }, HttpStatus.CONFLICT);
+          }
           if (err1.response?.status === 404) {
             await firstValueFrom(
               this.httpService.post(
                 `https://tourgirls-gateway-mm.azurewebsites.net/api/v3/reservas/${michaelTargetId}/cancel`,
-                { reason: dto?.reason || 'Cancelación solicitada por el usuario' },
+                michaelBody,
                 { headers: michaelHeaders, timeout: 5000 },
               ),
             );
@@ -3227,15 +3570,105 @@ export class AtraccionesService implements OnModuleInit {
           }
         }
       } catch (err: any) {
+        if (err instanceof HttpException) throw err;
         this.logger.warn(`[Michael Cancel] Error notificando cancelación a Michael: ${err.message}`);
       }
     } else {
+      let dilanOk = false;
       try {
         await this.dilanAdapter.cancelarReserva(partnerCancelId || reservationId, dto?.reason || 'Cancelación solicitada por el usuario', idempotencyKey, cId);
         this.logger.log(`[Dilan Cancel] Reserva notificada exitosamente a Descubre EC (${partnerCancelId || reservationId})`);
+        dilanOk = true;
       } catch (adapterErr: any) {
+        if (adapterErr instanceof HttpException || adapterErr.status === 409 || adapterErr.response?.status === 409) {
+          throw adapterErr;
+        }
         this.logger.warn(`ACL: No se pudo notificar reverso a tienda externa de Dilan: ${adapterErr.message}`);
       }
+      if (!dilanOk) {
+        // Fallback defensivo: si Dilan rechaza o no encuentra el código (ej. DEC- emitido por Michael/TourGirls), intentar Michael
+        try {
+          const mHeaders = {
+            'X-API-Key': 'Bw_Y7_TsbB7DcETwoa-mw6xSunT_rP5nHf_ZitpfB2w',
+            'Idempotency-Key': crypto.randomUUID(),
+            'X-Correlation-Id': cId || crypto.randomUUID(),
+            'Content-Type': 'application/json',
+          };
+          const mBody = {
+            reason: dto?.reason || 'Cancelación solicitada por el usuario',
+            solicitante: dto?.solicitante || 'SAGA_ORCHESTRATOR',
+          };
+          const mTarget = partnerCancelId || reservationId;
+          try {
+            await firstValueFrom(
+              this.httpService.post(
+                `https://tourgirls-gateway-mm.azurewebsites.net/api/v3/atracciones/reservas/${mTarget}/cancel`,
+                mBody,
+                { headers: mHeaders, timeout: 5000 },
+              ),
+            );
+            this.logger.log(`[Michael Cancel Fallback] Cancelada exitosamente en TourGirls (/atracciones/reservas): ${mTarget}`);
+          } catch (mErr1: any) {
+            if (mErr1.response?.status === 404) {
+              await firstValueFrom(
+                this.httpService.post(
+                  `https://tourgirls-gateway-mm.azurewebsites.net/api/v3/reservas/${mTarget}/cancel`,
+                  mBody,
+                  { headers: mHeaders, timeout: 5000 },
+                ),
+              );
+              this.logger.log(`[Michael Cancel Fallback /reservas] Cancelada exitosamente en TourGirls (/reservas): ${mTarget}`);
+            }
+          }
+        } catch (_) { }
+      }
+    }
+
+    // APLICAR CANCELACIÓN LOCAL ÚNICAMENTE TRAS CONFIRMACIÓN O NO CONFLICTO DEL SOCIO
+    if (reserva) {
+      reserva.status = 'CANCELLED';
+      reserva.motivoCancelacion = dto?.reason || 'Cancelación solicitada por el usuario';
+      reserva.cancelCode = cancelCode;
+      await this.reservaRepo.save(reserva);
+
+      // Restituir cupos en TurnoAforo
+      if (reserva.turnoId) {
+        const turno = await this.turnoRepo.findOne({ where: { id: reserva.turnoId } });
+        if (turno) {
+          turno.cuposDisponibles += reserva.ticketCount;
+          if (turno.estado === 'AGOTADO' && turno.cuposDisponibles > 0) {
+            turno.estado = turno.cuposDisponibles <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE';
+          }
+          await this.turnoRepo.save(turno);
+        }
+      }
+
+      // Restituir cupos en base de datos concurrentemente (SQL directo idempotente)
+      if (this.dataSource && this.dataSource.isInitialized && reserva.atraccionId && reserva.date) {
+        try {
+          const rawTime = (reserva.time || '10:00').trim();
+          await this.dataSource.query(
+            `UPDATE schema_atracciones.atracciones_turnos_aforo
+             SET cupos_disponibles = LEAST(capacidad_total, cupos_disponibles + $1),
+                 estado = CASE 
+                   WHEN (cupos_disponibles + $1) > 5 THEN 'DISPONIBLE'
+                   WHEN (cupos_disponibles + $1) > 0 THEN 'ULTIMOS_CUPOS'
+                   ELSE 'DISPONIBLE'
+                 END
+             WHERE atraccion_id = $2 AND fecha = $3 AND (hora_inicio = $4 OR hora_inicio LIKE $5)`,
+            [reserva.ticketCount, reserva.atraccionId, reserva.date, rawTime, `${rawTime.split(' ')[0]}%`],
+          );
+        } catch (_) { }
+      }
+
+      // Evento Outbox
+      try {
+        await this.outboxRepo.save({
+          eventType: 'ATRACCION_RESERVA_CANCELADA',
+          aggregateId: reserva.id,
+          payload: { reserva_id: reserva.id, cancel_code: cancelCode, refund_amount: refundAmount },
+        });
+      } catch (e) { }
     }
 
     // Auditoría Winston física
@@ -3251,12 +3684,20 @@ export class AtraccionesService implements OnModuleInit {
       reservation_id: reservationId,
       status: 'CANCELLED',
       cancel_code: cancelCode,
+      reembolso_id: cancelCode,
+      monto_reembolsado: refundAmount,
       refund: {
+        refund_id: cancelCode,
+        refund_code: cancelCode,
         status: 'PROCESSED',
         amount: refundAmount,
         currency: 'USD',
-        refund_code: cancelCode,
         message: 'Reembolso del 100% procesado sin penalización conforme al contrato Saga.',
+      },
+      stock_restoration: {
+        status: 'RESTORED',
+        restored_spots: reserva?.ticketCount || 0,
+        message: 'Cupos reincorporados a la disponibilidad del operador local.',
       },
       message: 'Reserva cancelada exitosamente y cupos restituidos a la disponibilidad operativa.',
     };
@@ -3428,9 +3869,9 @@ export class AtraccionesService implements OnModuleInit {
     // Se ejecuta en PARALELO para las reservas recientes (< 48h) pendientes de check-in
     // con timeout de 5000ms para soportar latencia real de Azure
     const now = Date.now();
-    const pendientesSync = reservas.filter(r => 
-      r.status !== 'CONFIRMADO_ASISTIDO' && 
-      r.status !== 'CHECKED_IN' && 
+    const pendientesSync = reservas.filter(r =>
+      r.status !== 'CONFIRMADO_ASISTIDO' &&
+      r.status !== 'CHECKED_IN' &&
       r.status !== 'CANCELLED' &&
       r.createdAt && (now - new Date(r.createdAt).getTime()) < 48 * 3600 * 1000
     ).slice(0, 4);
@@ -3456,6 +3897,13 @@ export class AtraccionesService implements OnModuleInit {
                   },
                 ),
               );
+              if (data && (data.status === 'CANCELLED' || data.status === 'CANCELADA' || data.estado === 'CANCELADA' || data.estado === 'CANCELLED')) {
+                r.status = 'CANCELLED';
+                r.motivoCancelacion = data.motivo_cancelacion || data.motivo || data.reason || 'Cancelado en panel de administración de TourGirls';
+                await this.reservaRepo.save(r);
+                this.logger.log(`[Michael Live Sync] Reserva ${r.id} sincronizada a CANCELLED`);
+                return;
+              }
               if (data && (data.status === 'CHECKED_IN' || data.estado === 'CHECKED_IN' || data.estado_asistencia === 'CONFIRMADO_ASISTIDO' || data.status === 'CONFIRMADO_ASISTIDO')) {
                 r.status = 'CONFIRMADO_ASISTIDO';
                 r.checkinAt = data.checked_in_at || data.hora_checkin ? new Date(data.checked_in_at || data.hora_checkin) : new Date();
@@ -3464,7 +3912,7 @@ export class AtraccionesService implements OnModuleInit {
                 this.logger.log(`[Michael Live Sync] Reserva ${r.id} sincronizada a CONFIRMADO_ASISTIDO`);
                 return;
               }
-            } catch (_) {}
+            } catch (_) { }
           }
 
           // 2. Atracciones Ecuador (Alisson - NODE_ATR_ALISSON)
@@ -3479,6 +3927,13 @@ export class AtraccionesService implements OnModuleInit {
                   },
                 ),
               );
+              if (data && (data.status === 'CANCELLED' || data.status === 'CANCELADA' || data.estado === 'CANCELADA' || data.estado === 'CANCELLED')) {
+                r.status = 'CANCELLED';
+                r.motivoCancelacion = data.motivo_cancelacion || data.motivo || data.reason || 'Cancelado en panel de administración de Alisson';
+                await this.reservaRepo.save(r);
+                this.logger.log(`[Alisson Live Sync] Reserva ${r.id} sincronizada a CANCELLED`);
+                return;
+              }
               if (data && (data.status === 'CHECKED_IN' || data.estado === 'CHECKED_IN' || data.estado_asistencia === 'CONFIRMADO_ASISTIDO' || data.status === 'CONFIRMADO_ASISTIDO')) {
                 r.status = 'CONFIRMADO_ASISTIDO';
                 r.checkinAt = data.hora_checkin ? new Date(data.hora_checkin) : new Date();
@@ -3487,7 +3942,7 @@ export class AtraccionesService implements OnModuleInit {
                 this.logger.log(`[Alisson Live Sync] Reserva ${r.id} sincronizada a CONFIRMADO_ASISTIDO`);
                 return;
               }
-            } catch (_) {}
+            } catch (_) { }
           }
 
           // 2. Descubre EC (Dilan)
@@ -3502,6 +3957,13 @@ export class AtraccionesService implements OnModuleInit {
                   },
                 ),
               );
+              if (data && (data.status === 'CANCELLED' || data.status === 'CANCELADA' || data.estado === 'CANCELADA' || data.estado === 'CANCELLED')) {
+                r.status = 'CANCELLED';
+                r.motivoCancelacion = data.motivo_cancelacion || data.motivo || data.reason || 'Cancelado en panel de administración de Descubre EC';
+                await this.reservaRepo.save(r);
+                this.logger.log(`[Dilan Live Sync] Reserva ${r.id} sincronizada a CANCELLED`);
+                return;
+              }
               if (data && (data.status === 'CHECKED_IN' || data.estado === 'CHECKED_IN' || data.estado_asistencia === 'CONFIRMADO_ASISTIDO' || data.status === 'CONFIRMADO_ASISTIDO')) {
                 r.status = 'CONFIRMADO_ASISTIDO';
                 r.checkinAt = data.checked_in_at || data.hora_checkin ? new Date(data.checked_in_at || data.hora_checkin) : new Date();
@@ -3510,11 +3972,11 @@ export class AtraccionesService implements OnModuleInit {
                 this.logger.log(`[Dilan Live Sync] Reserva ${r.id} sincronizada a CONFIRMADO_ASISTIDO`);
                 return;
               }
-            } catch (_) {}
+            } catch (_) { }
           }
 
           // 3. EcuaTravel (Ariel)
-          if (r.id.startsWith('ECT-') || (r.atraccionId?.length > 30 && !r.id.startsWith('DEC-'))) {
+          if (r.id.startsWith('ECT-')) {
             try {
               const { data } = await firstValueFrom(
                 this.httpService.get(`https://ecuatravel-atracciones-api.azurewebsites.net/api/v3/reservas/${r.id}`, {
@@ -3522,6 +3984,13 @@ export class AtraccionesService implements OnModuleInit {
                   timeout: 4500,
                 }),
               );
+              if (data && (data.status === 'CANCELLED' || data.status === 'CANCELADA' || data.estado === 'CANCELADA' || data.estado === 'CANCELLED')) {
+                r.status = 'CANCELLED';
+                r.motivoCancelacion = data.motivo_cancelacion || data.motivo || data.reason || 'Cancelado en panel de administración de EcuaTravel';
+                await this.reservaRepo.save(r);
+                this.logger.log(`[Ariel Live Sync] Reserva ${r.id} sincronizada a CANCELLED`);
+                return;
+              }
               if (data && (data.status === 'CHECKED_IN' || data.estado === 'CHECKED_IN' || data.estado_asistencia === 'CONFIRMADO_ASISTIDO' || data.status === 'CONFIRMADO_ASISTIDO')) {
                 r.status = 'CONFIRMADO_ASISTIDO';
                 r.checkinAt = data.hora_checkin ? new Date(data.hora_checkin) : new Date();
@@ -3529,32 +3998,38 @@ export class AtraccionesService implements OnModuleInit {
                 await this.reservaRepo.save(r);
                 this.logger.log(`[Ariel Live Sync] Reserva ${r.id} sincronizada a CONFIRMADO_ASISTIDO`);
               }
-            } catch (_) {}
+            } catch (_) { }
           }
-        } catch (_) {}
+        } catch (_) { }
       });
 
       await Promise.allSettled(syncPromises);
     }
 
     const atraccionIds = [...new Set(reservas.map((r) => r.atraccionId).filter(Boolean))];
-    const atraccionMap = new Map<string, string>();
+    const atraccionMap = new Map<string, { nombre: string; foto?: string }>();
     if (atraccionIds.length > 0) {
       try {
         const foundAtr = await this.atraccionRepo.find({ where: { id: In(atraccionIds) } });
-        foundAtr.forEach((a) => atraccionMap.set(a.id, a.nombre));
-      } catch (_) {}
+        foundAtr.forEach((a) => {
+          const f = (a.fotosUrls && a.fotosUrls.length > 0) ? a.fotosUrls[0] : undefined;
+          atraccionMap.set(a.id, { nombre: a.nombre, foto: f });
+        });
+      } catch (_) { }
     }
 
-    return reservas.map((r) => this.formatReservaResponse(r, atraccionMap.get(r.atraccionId)));
+    return reservas.map((r) => {
+      const atInfo = atraccionMap.get(r.atraccionId);
+      return this.formatReservaResponse(r, atInfo?.nombre, atInfo?.foto);
+    });
   }
 
   async getReservaById(reservationId: string): Promise<any> {
     let reserva = await this.reservaRepo.findOne({ where: { id: reservationId } });
     if (!reserva) {
       const all = await this.reservaRepo.find();
-      reserva = all.find((r) => 
-        r.id === reservationId || 
+      reserva = all.find((r) =>
+        r.id === reservationId ||
         r.id.startsWith(reservationId) ||
         r.idempotencyKey === reservationId ||
         (r.voucherQrPayload && r.voucherQrPayload.includes(reservationId))
@@ -3562,11 +4037,15 @@ export class AtraccionesService implements OnModuleInit {
     }
     if (!reserva) throw new HttpException('Reserva no encontrada', HttpStatus.NOT_FOUND);
     let atraccionNombre = '';
+    let atraccionFoto = '';
     try {
       const at = await this.atraccionRepo.findOne({ where: [{ id: reserva.atraccionId }, { slug: reserva.atraccionId }] });
-      if (at) atraccionNombre = at.nombre;
-    } catch (_) {}
-    return this.formatReservaResponse(reserva, atraccionNombre);
+      if (at) {
+        atraccionNombre = at.nombre;
+        atraccionFoto = (at.fotosUrls && at.fotosUrls.length > 0) ? at.fotosUrls[0] : '';
+      }
+    } catch (_) { }
+    return this.formatReservaResponse(reserva, atraccionNombre, atraccionFoto);
   }
 
   private formatAtraccionResponse(item: Atraccion): any {
@@ -3603,10 +4082,22 @@ export class AtraccionesService implements OnModuleInit {
       directions_hint: 'Frente al parque La Carolina, estación Quinde.',
     };
 
+    const provCode = item.proveedorCodigo || (item.id?.startsWith('0bef') ? 'NODE_ATR_ARIEL' : 'NODE_ATR_DILAN');
+    // Determinar soporte etario según el socio integrado:
+    // - Ariel (Ecuatravel): tarifa plana por persona, sin desglose de niños/seniors/infantes.
+    // - Gloria (Vívelo Ecuador): endpoint de reservas opera sobre total 'personas', sin desglose etario.
+    // - Alisson: no admite seniors ni infantes (solo tarifa adulto/general).
+    // - Michael y Dilan: admiten desglose si la atracción define tarifas diferenciadas.
+    const permiteDiferenciado = provCode !== 'NODE_ATR_ARIEL' && provCode !== 'NODE_ATR_GLORIA';
+    const admiteNinos = permiteDiferenciado && provCode !== 'NODE_ATR_ALISSON';
+    const admiteSeniors = permiteDiferenciado && provCode !== 'NODE_ATR_ALISSON';
+    const admiteInfantes = false; // Ningún socio admite aforo formal para infantes (tarifa 0 / sin aforo en tours)
+    const soloPersonas = !admiteNinos && !admiteSeniors && !admiteInfantes;
+
     const priceBreakdown = {
       adulto: adultPrice,
-      nino: Number((adultPrice * 0.5).toFixed(2)),
-      senior: Number((adultPrice * 0.7).toFixed(2)),
+      nino: admiteNinos ? Number((adultPrice * 0.5).toFixed(2)) : adultPrice,
+      senior: admiteSeniors ? Number((adultPrice * 0.7).toFixed(2)) : adultPrice,
       infante: 0,
       estudiante: Number((adultPrice * 0.6).toFixed(2)),
       moneda: currency,
@@ -3614,7 +4105,7 @@ export class AtraccionesService implements OnModuleInit {
       currency: currency,
       total: adultPrice,
       adult: adultPrice,
-      child: Number((adultPrice * 0.5).toFixed(2)),
+      child: admiteNinos ? Number((adultPrice * 0.5).toFixed(2)) : adultPrice,
       infant: 0,
     };
 
@@ -3687,8 +4178,19 @@ export class AtraccionesService implements OnModuleInit {
       guide_languages: item.idiomasSoportados || ['Español', 'Inglés'],
       punto_encuentro: item.puntoEncuentro || 'Boulevard Naciones Unidas y Av. Shyris (Parada Quinde)',
       coordenadas: { latitud: Number(item.latitud) || -0.1807, longitud: Number(item.longitud) || -78.4842 },
-      fotos_urls: item.fotosUrls,
-      photos: (item.fotosUrls || []).map((url) => ({ url })),
+      fotos_urls: (item.fotosUrls && item.fotosUrls.length > 0) ? item.fotosUrls : [
+        'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop',
+      ],
+      photos: ((item.fotosUrls && item.fotosUrls.length > 0) ? item.fotosUrls : [
+        'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=800&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop',
+      ]).map((url) => ({ url })),
+      foto_url: (item.fotosUrls && item.fotosUrls.length > 0) ? item.fotosUrls[0] : 'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800&auto=format&fit=crop',
+      photoUrl: (item.fotosUrls && item.fotosUrls.length > 0) ? item.fotosUrls[0] : 'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800&auto=format&fit=crop',
+      imagen: (item.fotosUrls && item.fotosUrls.length > 0) ? item.fotosUrls[0] : 'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800&auto=format&fit=crop',
       itinerario_cronologico: itineraryList,
       includes: item.inclusiones || ['Transporte', 'Guía bilingüe'],
       exclusiones: item.exclusiones,
@@ -3703,6 +4205,16 @@ export class AtraccionesService implements OnModuleInit {
       },
       permite_paquete: true,
       porcentaje_descuento_paquete: 15.0,
+      admite_ninos: admiteNinos,
+      admite_seniors: admiteSeniors,
+      admite_infantes: admiteInfantes,
+      solo_personas: soloPersonas,
+      politicas_edad: {
+        admite_ninos: admiteNinos,
+        admite_seniors: admiteSeniors,
+        admite_infantes: admiteInfantes,
+        solo_personas: soloPersonas,
+      },
       proveedor: {
         id: item.proveedorCodigo || 'NODE_ATR_DILAN',
         codigo: item.proveedorCodigo || 'NODE_ATR_DILAN',
@@ -3720,8 +4232,9 @@ export class AtraccionesService implements OnModuleInit {
     };
   }
 
-  private formatReservaResponse(reserva: ReservaAtraccion, atraccionNombre?: string): any {
+  private formatReservaResponse(reserva: ReservaAtraccion, atraccionNombre?: string, atraccionFoto?: string): any {
     const totalAmount = Number(reserva.totalAmount);
+    const fotoFinal = atraccionFoto || 'https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=800&auto=format&fit=crop';
     let titulo = atraccionNombre || (reserva.specialRequirements && !reserva.specialRequirements.includes('{') ? reserva.specialRequirements : null) || `Tour / Atracción (${reserva.ticketCount || 1} personas)`;
     return {
       id: reserva.id,
@@ -3736,6 +4249,12 @@ export class AtraccionesService implements OnModuleInit {
       name: titulo,
       status: reserva.status,
       estado: reserva.status,
+      foto_url: fotoFinal,
+      photo_url: fotoFinal,
+      photoUrl: fotoFinal,
+      imagen: fotoFinal,
+      photos: [{ url: fotoFinal }],
+      fotos_urls: [fotoFinal],
       date: reserva.date,
       fecha: reserva.date,
       time: reserva.time,

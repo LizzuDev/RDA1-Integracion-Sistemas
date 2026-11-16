@@ -103,7 +103,34 @@ const ARISTAS = [
   ['pagos', 'bus', 'AMQP'],
 ];
 
-export function ArquitecturaVuelos({ eventos, aerolineas = [], busActivo, reproducir }) {
+/**
+ * Salud de cada conexión del diagrama: cuántos pasos la recorrieron y en cuántos
+ * el punto se quedó ahí por error (último tramo de un paso fallido).
+ * Clave: los dos componentes ordenados, "a|b".
+ */
+export function saludDeTramos(eventos, aerolineas = []) {
+  const salud = {};
+  for (const e of eventos) {
+    for (const r of rutasDe(e, aerolineas)) {
+      const ruta = r.ruta ? (r.cortarEn != null ? r.ruta.slice(0, r.cortarEn + 1) : r.ruta) : null;
+      if (!ruta || ruta.length < 2) continue;
+      const vistas = new Set();
+      for (let i = 0; i < ruta.length - 1; i++) {
+        const k = [ruta[i], ruta[i + 1]].sort().join('|');
+        if (vistas.has(k)) continue;
+        vistas.add(k);
+        (salud[k] ??= { total: 0, errores: 0 }).total += 1;
+      }
+      if (r.resultado === 'error') {
+        const k = [ruta[ruta.length - 2], ruta[ruta.length - 1]].sort().join('|');
+        (salud[k] ??= { total: 0, errores: 0 }).errores += 1;
+      }
+    }
+  }
+  return salud;
+}
+
+export function ArquitecturaVuelos({ eventos, aerolineas = [], busActivo, reproducir, salud = null }) {
   const [puntos, setPuntos] = useState([]);
   const [ahora, setAhora] = useState(() => performance.now());
   const vistos = useRef(new Set());
@@ -118,7 +145,7 @@ export function ArquitecturaVuelos({ eventos, aerolineas = [], busActivo, reprod
     aerolineas.forEach((a, i) => {
       c[`aero:${a.codigo}`] = {
         x: 905, y: 80 + i * alto, w: 165, h: Math.min(58, alto - 8),
-        titulo: a.nombre || a.codigo, sub: a.estado === 'EN_LINEA' ? 'REST + OAuth2 · en línea' : `REST + OAuth2 · ${String(a.estado || '').toLowerCase().replace(/_/g, ' ')}`,
+        titulo: a.nombre || a.codigo, sub: a.estado === 'EN_LINEA' ? 'en línea' : `${String(a.estado || '').toLowerCase().replace(/_/g, ' ')}`,
         icono: '🛫', caida: a.estado !== 'EN_LINEA',
       };
     });
@@ -226,16 +253,21 @@ export function ArquitecturaVuelos({ eventos, aerolineas = [], busActivo, reprod
           <text x={180} y={58} fontSize="11" fill={T.muted}>Booking Core API · un solo despliegue en Azure App Service (módulos NestJS)</text>
           <text x={835} y={30} fontSize="11" fill={T.muted}>Aerolíneas socias (contrato v2)</text>
 
-          {aristas.map(([a, b, etiqueta]) => {
+          {/* Las conexiones van sin nombre: solo las líneas. */}
+          {aristas.map(([a, b]) => {
             const A = comps[a];
             const B = comps[b];
-            const activa = tramosActivos.has([a, b].sort().join('|'));
+            const clave = [a, b].sort().join('|');
+            const activa = tramosActivos.has(clave);
+            // Salud de la última hora: rojo ≥ 20 % de errores, ámbar ≥ 5 %, verde si funciona.
+            const sd = salud?.[clave];
+            const tasa = sd && sd.total >= 3 ? sd.errores / sd.total : null;
+            const colorSalud = tasa == null ? T.border : tasa >= 0.2 ? '#d32f2f' : tasa >= 0.05 ? '#e8a400' : '#8fcca0';
             return (
               <g key={`${a}-${b}`}>
-                <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={activa ? T.azul : T.border} strokeWidth={activa ? 2.5 : 1.5} />
-                {etiqueta && (
-                  <text x={(A.x + B.x) / 2 + (A.x === B.x ? 6 : 0)} y={(A.y + B.y) / 2 - 5} fontSize="9.5" fill={T.muted} textAnchor={A.x === B.x ? 'start' : 'middle'} paintOrder="stroke" stroke="#fafbfc" strokeWidth="3">{etiqueta}</text>
-                )}
+                <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={activa ? T.azul : colorSalud} strokeWidth={activa ? 2.5 : tasa != null && tasa >= 0.05 ? 2.5 : 1.5}>
+                  {sd && <title>{`Última hora: ${sd.total} paso(s), ${sd.errores} con error (${Math.round((sd.errores / Math.max(1, sd.total)) * 100)} %)`}</title>}
+                </line>
               </g>
             );
           })}

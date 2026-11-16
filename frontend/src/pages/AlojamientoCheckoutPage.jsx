@@ -1,16 +1,26 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { getAlojamiento } from '../services/alojamientosApi';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { AlojamientoCheckoutModal } from '../components/AlojamientoCheckoutModal';
+import { AlojamientosLoadingView } from '../components/AlojamientosLoadingView';
 import { fechaLocal } from '../utils/fechas';
 
 export function AlojamientoCheckoutPage() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currency, convertPrice } = useCurrency();
+
+  useEffect(() => {
+    if (!user) {
+      const returnUrl = location.pathname + location.search;
+      sessionStorage.setItem('booking_return_url', returnUrl);
+      navigate('/login', { state: { from: returnUrl, message: 'Inicia sesión para completar tu reserva' } });
+    }
+  }, [user, navigate, location]);
 
   const hotelId = searchParams.get('hotel_id') || searchParams.get('id') || '11771815';
   const checkin = searchParams.get('checkin') || fechaLocal(2);
@@ -48,12 +58,7 @@ export function AlojamientoCheckoutPage() {
   }, [hotelId]);
 
   if (loading || !alojamiento) {
-    return (
-      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ width: '40px', height: '40px', border: '3px solid #003580', borderTop: '3px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <p style={{ color: '#595959', fontSize: '14px' }}>Cargando proceso de reserva segura...</p>
-      </div>
-    );
+    return <AlojamientosLoadingView />;
   }
 
   const nightsCount = 6;

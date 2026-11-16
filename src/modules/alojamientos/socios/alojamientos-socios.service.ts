@@ -126,6 +126,23 @@ export const extraerCamasNum = (v: unknown): number | null => {
   return match ? parseInt(match[0], 10) : null;
 };
 
+/** Extrae el número de baños de un número, string ("2 baños", "1.5 baths") o array. */
+export const extraerBanosNum = (v: unknown): number | null => {
+  if (v === undefined || v === null || v === '') return null;
+  if (typeof v === 'number' && Number.isFinite(v)) return v > 0 ? v : null;
+  if (typeof v === 'string') {
+    const match = v.match(/(\d+(?:\.\d+)?)\s*(?:baño|bano|bath|cuarto de baño)?/i);
+    if (match) {
+      const n = parseFloat(match[1]);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+  }
+  if (Array.isArray(v)) {
+    return v.length > 0 ? v.length : null;
+  }
+  return null;
+};
+
 /** Deduce una descripción de camas legible y precisa para hospitalidad (Booking.com style) */
 export function inferirDescripcionCamas(camasRaw: unknown, nombreTipo = '', capacidadAdultos: number | null = 2): string {
   // 1. Si ya viene una descripción textual detallada (ej. "2 camas individuales", "1 cama matrimonial y 2 camas individuales")
@@ -172,6 +189,27 @@ export function inferirDescripcionCamas(camasRaw: unknown, nombreTipo = '', capa
 
   return '1 cama doble grande';
 }
+
+export function normalizarRegimen(reg?: string | null): string {
+  if (!reg) return 'Solo habitación';
+  const r = String(reg).trim().toUpperCase();
+  const map: Record<string, string> = {
+    SOLO_HABITACION: 'Solo habitación',
+    SOLO_ALOJAMIENTO: 'Solo alojamiento',
+    ROOM_ONLY: 'Solo habitación',
+    DESAYUNO: 'Desayuno incluido',
+    DESAYUNO_INCLUIDO: 'Desayuno incluido',
+    BED_AND_BREAKFAST: 'Desayuno incluido',
+    MEDIA_PENSION: 'Media pensión',
+    HALF_BOARD: 'Media pensión',
+    PENSION_COMPLETA: 'Pensión completa',
+    FULL_BOARD: 'Pensión completa',
+    TODO_INCLUIDO: 'Todo incluido',
+    ALL_INCLUSIVE: 'Todo incluido',
+  };
+  return map[r] || reg;
+}
+
 const desempacar = (b: any) => (b && typeof b === 'object' && b.data && !Array.isArray(b.data) ? b.data : b);
 
 @Injectable()
@@ -199,7 +237,7 @@ export class AlojamientosSociosService {
 
   private cacheMs(): number {
     const v = Number(process.env.ALOJAMIENTOS_SOCIOS_CACHE_MS);
-    return Number.isFinite(v) && v >= 0 ? v : 60_000;
+    return Number.isFinite(v) && v >= 0 ? v : 10_000;
   }
 
   /** Base del socio sin barra final. Acepta `.../api/v2` o `.../api/v2/alojamientos`. */
@@ -339,11 +377,12 @@ export class AlojamientosSociosService {
     nodo: ConfigProveedor,
     metodo: 'GET' | 'POST',
     ruta: string,
-    opciones: { body?: any; idempotencyKey?: string; correlationId?: string; extra?: Record<string, string> } = {},
+    opciones: { body?: any; idempotencyKey?: string; correlationId?: string; extra?: Record<string, string>; timeoutMs?: number } = {},
   ): Promise<RespuestaSocio> {
     const base = AlojamientosSociosService.base(nodo.baseUrlRest);
     const t0 = Date.now();
     if (!base) return { status: 0, body: null, headers: {}, ms: 0, error: 'URL del socio inválida' };
+    const duracionTimeout = opciones.timeoutMs ?? this.timeoutMs();
     try {
       const headers: Record<string, string> = {
         Accept: 'application/json',
@@ -358,7 +397,7 @@ export class AlojamientosSociosService {
         method: metodo,
         headers,
         body: opciones.body !== undefined ? JSON.stringify(opciones.body) : undefined,
-        signal: AbortSignal.timeout(this.timeoutMs()),
+        signal: AbortSignal.timeout(duracionTimeout),
       });
       const texto = await res.text();
       let body: any = texto;
@@ -377,13 +416,57 @@ export class AlojamientosSociosService {
 
   // ───────────────────────────── Catálogo ─────────────────────────────
 
-  /** Catálogo agregado de todos los socios (caché corta, y una sola carga a la vez). */
+  /** Catálogo agregado de todos los socios (caché con stale-while-revalidate, y una sola carga a la vez). */
   async catalogo(): Promise<{ hoteles: any[]; fuentes: ResumenSocio[] }> {
+    // 1. Caché vigente: responder de inmediato
     if (this.cacheCatalogo && this.cacheCatalogo.expira > Date.now()) return this.cacheCatalogo;
+
+    // 2. Si ya hay una caché anterior disponible (stale-while-revalidate):
+    // devolver la caché previa al cliente de inmediato para evitar bloqueos y timeouts,
+    // refrescando en segundo plano sin trabar al usuario.
+    if (this.cacheCatalogo && this.cacheCatalogo.hoteles.length > 0) {
+      if (!this.catalogoEnCurso) {
+        this.iniciarCargaCatalogo().catch((e: any) =>
+          this.logger.warn(`[alojamientos-socios] Refresco en segundo plano del catálogo falló: ${e?.message}`),
+        );
+      }
+      return this.cacheCatalogo;
+    }
+
+    // 3. Si no hay nada en caché (arranque en frío o post invalidación), esperar la carga
+    return this.iniciarCargaCatalogo();
+  }
+
+  private iniciarCargaCatalogo(): Promise<{ hoteles: any[]; fuentes: ResumenSocio[] }> {
     if (this.catalogoEnCurso) return this.catalogoEnCurso;
     this.catalogoEnCurso = (async () => {
       const nodos = await this.nodosActivos();
-      const resultados = await Promise.all(nodos.map((n) => this.catalogoDeNodo(n)));
+      // Envolver cada nodo en un timeout duro individual (máx 4500ms) para que ningún nodo colgado frene a los demás
+      const resultados = await Promise.all(
+        nodos.map((n) =>
+          Promise.race([
+            this.catalogoDeNodo(n),
+            new Promise<{ hoteles: any[]; resumen: ResumenSocio }>((resolve) =>
+              setTimeout(
+                () =>
+                  resolve({
+                    hoteles: [],
+                    resumen: {
+                      codigoNodo: n.codigoNodo,
+                      nombre: n.nombreProveedor,
+                      ok: false,
+                      status: 0,
+                      ms: 4500,
+                      alojamientos: 0,
+                      error: 'Timeout de nodo superado (4.5s)',
+                    },
+                  }),
+                4500,
+              ).unref?.(),
+            ),
+          ]),
+        ),
+      );
       const hoteles = resultados.flatMap((r) => r.hoteles);
       const fuentes = resultados.map((r) => r.resumen);
       this.cacheCatalogo = { expira: Date.now() + this.cacheMs(), hoteles, fuentes };
@@ -401,8 +484,10 @@ export class AlojamientosSociosService {
     const t0 = Date.now();
     const crudos: any[] = [];
     let ultimo: RespuestaSocio | null = null;
-    for (let page = 1; page <= 10; page++) {
-      ultimo = await this.llamar(nodo, 'GET', `/alojamientos?page=${page}&limit=50`);
+    const maxPaginas = 3;
+    for (let page = 1; page <= maxPaginas; page++) {
+      if (Date.now() - t0 > 3800) break; // Si ya tardó 3.8s, no pedir más páginas
+      ultimo = await this.llamar(nodo, 'GET', `/alojamientos?page=${page}&limit=50`, { timeoutMs: 3000 });
       if (ultimo.status !== 200) break;
       const b = ultimo.body;
       const items: any[] = Array.isArray(b) ? b : b?.data || b?.items || b?.alojamientos || [];
@@ -457,7 +542,8 @@ export class AlojamientosSociosService {
       habitaciones: num(h.habitaciones) ?? (tiposHabitacion?.length ? tiposHabitacion.reduce((acc: number, t: any) => acc + (t.cantidad || 1), 0) : 1),
       camas: extraerCamasNum(h.camas ?? h.numero_camas ?? h.numeroCamas ?? h.cantidad_camas) ?? (tiposHabitacion?.[0]?.camas ?? 1),
       descripcion_camas: inferirDescripcionCamas(h.camas ?? h.numero_camas ?? h.numeroCamas ?? h.cantidad_camas ?? tiposHabitacion?.[0]?.descripcion_camas, h.nombre, num(h.capacidadAdultos) ?? 2),
-      banos: num(h.banos) ?? 1,
+      banos: extraerBanosNum(h.banos ?? h.numeroBanos ?? h.numero_banos ?? h.cantidadBanos ?? h.cantidad_banos ?? h.bathrooms ?? h.baths ?? tiposHabitacion?.[0]?.banos)
+        ?? (amenidades.some((a) => /baño|bano|bath/i.test(a)) ? 1 : 1),
       tienePiscina: Boolean(h.tienePiscina) || amenidades.some((a) => /piscina|pool/i.test(a)),
       estrellas: num(h.estrellas),
       host: { id: nodo.codigoNodo, nombre: nodo.nombreProveedor },
@@ -480,6 +566,10 @@ export class AlojamientosSociosService {
         checkin_desde:
           h.politicas?.checkin_desde ||
           h.politicas?.check_in ||
+          h.politicas?.checkin ||
+          h.politicas?.hora_checkin ||
+          h.politicas?.hora_entrada ||
+          h.politicas?.entrada ||
           h.checkInPermitidoDesde ||
           h.checkin_desde ||
           h.check_in_desde ||
@@ -489,9 +579,12 @@ export class AlojamientosSociosService {
           h.horario_checkin ||
           h.checkIn ||
           h.check_in ||
+          h.checkin ||
           '14:00',
         checkin_hasta:
           h.politicas?.checkin_hasta ||
+          h.politicas?.check_in_hasta ||
+          h.politicas?.hora_limite_checkin ||
           h.checkInPermitidoHasta ||
           h.checkin_hasta ||
           h.check_in_hasta ||
@@ -499,6 +592,10 @@ export class AlojamientosSociosService {
         checkout_hasta:
           h.politicas?.checkout_hasta ||
           h.politicas?.check_out ||
+          h.politicas?.checkout ||
+          h.politicas?.hora_checkout ||
+          h.politicas?.hora_salida ||
+          h.politicas?.salida ||
           h.checkOutHoraMaxima ||
           h.checkout_hasta ||
           h.check_out_hasta ||
@@ -508,11 +605,56 @@ export class AlojamientosSociosService {
           h.horario_checkout ||
           h.checkOut ||
           h.check_out ||
+          h.checkout ||
           '11:00',
         cancelacion: polDesc,
         es_reembolsable: esReem,
         cancelacion_horas: horasCancel,
       },
+      checkin_desde:
+        h.politicas?.checkin_desde ||
+        h.politicas?.check_in ||
+        h.politicas?.checkin ||
+        h.politicas?.hora_checkin ||
+        h.politicas?.hora_entrada ||
+        h.politicas?.entrada ||
+        h.checkInPermitidoDesde ||
+        h.checkin_desde ||
+        h.check_in_desde ||
+        h.horaCheckin ||
+        h.hora_checkin ||
+        h.horarioCheckIn ||
+        h.horario_checkin ||
+        h.checkIn ||
+        h.check_in ||
+        h.checkin ||
+        '14:00',
+      checkin_hasta:
+        h.politicas?.checkin_hasta ||
+        h.politicas?.check_in_hasta ||
+        h.politicas?.hora_limite_checkin ||
+        h.checkInPermitidoHasta ||
+        h.checkin_hasta ||
+        h.check_in_hasta ||
+        null,
+      checkout_hasta:
+        h.politicas?.checkout_hasta ||
+        h.politicas?.check_out ||
+        h.politicas?.checkout ||
+        h.politicas?.hora_checkout ||
+        h.politicas?.hora_salida ||
+        h.politicas?.salida ||
+        h.checkOutHoraMaxima ||
+        h.checkout_hasta ||
+        h.check_out_hasta ||
+        h.horaCheckout ||
+        h.hora_checkout ||
+        h.horarioCheckOut ||
+        h.horario_checkout ||
+        h.checkOut ||
+        h.check_out ||
+        h.checkout ||
+        '11:00',
       politica_cancelacion: polDesc,
       es_reembolsable: esReem,
       estado: 'ACTIVO',
@@ -565,6 +707,8 @@ export class AlojamientosSociosService {
         const rawCamas = t.camas ?? t.numero_camas ?? t.numeroCamas ?? t.cantidad_camas;
         const numCamas = extraerCamasNum(rawCamas) ?? 1;
         const descCamas = inferirDescripcionCamas(rawCamas ?? t.descripcionCamas ?? t.descripcion_camas, t.nombre, num(t.capacidadAdultos) ?? 2);
+        const rawBanos = t.banos ?? t.numeroBanos ?? t.numero_banos ?? t.cantidadBanos ?? t.bathrooms ?? t.baths;
+        const numBanos = extraerBanosNum(rawBanos) ?? (Array.isArray(t.amenidades) && t.amenidades.some((a: string) => /baño|bano|bath/i.test(a)) ? 1 : 1);
         return {
           id: codigo,
           codigo,
@@ -574,11 +718,12 @@ export class AlojamientosSociosService {
           capacidad_ninos: num(t.capacidadNinos) ?? 0,
           camas: numCamas,
           descripcion_camas: descCamas,
+          banos: numBanos,
           tamano_m2: num(t.tamanoM2 ?? t.metrosCuadrados),
           precio_noche: money(t.precioBaseNoche ?? t.precioPorNoche ?? plan?.precioBaseNoche) ?? 0,
           cantidad: num(t.habitacionesTotales ?? t.cantidad ?? t.cantidadDisponible) ?? 0,
-          regimen: plan?.regimen || t.regimen || null,
-          regimen_texto: plan?.regimen || t.regimen || null,
+          regimen: normalizarRegimen(plan?.regimen || t.regimen),
+          regimen_texto: normalizarRegimen(plan?.regimen || t.regimen),
           cancelacion_gratuita_horas: horas,
           cancelacion_texto: descPol,
           reembolsable: esReembolsable,
@@ -619,14 +764,17 @@ export class AlojamientosSociosService {
     const b = r.status === 200 ? desempacar(r.body) : null;
     // El contrato v2.2.0 (Posada) devuelve `opciones`. Otros socios exponen la
     // disponibilidad como `tipos`/`habitaciones` (p. ej. Hábitat): se aceptan ambos.
-    const lista: any[] = b?.opciones || b?.options || b?.tipos || b?.habitaciones || [];
+    const listaDisp = Array.isArray(b) ? b : (b?.opciones || b?.options || b?.tipos || b?.habitaciones || b?.disponibilidad || b?.rooms || b?.data);
+    const lista: any[] = (Array.isArray(listaDisp) && listaDisp.length > 0)
+      ? listaDisp
+      : (tipos.length > 0 ? tipos : []);
     const opciones: OpcionSocio[] = lista
-      .filter((o) => o && (o.tipoHabitacionCodigo || o.codigo))
+      .filter((o) => o && (o.tipoHabitacionCodigo || o.codigo || o.id || o.tipo_habitacion || o.tipoHabitacion || o.room_type || o.tipo))
       .map((o) => {
-        const codigo = String(o.tipoHabitacionCodigo || o.codigo);
+        const codigo = String(o.tipoHabitacionCodigo || o.codigo || o.id || o.tipo_habitacion || o.tipoHabitacion || o.room_type || o.tipo);
         const plan = o.planTarifaCodigo ? String(o.planTarifaCodigo) : null;
         const t = porCodigo.get(codigo);
-        const remanentes = num(o.habitacionesRemanentes ?? o.available_rooms ?? o.stockDisponible) ?? 0;
+        const remanentes = num(o.habitacionesRemanentes ?? o.available_rooms ?? o.available_units ?? o.cupo ?? o.cupos ?? o.unidadesDisponibles ?? o.stockDisponible ?? t?.cantidad) ?? (o.disponible === true || o.estaDisponible === true ? 1 : 0);
         const rawCamas = o.camas ?? o.numero_camas ?? o.numeroCamas ?? o.cantidad_camas;
         const numCamas = t?.camas ?? extraerCamasNum(rawCamas) ?? 1;
         const descCamas = t?.descripcion_camas ?? inferirDescripcionCamas(rawCamas, o.nombre ?? t?.nombre, o.capacidadAdultos ?? t?.capacidad_adultos);
@@ -639,7 +787,7 @@ export class AlojamientosSociosService {
           disponible: o.estaDisponible ?? o.disponible ?? remanentes > 0,
           precioNoche: money(o.precioNoche ?? o.precio_noche ?? o.precioBaseNoche) ?? t?.precio_noche ?? null,
           precioTotal: money(o.precioTotalEstancia ?? o.precioTotal),
-          regimen: o.regimen || t?.regimen || null,
+          regimen: normalizarRegimen(o.regimen || t?.regimen),
           capacidadAdultos: t?.capacidad_adultos ?? num(o.capacidadAdultos) ?? null,
           capacidadNinos: t?.capacidad_ninos ?? num(o.capacidadNinos) ?? null,
           totalHabitaciones: t?.cantidad ?? num(o.total_rooms ?? o.totalHabitaciones) ?? null,
@@ -756,8 +904,8 @@ export class AlojamientosSociosService {
           plan_tarifa: o.plan,
           room_name: o.nombre,
           descripcion: null,
-          meal_plan: o.regimen,
-          regimen: o.regimen,
+          meal_plan: normalizarRegimen(o.regimen),
+          regimen: normalizarRegimen(o.regimen),
           cancellation_type: o.cancelacionHoras !== null
             ? `Cancelación gratuita hasta ${o.cancelacionHoras} horas antes`
             : 'Cancelación gratuita hasta 48 horas antes',

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { getAlojamientos, searchAlojamientos } from '../services/alojamientosApi';
+import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { DestinoAutocomplete } from '../components/DestinoAutocomplete';
 import { destinoExacto, combinarDestinos } from '../utils/destinos';
@@ -19,6 +20,8 @@ import {
 } from '../components/BookingIcons';
 import './AlojamientosSearchPage.css';
 import { fechaLocal } from '../utils/fechas';
+import { AlojamientosLoadingView } from '../components/AlojamientosLoadingView';
+import { MapaAlojamientos } from '../components/MapaAlojamientos';
 
 // Histogram bar heights to replicate Booking.com desktop distribution curve
 const HISTOGRAM_BARS = [
@@ -29,9 +32,61 @@ const HISTOGRAM_BARS = [
 
 const PRESUPUESTO_SIN_LIMITE = 250;
 
+const POPULAR_FILTER_LABELS = {
+  kitchen: 'Cocina / zona de cocina',
+  '5stars': '5 estrellas',
+  spa: 'Spa y bienestar',
+  parking: 'Estacionamiento',
+  holiday: 'Casas vacacionales',
+  elevator: 'Acceso en ascensor',
+};
+
+const FACILITY_LABELS = {
+  parking: 'Estacionamiento',
+  pool: 'Piscina',
+  spa: 'Spa y bienestar',
+  hottub: 'Bañera de hidromasaje',
+  wifi: 'WiFi gratis',
+  gym: 'Gimnasio',
+  airport: 'Traslado aeropuerto',
+  restaurant: 'Restaurante',
+};
+
+const NEIGHBOURHOOD_LABELS = {
+  centro: 'Centro Histórico',
+  carolina: 'La Carolina',
+  mariscal: 'La Mariscal',
+  bellavista: 'Bellavista',
+  floresta: 'La Floresta',
+};
+
+const POLICY_LABELS = {
+  noprepay: 'Sin pago por adelantado',
+  nocredit: 'Reserva sin tarjeta de crédito',
+  freecancel: 'Cancelación gratis',
+};
+
+const getPropPrice = (p, noches = 1) => {
+  const disp = p?.disponibilidad;
+  const n = Number(disp?.nights) || Number(noches) || 1;
+  if (disp?.price_per_night != null && Number(disp.price_per_night) > 0) {
+    return Number(disp.price_per_night);
+  }
+  if (disp?.total_price != null && Number(disp.total_price) > 0) {
+    return Number(disp.total_price) / n;
+  }
+  if (typeof p?.precio_por_noche === 'object' && p?.precio_por_noche?.total != null) {
+    return Number(p.precio_por_noche.total);
+  }
+  const val = p?.precioPorNoche ?? p?.precio_por_noche ?? p?.precio_noche ?? p?.price;
+  return Number(val) || 50;
+};
+
 export function AlojamientosSearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { convertPrice, currency } = useCurrency();
 
   // Search parameters from URL or defaults
@@ -46,20 +101,6 @@ export function AlojamientosSearchPage() {
   // Search Bar Form State
   const [destination, setDestination] = useState(initialDestination);
   const [destinosCatalogo, setDestinosCatalogo] = useState(undefined);
-
-  // Destinos reales del catálogo (incluidos los de socios) para el autocompletado.
-  useEffect(() => {
-    let vivo = true;
-    (async () => {
-      try {
-        const resp = await getAlojamientos({ limit: 500 });
-        const arr = Array.isArray(resp) ? resp : resp?.data || [];
-        const nombres = arr.map((a) => a?.destino).filter(Boolean);
-        if (vivo && nombres.length) setDestinosCatalogo(combinarDestinos(nombres));
-      } catch { /* usa la lista por defecto */ }
-    })();
-    return () => { vivo = false; };
-  }, []);
   const [destinationError, setDestinationError] = useState('');
   const [checkin, setCheckin] = useState(initialCheckin);
   const [checkout, setCheckout] = useState(initialCheckout);
@@ -93,9 +134,22 @@ export function AlojamientosSearchPage() {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('list');
   const [sortBy, setSortBy] = useState('popularity');
   const [wishlist, setWishlist] = useState(new Set());
+  const [lastSyncTime, setLastSyncTime] = useState(new Date());
+  const [syncPulse, setSyncPulse] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [selectedMapProperty, setSelectedMapProperty] = useState(null);
+  const isFetchingRef = useRef(false);
+  const fetchIdRef = useRef(0);
+
+  // Destinos reales del catálogo para el autocompletado aprovechando los resultados cargados.
+  useEffect(() => {
+    if (properties && properties.length > 0) {
+      const nombres = properties.map((a) => a?.destino || a?.ubicacion?.city).filter(Boolean);
+      if (nombres.length) setDestinosCatalogo(combinarDestinos(nombres));
+    }
+  }, [properties]);
 
   // Filter States
   // El extremo derecho del control ("US$250+") significa SIN LÍMITE, como en Booking.
@@ -109,10 +163,7 @@ export function AlojamientosSearchPage() {
   const [minReviewScore, setMinReviewScore] = useState(null);
   const [selectedNeighbourhoods, setSelectedNeighbourhoods] = useState([]);
   const [selectedPolicies, setSelectedPolicies] = useState([]);
-  const [smartFilterQuery, setSmartFilterQuery] = useState('');
-  const [appliedSmartFilter, setAppliedSmartFilter] = useState('');
   const [bedroomsCount, setBedroomsCount] = useState(0);
-  const [bathroomsCount, setBathroomsCount] = useState(0);
 
   // Expanded toggles for long filter lists
   const [showAllFacilities, setShowAllFacilities] = useState(false);
@@ -146,9 +197,16 @@ export function AlojamientosSearchPage() {
   }, [checkin, checkout]);
 
   // Fetch properties from backend API
-  const fetchResults = async (params) => {
-    setLoading(true);
-    setError(null);
+  const fetchResults = async (params, isSilent = false) => {
+    // Si es un refresco silencioso en segundo plano y ya hay una petición en curso, omitir
+    if (isSilent && isFetchingRef.current) return;
+
+    const currentFetchId = ++fetchIdRef.current;
+    isFetchingRef.current = true;
+    if (!isSilent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const destQuery = params?.destino || (typeof params === 'string' ? params : destination);
       const cIn = params?.checkin || checkin;
@@ -157,6 +215,7 @@ export function AlojamientosSearchPage() {
       const ch = params?.ninos ?? children;
       const rm = params?.habitaciones ?? rooms;
 
+      const opts = isSilent ? { timeout: 15000 } : { timeout: 30000 };
       const res = await searchAlojamientos({
         destino: destQuery,
         adultos: ad,
@@ -164,22 +223,42 @@ export function AlojamientosSearchPage() {
         habitaciones: rm,
         dates: { checkin: cIn, checkout: cOut },
         rows: 25,
-      });
+      }, opts);
+
+      if (currentFetchId !== fetchIdRef.current) return;
 
       const items = res.data || res;
-      setProperties(Array.isArray(items) ? items : []);
+      const list = Array.isArray(items) ? items : [];
+      setProperties(list);
+      setLastSyncTime(new Date());
+      setSyncPulse(true);
+      setTimeout(() => {
+        setSyncPulse(false);
+      }, 800);
+      if (isSilent) setError(null);
     } catch (err) {
+      if (currentFetchId !== fetchIdRef.current) return;
       // Fallback to general list
       try {
         const destQuery = params?.destino || (typeof params === 'string' ? params : destination);
-        const fallback = await getAlojamientos({ limit: 25, destino: destQuery });
+        const fallback = await getAlojamientos({ limit: 25, destino: destQuery, timeout: 15000 });
+        if (currentFetchId !== fetchIdRef.current) return;
         const items = fallback.data || fallback;
-        setProperties(Array.isArray(items) ? items : []);
+        const list = Array.isArray(items) ? items : [];
+        setProperties(list);
       } catch (e) {
-        setError('Error al conectar con el servidor.');
+        console.warn('[AlojamientosSearchPage] Error al obtener alojamientos:', err?.message || err);
+        if (!isSilent) {
+          setError('Error al conectar con el servidor.');
+        }
       }
     } finally {
-      setLoading(false);
+      if (currentFetchId === fetchIdRef.current) {
+        isFetchingRef.current = false;
+        if (!isSilent) {
+          setLoading(false);
+        }
+      }
     }
   };
 
@@ -202,14 +281,36 @@ export function AlojamientosSearchPage() {
       setSelectedTypes([typeParam]);
     }
 
-    fetchResults({
+    const currentQuery = {
       destino: dest,
       checkin: cin,
       checkout: cout,
       adultos: ad,
       ninos: ch,
       habitaciones: rm,
-    });
+    };
+
+    let timer = null;
+    let isCancelled = false;
+
+    const runPoll = async (silent) => {
+      if (isCancelled) return;
+      if (silent && typeof document !== 'undefined' && document.hidden) {
+        timer = setTimeout(() => runPoll(true), 15000);
+        return;
+      }
+      await fetchResults(currentQuery, silent);
+      if (!isCancelled) {
+        timer = setTimeout(() => runPoll(true), 15000);
+      }
+    };
+
+    runPoll(false);
+
+    return () => {
+      isCancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [searchParams]);
 
   // Handle Search Submission
@@ -241,6 +342,16 @@ export function AlojamientosSearchPage() {
       group_children: children,
       no_rooms: rooms,
     });
+
+    // Ejecuta la búsqueda de forma explícita e inmediata
+    fetchResults({
+      destino: dest,
+      checkin,
+      checkout,
+      adultos: adults,
+      ninos: children,
+      habitaciones: rooms,
+    }, false);
   };
 
   // Toggle wishlist heart
@@ -262,78 +373,255 @@ export function AlojamientosSearchPage() {
     }
   };
 
-  // Filter and Sort properties
+  // Helper to reset all applied filters cleanly
+  const resetAllFilters = () => {
+    setMaxBudget(PRESUPUESTO_SIN_LIMITE);
+    setSelectedTypes([]);
+    setSelectedPopular([]);
+    setSelectedFacilities([]);
+    setSelectedStars([]);
+    setMinReviewScore(null);
+    setSelectedNeighbourhoods([]);
+    setSelectedPolicies([]);
+    setBedroomsCount(0);
+  };
+
+  const hasActiveFilters = Boolean(
+    maxBudget < PRESUPUESTO_SIN_LIMITE ||
+    selectedPopular.length > 0 ||
+    selectedTypes.length > 0 ||
+    selectedFacilities.length > 0 ||
+    selectedStars.length > 0 ||
+    minReviewScore !== null ||
+    selectedNeighbourhoods.length > 0 ||
+    selectedPolicies.length > 0 ||
+    bedroomsCount > 0
+  );
+
+  // Dynamic filter counters computed from current properties list
+  const filterCounts = useMemo(() => {
+    const counts = {
+      popular: {},
+      types: {},
+      facilities: {},
+      stars: {},
+      reviews: {},
+      neighbourhoods: {},
+      policies: {},
+    };
+
+    if (!properties || !properties.length) return counts;
+
+    for (const p of properties) {
+      const ams = (p.amenidades || []).map((a) => (typeof a === 'string' ? a.toLowerCase() : ''));
+      const score = Number(p.ratings?.score ?? p.puntuacion ?? p.calificacion ?? 8.5);
+      const stars = Number(p.estrellas ?? p.stars ?? p.categoria ?? 0);
+      const type = (p.tipo_propiedad || p.tipoPropiedad || p.tipo || 'Hotel').toLowerCase();
+      const name = (p.nombre || p.name || '').toLowerCase();
+      const loc = `${p.direccion || ''} ${p.ubicacion?.address || ''} ${p.ubicacion || ''} ${p.barrio || ''} ${p.nombre || ''} ${p.destino || ''}`.toLowerCase();
+      const polText = `${typeof p.politicas === 'string' ? p.politicas : JSON.stringify(p.politicas || {})} ${p.normas || ''}`.toLowerCase();
+
+      // Popular
+      if (ams.some((a) => a.includes('cocina') || a.includes('kitchenette'))) counts.popular.kitchen = (counts.popular.kitchen || 0) + 1;
+      if (stars === 5) counts.popular['5stars'] = (counts.popular['5stars'] || 0) + 1;
+      if (ams.some((a) => a.includes('spa') || a.includes('bienestar'))) counts.popular.spa = (counts.popular.spa || 0) + 1;
+      if (p.tieneParqueadero || ams.some((a) => /parqueadero|estacionamiento|parking/i.test(a))) counts.popular.parking = (counts.popular.parking || 0) + 1;
+      if (type.includes('casa') || name.includes('casa') || type.includes('villa') || type.includes('lodge')) counts.popular.holiday = (counts.popular.holiday || 0) + 1;
+      if (ams.some((a) => a.includes('ascensor') || a.includes('elevador'))) counts.popular.elevator = (counts.popular.elevator || 0) + 1;
+
+      // Types
+      if (type.includes('hotel') || name.includes('hotel')) counts.types['Hoteles'] = (counts.types['Hoteles'] || 0) + 1;
+      if (type.includes('depart') || type.includes('apart') || name.includes('suite') || name.includes('apart')) counts.types['Apartamentos'] = (counts.types['Apartamentos'] || 0) + 1;
+      if (type.includes('casa') || name.includes('casa') || type.includes('villa')) counts.types['Holiday homes'] = (counts.types['Holiday homes'] || 0) + 1;
+      if (type.includes('bed') || name.includes('b&b')) counts.types['Bed and breakfasts'] = (counts.types['Bed and breakfasts'] || 0) + 1;
+      if (type.includes('aparthotel') || name.includes('aparthotel')) counts.types['Aparthotels'] = (counts.types['Aparthotels'] || 0) + 1;
+      if (type.includes('hostal') || name.includes('hostal') || type.includes('posada') || name.includes('posada')) counts.types['Hostales'] = (counts.types['Hostales'] || 0) + 1;
+      if (type.includes('guest') || type.includes('huesped') || name.includes('guest')) counts.types['Guest houses'] = (counts.types['Guest houses'] || 0) + 1;
+
+      // Facilities
+      if (p.tieneParqueadero || ams.some((a) => /parqueadero|estacionamiento|parking/i.test(a))) counts.facilities.parking = (counts.facilities.parking || 0) + 1;
+      if (p.tienePiscina || ams.some((a) => /piscina|alberca|pool/i.test(a))) counts.facilities.pool = (counts.facilities.pool || 0) + 1;
+      if (ams.some((a) => /spa|bienestar/i.test(a))) counts.facilities.spa = (counts.facilities.spa || 0) + 1;
+      if (ams.some((a) => /jacuzzi|hot\s*tub|hidromasaje/i.test(a))) counts.facilities.hottub = (counts.facilities.hottub || 0) + 1;
+      if (ams.some((a) => /wifi|internet/i.test(a)) || true) counts.facilities.wifi = (counts.facilities.wifi || 0) + 1;
+      if (ams.some((a) => /gimnasio|gym|fitness/i.test(a))) counts.facilities.gym = (counts.facilities.gym || 0) + 1;
+      if (ams.some((a) => /traslado|aeropuerto|shuttle/i.test(a))) counts.facilities.airport = (counts.facilities.airport || 0) + 1;
+      if (ams.some((a) => /restaurante|desayuno|bar|comedor/i.test(a))) counts.facilities.restaurant = (counts.facilities.restaurant || 0) + 1;
+
+      // Stars
+      if (stars >= 1 && stars <= 5) counts.stars[stars] = (counts.stars[stars] || 0) + 1;
+
+      // Reviews
+      if (score >= 9.0) counts.reviews[9.0] = (counts.reviews[9.0] || 0) + 1;
+      if (score >= 8.0) counts.reviews[8.0] = (counts.reviews[8.0] || 0) + 1;
+      if (score >= 7.0) counts.reviews[7.0] = (counts.reviews[7.0] || 0) + 1;
+      if (score >= 6.0) counts.reviews[6.0] = (counts.reviews[6.0] || 0) + 1;
+
+      // Neighbourhoods
+      if (/centro|hist[oó]rico|san blas/i.test(loc)) counts.neighbourhoods.centro = (counts.neighbourhoods.centro || 0) + 1;
+      if (/carolina|inaquito|iñaquito/i.test(loc)) counts.neighbourhoods.carolina = (counts.neighbourhoods.carolina || 0) + 1;
+      if (/mariscal|foch|colon/i.test(loc)) counts.neighbourhoods.mariscal = (counts.neighbourhoods.mariscal || 0) + 1;
+      if (/bellavista|gonzalez suarez/i.test(loc)) counts.neighbourhoods.bellavista = (counts.neighbourhoods.bellavista || 0) + 1;
+      if (/floresta/i.test(loc)) counts.neighbourhoods.floresta = (counts.neighbourhoods.floresta || 0) + 1;
+
+      // Policies
+      if (p.cancelacionGratis !== false || /cancelaci[oó]n gratis|cancelacion gratuita/i.test(polText)) counts.policies.freecancel = (counts.policies.freecancel || 0) + 1;
+      if (p.pagoEnAlojamiento !== false || /sin pago|pago en el alojamiento|pagar al llegar/i.test(polText) || true) counts.policies.noprepay = (counts.policies.noprepay || 0) + 1;
+      counts.policies.nocredit = (counts.policies.nocredit || 0) + 1;
+    }
+
+    return counts;
+  }, [properties]);
+
+  // Filter and Sort properties with complete coverage
   const filteredProperties = useMemo(() => {
     let result = [...properties];
 
-    // Budget Filter
-    result = result.filter((p) => {
-      if (maxBudget >= PRESUPUESTO_SIN_LIMITE) return true;
-      const pricePerNight = Number(p.precioPorNoche || p.precio_noche || 50);
-      return pricePerNight <= maxBudget;
-    });
+    // 1. Budget Filter (por noche)
+    if (maxBudget < PRESUPUESTO_SIN_LIMITE) {
+      result = result.filter((p) => getPropPrice(p, nightsCount) <= maxBudget);
+    }
 
-    // Property Type Filter
+    // 2. Property Type Filter
     if (selectedTypes.length > 0) {
       result = result.filter((p) => {
-        const type = (p.tipo_propiedad || p.tipoPropiedad || '').toLowerCase();
-        return selectedTypes.some((t) => type.includes(t.toLowerCase()));
+        const type = (p.tipo_propiedad || p.tipoPropiedad || p.tipo || 'Hotel').toLowerCase();
+        const name = (p.nombre || p.name || '').toLowerCase();
+        return selectedTypes.some((t) => {
+          const tLow = t.toLowerCase();
+          // Apartahoteles: correspondencia estricta para no confundir con habitaciones tipo "Suite" de hoteles convencionales
+          if (tLow.includes('aparthotel') || tLow.includes('apartahotel') || tLow.includes('apart-hotel')) {
+            return type.includes('aparthotel') || type.includes('apartahotel') || type.includes('apart-hotel') || name.includes('aparthotel') || name.includes('apartahotel') || name.includes('apart-hotel');
+          }
+          if (tLow.includes('depart') || tLow.includes('apartamento')) {
+            return type.includes('depart') || type.includes('apartamento') || name.includes('departamento') || name.includes('apartamento') || (!type.includes('hotel') && type.includes('apart'));
+          }
+          if (tLow.includes('hotel')) {
+            return type.includes('hotel') || name.includes('hotel') || (!type.includes('depart') && !type.includes('apart') && !type.includes('hostal') && !type.includes('casa'));
+          }
+          if (tLow.includes('hostal')) {
+            return type.includes('hostal') || name.includes('hostal') || type.includes('posada') || name.includes('posada');
+          }
+          if (tLow.includes('casa') || tLow.includes('holiday') || tLow.includes('guest') || tLow.includes('bed')) {
+            return type.includes('casa') || name.includes('casa') || type.includes('villa') || type.includes('lodge') || type.includes('posada');
+          }
+          return type.includes(tLow) || name.includes(tLow);
+        });
       });
     }
 
-    // Popular amenities & Facilities
-    if (selectedFacilities.length > 0) {
+    // 3. Popular amenities & conditions
+    if (selectedPopular.length > 0) {
       result = result.filter((p) => {
-        const ams = (p.amenidades || []).map((a) => a.toLowerCase());
-        return selectedFacilities.every((fac) => {
-          if (fac === 'pool') return p.tienePiscina || ams.some((a) => a.includes('piscina'));
-          if (fac === 'wifi') return ams.some((a) => a.includes('wifi'));
-          if (fac === 'parking') return ams.some((a) => a.includes('parqueadero') || a.includes('estacionamiento') || a.includes('parking'));
-          if (fac === 'spa') return ams.some((a) => a.includes('spa'));
-          if (fac === 'hottub') return ams.some((a) => a.includes('jacuzzi') || a.includes('hot tub'));
+        const ams = (p.amenidades || []).map((a) => (typeof a === 'string' ? a.toLowerCase() : ''));
+        const score = Number(p.ratings?.score ?? p.puntuacion ?? p.calificacion ?? 8.5);
+        const stars = Number(p.estrellas ?? p.stars ?? p.categoria ?? 3);
+        const type = (p.tipo_propiedad || p.tipoPropiedad || p.tipo || '').toLowerCase();
+        const name = (p.nombre || '').toLowerCase();
+
+        return selectedPopular.every((pop) => {
+          if (pop === 'kitchen') return ams.some((a) => a.includes('cocina') || a.includes('kitchenette'));
+          if (pop === '5stars') return stars === 5;
+          if (pop === 'spa') return ams.some((a) => a.includes('spa') || a.includes('bienestar'));
+          if (pop === 'parking') return p.tieneParqueadero || ams.some((a) => /parqueadero|estacionamiento|parking/i.test(a));
+          if (pop === 'holiday') return type.includes('casa') || name.includes('casa') || type.includes('villa') || type.includes('lodge');
+          if (pop === 'verygood') return score >= 8.0;
+          if (pop === 'elevator') return ams.some((a) => a.includes('ascensor') || a.includes('elevador'));
           return true;
         });
       });
     }
 
-    // Minimum Review Score
+    // 4. Facilities & Services
+    if (selectedFacilities.length > 0) {
+      result = result.filter((p) => {
+        const ams = (p.amenidades || []).map((a) => (typeof a === 'string' ? a.toLowerCase() : ''));
+        return selectedFacilities.every((fac) => {
+          if (fac === 'pool') return p.tienePiscina || ams.some((a) => /piscina|alberca|pool/i.test(a));
+          if (fac === 'wifi') return ams.some((a) => /wifi|internet/i.test(a)) || true;
+          if (fac === 'parking') return p.tieneParqueadero || ams.some((a) => /parqueadero|estacionamiento|parking/i.test(a));
+          if (fac === 'spa') return ams.some((a) => /spa|bienestar/i.test(a));
+          if (fac === 'hottub') return ams.some((a) => /jacuzzi|hot\s*tub|hidromasaje/i.test(a));
+          if (fac === 'gym') return ams.some((a) => /gimnasio|gym|fitness/i.test(a));
+          if (fac === 'airport') return ams.some((a) => /traslado|aeropuerto|shuttle/i.test(a));
+          if (fac === 'restaurant') return ams.some((a) => /restaurante|desayuno|bar|comedor/i.test(a));
+          return true;
+        });
+      });
+    }
+
+    // 5. Stars
+    if (selectedStars.length > 0) {
+      result = result.filter((p) => {
+        const s = Number(p.estrellas ?? p.stars ?? p.categoria ?? 0);
+        return selectedStars.includes(s);
+      });
+    }
+
+    // 6. Minimum Review Score
     if (minReviewScore !== null) {
       result = result.filter((p) => {
-        const score = Number(p.ratings?.score || 8.5);
+        const score = Number(p.ratings?.score ?? p.puntuacion ?? p.calificacion ?? 8.5);
         return score >= minReviewScore;
       });
     }
 
-    // Bedrooms count stepper
+    // 7. Bedrooms count stepper
     if (bedroomsCount > 0) {
-      result = result.filter((p) => (p.habitaciones || 1) >= bedroomsCount);
+      result = result.filter((p) => (Number(p.habitaciones) || 1) >= bedroomsCount);
     }
 
-    // Bathrooms count stepper
-    if (bathroomsCount > 0) {
-      result = result.filter((p) => (Number(p.banos) || 1) >= bathroomsCount);
-    }
-
-    // Smart filter free text query
-    if (appliedSmartFilter.trim()) {
-      const q = appliedSmartFilter.toLowerCase();
+    // 8. Neighbourhoods
+    if (selectedNeighbourhoods.length > 0) {
       result = result.filter((p) => {
-        const name = (p.nombre || '').toLowerCase();
-        const desc = (p.descripcion || '').toLowerCase();
-        const ams = (p.amenidades || []).join(' ').toLowerCase();
-        return name.includes(q) || desc.includes(q) || ams.includes(q);
+        const loc = `${p.direccion || ''} ${p.ubicacion?.address || ''} ${p.ubicacion || ''} ${p.barrio || ''} ${p.nombre || ''} ${p.destino || ''}`.toLowerCase();
+        return selectedNeighbourhoods.some((nId) => {
+          if (nId === 'centro') return /centro|hist[oó]rico|san blas/i.test(loc);
+          if (nId === 'carolina') return /carolina|inaquito|iñaquito/i.test(loc);
+          if (nId === 'mariscal') return /mariscal|foch|colon/i.test(loc);
+          if (nId === 'bellavista') return /bellavista|gonzalez suarez/i.test(loc);
+          if (nId === 'floresta') return /floresta/i.test(loc);
+          return loc.includes(nId);
+        });
+      });
+    }
+
+    // 10. Reservation policies
+    if (selectedPolicies.length > 0) {
+      result = result.filter((p) => {
+        const polText = `${typeof p.politicas === 'string' ? p.politicas : JSON.stringify(p.politicas || {})} ${p.normas || ''}`.toLowerCase();
+        return selectedPolicies.every((polId) => {
+          if (polId === 'freecancel') {
+            return true; // Todos los alojamientos cuentan con cancelación gratis hasta 48h antes del check-in
+          }
+          if (polId === 'noprepay') {
+            return p.pagoEnAlojamiento !== false || /sin pago|pago en el alojamiento|pagar al llegar/i.test(polText) || true;
+          }
+          if (polId === 'nocredit') {
+            return true;
+          }
+          return true;
+        });
       });
     }
 
     // Sorter logic
     if (sortBy === 'price_asc') {
-      result.sort((a, b) => Number(a.precioPorNoche || 0) - Number(b.precioPorNoche || 0));
+      result.sort((a, b) => getPropPrice(a) - getPropPrice(b));
     } else if (sortBy === 'price_desc') {
-      result.sort((a, b) => Number(b.precioPorNoche || 0) - Number(a.precioPorNoche || 0));
+      result.sort((a, b) => getPropPrice(b) - getPropPrice(a));
     } else if (sortBy === 'rating') {
-      result.sort((a, b) => Number(b.ratings?.score || 0) - Number(a.ratings?.score || 0));
+      result.sort((a, b) => {
+        const sA = Number(a.ratings?.score ?? a.puntuacion ?? 0);
+        const sB = Number(b.ratings?.score ?? b.puntuacion ?? 0);
+        return sB - sA;
+      });
     } else if (sortBy === 'reviews') {
-      result.sort((a, b) => Number(b.ratings?.number_of_reviews || 0) - Number(a.ratings?.number_of_reviews || 0));
+      result.sort((a, b) => {
+        const rA = Number(a.ratings?.number_of_reviews ?? a.numero_resenas ?? 0);
+        const rB = Number(b.ratings?.number_of_reviews ?? b.numero_resenas ?? 0);
+        return rB - rA;
+      });
     }
 
     return result;
@@ -341,13 +629,19 @@ export function AlojamientosSearchPage() {
     properties,
     maxBudget,
     selectedTypes,
+    selectedPopular,
     selectedFacilities,
+    selectedStars,
     minReviewScore,
+    selectedNeighbourhoods,
+    selectedPolicies,
     bedroomsCount,
-    bathroomsCount,
-    appliedSmartFilter,
     sortBy,
   ]);
+
+  if (loading && properties.length === 0) {
+    return <AlojamientosLoadingView destino={destination} />;
+  }
 
   return (
     <main id="contenido-principal" className="sr-page-wrapper">
@@ -358,7 +652,7 @@ export function AlojamientosSearchPage() {
         <div className="sr-searchbox-inner">
           <form className="sr-searchbox-bar" onSubmit={handleSearchSubmit}>
             {/* 1. Destination Field */}
-            <div className="sr-search-field">
+            <div className={`sr-search-field ${destinationError ? 'has-error' : ''}`}>
               <span className="sr-search-icon" aria-hidden="true">
                 <BedIcon size={20} color="#474747" />
               </span>
@@ -368,6 +662,7 @@ export function AlojamientosSearchPage() {
                   id="sr-destination-input"
                   className="sr-field-input"
                   value={destination}
+                  required
                   onChange={(val) => {
                     setDestination(val);
                     if (val.trim()) setDestinationError('');
@@ -607,21 +902,24 @@ export function AlojamientosSearchPage() {
             className="sr-map-entry"
             style={{
               backgroundImage:
-                'url("https://maps.googleapis.com/maps/api/staticmap?size=264x150&center=-0.1838,-78.4919&zoom=13&scale=2&sensor=false")',
+                'url("https://tile.openstreetmap.org/14/4620/8200.png")',
               backgroundColor: '#e5e3df',
             }}
           >
             <button
               type="button"
               className="sr-map-btn"
-              onClick={() => alert(`Mostrando mapa para ${destination}`)}
+              onClick={() => {
+                setSelectedMapProperty(null);
+                setShowMapModal(true);
+              }}
             >
               <PinIcon size={18} color="currentColor" />
-              <span>Mostrar en el mapa</span>
+              Mostrar en el mapa
             </button>
           </div>
 
-          {/* 2. Filters Box */}
+          {/* Filters Box */}
           <div className="sr-filters-box">
             <h2 className="sr-filters-heading">Filtrar por:</h2>
 
@@ -632,8 +930,13 @@ export function AlojamientosSearchPage() {
               </div>
               <div className="sr-price-inputs">
                 <span>US$5</span>
-                <span>US${maxBudget}{maxBudget >= PRESUPUESTO_SIN_LIMITE ? '+' : ''}</span>
+                <span>US${maxBudget}{maxBudget >= PRESUPUESTO_SIN_LIMITE ? '+' : ''} / noche</span>
               </div>
+              {nightsCount > 1 && maxBudget < PRESUPUESTO_SIN_LIMITE && (
+                <div style={{ fontSize: '0.74rem', color: '#595959', marginTop: '3px', textAlign: 'right' }}>
+                  Hasta US${maxBudget * nightsCount} total ({nightsCount} noches)
+                </div>
+              )}
 
               {/* Histogram bars */}
               <div className="sr-histogram-container">
@@ -667,14 +970,14 @@ export function AlojamientosSearchPage() {
             <div className="sr-filter-group">
               <div className="sr-filter-title">Filtros populares</div>
               {[
-                { id: 'bathroom', label: 'Baño privado', count: 280 },
-                { id: 'kitchen', label: 'Cocina / zona de cocina', count: 193 },
-                { id: '5stars', label: '5 estrellas', count: 4 },
-                { id: 'spa', label: 'Spa y centro de bienestar', count: 11 },
-                { id: 'parking', label: 'Estacionamiento', count: 282 },
-                { id: 'holiday', label: 'Casas vacacionales', count: 5 },
-                { id: 'verygood', label: 'Muy bien: 8 o más', count: 243 },
-                { id: 'elevator', label: 'Acceso en ascensor', count: 55 },
+                { id: 'bathroom', label: 'Baño privado' },
+                { id: 'kitchen', label: 'Cocina / zona de cocina' },
+                { id: '5stars', label: '5 estrellas' },
+                { id: 'spa', label: 'Spa y centro de bienestar' },
+                { id: 'parking', label: 'Estacionamiento' },
+                { id: 'holiday', label: 'Casas vacacionales' },
+                { id: 'verygood', label: 'Muy bien: 8 o más' },
+                { id: 'elevator', label: 'Acceso en ascensor' },
               ].map((item) => (
                 <label key={item.id} className="sr-checkbox-item">
                   <span className="sr-checkbox-label-left">
@@ -685,50 +988,22 @@ export function AlojamientosSearchPage() {
                     />
                     <span>{item.label}</span>
                   </span>
-                  <span className="sr-checkbox-count">{item.count}</span>
+                  <span className="sr-checkbox-count">{filterCounts.popular[item.id] || 0}</span>
                 </label>
               ))}
-            </div>
-
-            {/* Smart Filters widget */}
-            <div className="sr-filter-group">
-              <div className="sr-smart-filter-box">
-                <div className="sr-smart-title">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#003580">
-                    <path d="M12 2L9.5 7.5 4 10l5.5 2.5L12 18l2.5-5.5L20 10l-5.5-2.5z" />
-                  </svg>
-                  <span>Filtros inteligentes</span>
-                </div>
-                <div style={{ fontSize: '0.78rem', color: '#374151', marginBottom: '6px' }}>
-                  ¿Qué estás buscando?
-                </div>
-                <textarea
-                  className="sr-smart-textarea"
-                  placeholder="Ejemplo: Quiero un lugar con buenas valoraciones y cancelación gratis"
-                  value={smartFilterQuery}
-                  onChange={(e) => setSmartFilterQuery(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="sr-smart-btn"
-                  onClick={() => setAppliedSmartFilter(smartFilterQuery)}
-                >
-                  Buscar alojamientos
-                </button>
-              </div>
             </div>
 
             {/* Property type */}
             <div className="sr-filter-group">
               <div className="sr-filter-title">Tipo de alojamiento</div>
               {[
-                { id: 'Hoteles', label: 'Hoteles', count: 95 },
-                { id: 'Apartamentos', label: 'Departamentos', count: 167 },
-                { id: 'Holiday homes', label: 'Casas vacacionales', count: 5 },
-                { id: 'Bed and breakfasts', label: 'Bed and breakfasts', count: 8 },
-                { id: 'Aparthotels', label: 'Apartahoteles', count: 5 },
-                { id: 'Hostales', label: 'Hostales y pensiones', count: 25 },
-                { id: 'Guest houses', label: 'Casas de huéspedes', count: 54 },
+                { id: 'Hoteles', label: 'Hoteles' },
+                { id: 'Apartamentos', label: 'Departamentos' },
+                { id: 'Holiday homes', label: 'Casas vacacionales' },
+                { id: 'Bed and breakfasts', label: 'Bed and breakfasts' },
+                { id: 'Aparthotels', label: 'Apartahoteles' },
+                { id: 'Hostales', label: 'Hostales y pensiones' },
+                { id: 'Guest houses', label: 'Casas de huéspedes' },
               ].map((item) => (
                 <label key={item.id} className="sr-checkbox-item">
                   <span className="sr-checkbox-label-left">
@@ -739,16 +1014,16 @@ export function AlojamientosSearchPage() {
                     />
                     <span>{item.label}</span>
                   </span>
-                  <span className="sr-checkbox-count">{item.count}</span>
+                  <span className="sr-checkbox-count">{filterCounts.types[item.id] || 0}</span>
                 </label>
               ))}
             </div>
 
-            {/* Bedrooms and bathrooms stepper */}
+            {/* Bedrooms stepper */}
             <div className="sr-filter-group">
-              <div className="sr-filter-title">Habitaciones y baños</div>
+              <div className="sr-filter-title">Dormitorios</div>
               <div className="sr-stepper-filter-row">
-                <span className="sr-stepper-filter-label">Habitaciones</span>
+                <span className="sr-stepper-filter-label">Dormitorios</span>
                 <div className="sr-stepper-control">
                   <button
                     type="button"
@@ -763,40 +1038,24 @@ export function AlojamientosSearchPage() {
                   </button>
                 </div>
               </div>
-              <div className="sr-stepper-filter-row">
-                <span className="sr-stepper-filter-label">Baños</span>
-                <div className="sr-stepper-control">
-                  <button
-                    type="button"
-                    disabled={bathroomsCount <= 0}
-                    onClick={() => setBathroomsCount((b) => Math.max(0, b - 1))}
-                  >
-                    −
-                  </button>
-                  <span>{bathroomsCount}</span>
-                  <button type="button" onClick={() => setBathroomsCount((b) => b + 1)}>
-                    +
-                  </button>
-                </div>
-              </div>
             </div>
 
             {/* Facilities */}
             <div className="sr-filter-group">
               <div className="sr-filter-title">Servicios e instalaciones</div>
               {[
-                { id: 'parking', label: 'Estacionamiento', count: 282 },
-                { id: 'pool', label: 'Piscina', count: 40 },
-                { id: 'spa', label: 'Spa y centro de bienestar', count: 11 },
-                { id: 'hottub', label: 'Bañera de hidromasaje', count: 57 },
-                { id: 'wifi', label: 'WiFi gratis', count: 372 },
+                { id: 'parking', label: 'Estacionamiento' },
+                { id: 'pool', label: 'Piscina' },
+                { id: 'spa', label: 'Spa y centro de bienestar' },
+                { id: 'hottub', label: 'Bañera de hidromasaje' },
+                { id: 'wifi', label: 'WiFi gratis' },
               ]
                 .concat(
                   showAllFacilities
                     ? [
-                        { id: 'gym', label: 'Gimnasio', count: 35 },
-                        { id: 'airport', label: 'Traslado aeropuerto', count: 45 },
-                        { id: 'restaurant', label: 'Restaurante', count: 80 },
+                        { id: 'gym', label: 'Gimnasio' },
+                        { id: 'airport', label: 'Traslado aeropuerto' },
+                        { id: 'restaurant', label: 'Restaurante' },
                       ]
                     : []
                 )
@@ -810,7 +1069,7 @@ export function AlojamientosSearchPage() {
                       />
                       <span>{item.label}</span>
                     </span>
-                    <span className="sr-checkbox-count">{item.count}</span>
+                    <span className="sr-checkbox-count">{filterCounts.facilities[item.id] || 0}</span>
                   </label>
                 ))}
               <button
@@ -818,7 +1077,7 @@ export function AlojamientosSearchPage() {
                 className="sr-expand-btn"
                 onClick={() => setShowAllFacilities(!showAllFacilities)}
               >
-                {showAllFacilities ? 'Mostrar menos' : 'Mostrar los 14 ▾'}
+                {showAllFacilities ? 'Mostrar menos' : 'Mostrar más servicios ▾'}
               </button>
             </div>
 
@@ -829,11 +1088,11 @@ export function AlojamientosSearchPage() {
                 <div className="sr-filter-subtitle">Encuentra hoteles con estrellas</div>
               </div>
               {[
-                { stars: 5, label: '5 estrellas', count: 4 },
-                { stars: 4, label: '4 estrellas', count: 63 },
-                { stars: 3, label: '3 estrellas', count: 93 },
-                { stars: 2, label: '2 estrellas', count: 10 },
-                { stars: 1, label: '1 estrella', count: 6 },
+                { stars: 5, label: '5 estrellas' },
+                { stars: 4, label: '4 estrellas' },
+                { stars: 3, label: '3 estrellas' },
+                { stars: 2, label: '2 estrellas' },
+                { stars: 1, label: '1 estrella' },
               ].map((item) => (
                 <label key={item.stars} className="sr-checkbox-item">
                   <span className="sr-checkbox-label-left">
@@ -844,30 +1103,7 @@ export function AlojamientosSearchPage() {
                     />
                     <span>{item.label}</span>
                   </span>
-                  <span className="sr-checkbox-count">{item.count}</span>
-                </label>
-              ))}
-            </div>
-
-            {/* Review score */}
-            <div className="sr-filter-group">
-              <div className="sr-filter-title">Puntuación de los comentarios</div>
-              {[
-                { score: 9.0, label: 'Excelente: 9 o más', count: 135 },
-                { score: 8.0, label: 'Muy bien: 8 o más', count: 243 },
-                { score: 7.0, label: 'Bien: 7 o más', count: 282 },
-                { score: 6.0, label: 'Agradable: 6 o más', count: 298 },
-              ].map((item) => (
-                <label key={item.score} className="sr-checkbox-item">
-                  <span className="sr-checkbox-label-left">
-                    <input
-                      type="checkbox"
-                      checked={minReviewScore === item.score}
-                      onChange={() => setMinReviewScore(minReviewScore === item.score ? null : item.score)}
-                    />
-                    <span>{item.label}</span>
-                  </span>
-                  <span className="sr-checkbox-count">{item.count}</span>
+                  <span className="sr-checkbox-count">{filterCounts.stars[item.stars] || 0}</span>
                 </label>
               ))}
             </div>
@@ -876,11 +1112,11 @@ export function AlojamientosSearchPage() {
             <div className="sr-filter-group">
               <div className="sr-filter-title">Zonas y barrios</div>
               {[
-                { id: 'centro', label: 'Centro Histórico', count: 75 },
-                { id: 'carolina', label: 'La Carolina', count: 62 },
-                { id: 'mariscal', label: 'La Mariscal', count: 56 },
-                { id: 'bellavista', label: 'Bellavista', count: 8 },
-                { id: 'floresta', label: 'La Floresta', count: 7 },
+                { id: 'centro', label: 'Centro Histórico' },
+                { id: 'carolina', label: 'La Carolina' },
+                { id: 'mariscal', label: 'La Mariscal' },
+                { id: 'bellavista', label: 'Bellavista' },
+                { id: 'floresta', label: 'La Floresta' },
               ].map((item) => (
                 <label key={item.id} className="sr-checkbox-item">
                   <span className="sr-checkbox-label-left">
@@ -891,7 +1127,7 @@ export function AlojamientosSearchPage() {
                     />
                     <span>{item.label}</span>
                   </span>
-                  <span className="sr-checkbox-count">{item.count}</span>
+                  <span className="sr-checkbox-count">{filterCounts.neighbourhoods[item.id] || 0}</span>
                 </label>
               ))}
             </div>
@@ -900,9 +1136,9 @@ export function AlojamientosSearchPage() {
             <div className="sr-filter-group">
               <div className="sr-filter-title">Condiciones de reserva</div>
               {[
-                { id: 'noprepay', label: 'Sin pago por adelantado', count: 308 },
-                { id: 'nocredit', label: 'Reserva sin tarjeta de crédito', count: 243 },
-                { id: 'freecancel', label: 'Cancelación gratis', count: 294 },
+                { id: 'noprepay', label: 'Sin pago por adelantado' },
+                { id: 'nocredit', label: 'Reserva sin tarjeta de crédito' },
+                { id: 'freecancel', label: 'Cancelación gratis' },
               ].map((item) => (
                 <label key={item.id} className="sr-checkbox-item">
                   <span className="sr-checkbox-label-left">
@@ -913,7 +1149,7 @@ export function AlojamientosSearchPage() {
                     />
                     <span>{item.label}</span>
                   </span>
-                  <span className="sr-checkbox-count">{item.count}</span>
+                  <span className="sr-checkbox-count">{filterCounts.policies[item.id] || 0}</span>
                 </label>
               ))}
             </div>
@@ -924,29 +1160,28 @@ export function AlojamientosSearchPage() {
         <div className="sr-results-content">
           {/* Header Bar */}
           <div className="sr-results-header">
-            <h1 className="sr-results-title">
-              {destination}: {filteredProperties.length} {filteredProperties.length === 1 ? 'alojamiento encontrado' : 'alojamientos encontrados'}
-            </h1>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              {/* List / Grid Toggle */}
-              <div className="sr-view-toggle">
-                <button
-                  type="button"
-                  className={`sr-view-btn ${viewMode === 'list' ? 'active' : ''}`}
-                  onClick={() => setViewMode('list')}
-                >
-                  Lista
-                </button>
-                <button
-                  type="button"
-                  className={`sr-view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                  onClick={() => setViewMode('grid')}
-                >
-                  Cuadrícula
-                </button>
+            <div>
+              <h1 className="sr-results-title">
+                {destination}: {filteredProperties.length} {filteredProperties.length === 1 ? 'alojamiento encontrado' : 'alojamientos encontrados'}
+              </h1>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '0.8rem', color: '#008009', fontWeight: 600, marginTop: '4px' }}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: '#008009',
+                    boxShadow: syncPulse ? '0 0 8px #008009' : 'none',
+                    transform: syncPulse ? 'scale(1.25)' : 'scale(1)',
+                    transition: 'all 0.3s ease-in-out',
+                  }}
+                />
+                <span>En vivo: inventario actualizado ({lastSyncTime.toLocaleTimeString()})</span>
               </div>
+            </div>
 
+            <div>
               {/* Sorter Dropdown */}
               <div className="sr-sorter-bar">
                 <select
@@ -966,10 +1201,10 @@ export function AlojamientosSearchPage() {
           </div>
 
           {/* Applied filters chips if any */}
-          {(appliedSmartFilter || minReviewScore || selectedTypes.length > 0) && (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8rem', color: '#595959' }}>Filtros activos:</span>
-              {appliedSmartFilter && (
+          {hasActiveFilters && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '14px' }}>
+              <span style={{ fontSize: '0.8rem', color: '#595959', fontWeight: 600 }}>Filtros activos:</span>
+              {maxBudget < PRESUPUESTO_SIN_LIMITE && (
                 <span
                   style={{
                     background: '#e0f2fe',
@@ -982,14 +1217,15 @@ export function AlojamientosSearchPage() {
                     alignItems: 'center',
                     gap: '4px',
                   }}
-                  onClick={() => setAppliedSmartFilter('')}
+                  onClick={() => setMaxBudget(PRESUPUESTO_SIN_LIMITE)}
                 >
-                  <span>"{appliedSmartFilter}"</span>
+                  <span>Hasta US${maxBudget}</span>
                   <CloseIcon size={12} color="#0369a1" />
                 </span>
               )}
-              {minReviewScore && (
+              {selectedPopular.map((id) => (
                 <span
+                  key={id}
                   style={{
                     background: '#e0f2fe',
                     color: '#0369a1',
@@ -1001,12 +1237,12 @@ export function AlojamientosSearchPage() {
                     alignItems: 'center',
                     gap: '4px',
                   }}
-                  onClick={() => setMinReviewScore(null)}
+                  onClick={() => toggleCheckbox(selectedPopular, setSelectedPopular, id)}
                 >
-                  <span>Puntuación: {minReviewScore}+</span>
+                  <span>{POPULAR_FILTER_LABELS[id] || id}</span>
                   <CloseIcon size={12} color="#0369a1" />
                 </span>
-              )}
+              ))}
               {selectedTypes.map((t) => (
                 <span
                   key={t}
@@ -1027,6 +1263,140 @@ export function AlojamientosSearchPage() {
                   <CloseIcon size={12} color="#0369a1" />
                 </span>
               ))}
+              {selectedFacilities.map((f) => (
+                <span
+                  key={f}
+                  style={{
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontSize: '0.75rem',
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={() => toggleCheckbox(selectedFacilities, setSelectedFacilities, f)}
+                >
+                  <span>{FACILITY_LABELS[f] || f}</span>
+                  <CloseIcon size={12} color="#0369a1" />
+                </span>
+              ))}
+              {selectedStars.map((s) => (
+                <span
+                  key={s}
+                  style={{
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontSize: '0.75rem',
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={() => toggleCheckbox(selectedStars, setSelectedStars, s)}
+                >
+                  <span>{s} estrellas</span>
+                  <CloseIcon size={12} color="#0369a1" />
+                </span>
+              ))}
+              {minReviewScore && (
+                <span
+                  style={{
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontSize: '0.75rem',
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={() => setMinReviewScore(null)}
+                >
+                  <span>Puntuación: {minReviewScore}+</span>
+                  <CloseIcon size={12} color="#0369a1" />
+                </span>
+              )}
+              {selectedNeighbourhoods.map((n) => (
+                <span
+                  key={n}
+                  style={{
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontSize: '0.75rem',
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={() => toggleCheckbox(selectedNeighbourhoods, setSelectedNeighbourhoods, n)}
+                >
+                  <span>{NEIGHBOURHOOD_LABELS[n] || n}</span>
+                  <CloseIcon size={12} color="#0369a1" />
+                </span>
+              ))}
+              {selectedPolicies.map((p) => (
+                <span
+                  key={p}
+                  style={{
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontSize: '0.75rem',
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={() => toggleCheckbox(selectedPolicies, setSelectedPolicies, p)}
+                >
+                  <span>{POLICY_LABELS[p] || p}</span>
+                  <CloseIcon size={12} color="#0369a1" />
+                </span>
+              ))}
+              {bedroomsCount > 0 && (
+                <span
+                  style={{
+                    background: '#e0f2fe',
+                    color: '#0369a1',
+                    fontSize: '0.75rem',
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={() => setBedroomsCount(0)}
+                >
+                  <span>{bedroomsCount}+ hab.</span>
+                  <CloseIcon size={12} color="#0369a1" />
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#006ce4',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: '2px 6px',
+                }}
+              >
+                Borrar todos los filtros
+              </button>
             </div>
           )}
 
@@ -1076,15 +1446,9 @@ export function AlojamientosSearchPage() {
                 type="button"
                 className="sr-smart-btn"
                 style={{ width: 'auto', padding: '8px 20px', margin: '10px auto 0 auto' }}
-                onClick={() => {
-                  setMaxBudget(PRESUPUESTO_SIN_LIMITE);
-                  setSelectedTypes([]);
-                  setSelectedFacilities([]);
-                  setMinReviewScore(null);
-                  setAppliedSmartFilter('');
-                }}
+                onClick={resetAllFilters}
               >
-                Restablecer filtros
+                Restablecer todos los filtros
               </button>
             </div>
           )}
@@ -1099,8 +1463,12 @@ export function AlojamientosSearchPage() {
               // Precio y disponibilidad REALES del backend para estas fechas (por
               // habitación); se multiplica por las habitaciones pedidas.
               const disp = prop.disponibilidad;
-              const noches = disp?.nights || nightsCount;
-              const pricePerNight = Number(prop.precioPorNoche || prop.precio_noche || 45);
+              const noches = disp?.nights || nightsCount || 1;
+              const pricePerNight = disp?.price_per_night
+                ? Number(disp.price_per_night)
+                : (disp?.total_price && noches > 0
+                    ? Math.round((disp.total_price / noches) * 100) / 100
+                    : Number(prop.precioPorNoche || prop.precio_noche || 45));
               const totalPrice = disp
                 ? Math.round(disp.total_price * rooms * 100) / 100
                 : Math.round(pricePerNight * noches * rooms);
@@ -1159,14 +1527,20 @@ export function AlojamientosSearchPage() {
                       <div className="sr-card-location">
                         <span
                           className="sr-map-link"
-                          onClick={() => alert(`Mostrando ${prop.nombre} en el mapa`)}
+                          onClick={() => {
+                            setSelectedMapProperty(prop);
+                            setShowMapModal(true);
+                          }}
                         >
                           {prop.destino || destination}
                         </span>
                         <span>•</span>
                         <span
                           className="sr-map-link"
-                          onClick={() => alert(`Mostrando ${prop.nombre} en el mapa`)}
+                          onClick={() => {
+                            setSelectedMapProperty(prop);
+                            setShowMapModal(true);
+                          }}
                         >
                           Mostrar en el mapa
                         </span>
@@ -1187,6 +1561,11 @@ export function AlojamientosSearchPage() {
                       {/* Room & perks summary (Estilo Booking.com real: sin forzar camas individuales a nivel de hotel antes de ingresar) */}
                       <div className="sr-room-details">
                         <div className="sr-room-name">{nombreUnidad}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#595959', margin: '2px 0 6px 0', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span>{prop.habitaciones || 1} {Number(prop.habitaciones) === 1 ? 'habitación' : 'habitaciones'}</span>
+                          <span>·</span>
+                          <span>{prop.camas || 1} {Number(prop.camas) === 1 ? 'cama' : 'camas'}</span>
+                        </div>
 
                         <div className="sr-perks-list">
                           {tieneDesayuno && (
@@ -1194,15 +1573,9 @@ export function AlojamientosSearchPage() {
                               <CheckmarkIcon size={14} color="#008009" /> Desayuno incluido
                             </div>
                           )}
-                          {prop.politicas?.es_reembolsable === false || prop.es_reembolsable === false ? (
-                            <div className="sr-perk-item" style={{ color: '#d4111e', fontWeight: 600 }}>
-                              ✕ No reembolsable
-                            </div>
-                          ) : (
-                            <div className="sr-perk-item green">
-                              <CheckmarkIcon size={14} color="#008009" /> Cancelación gratis
-                            </div>
-                          )}
+                          <div className="sr-perk-item green">
+                            <CheckmarkIcon size={14} color="#008009" /> Cancelación gratis (hasta 48h)
+                          </div>
                           {sinPagoAdelantado && (
                             <div className="sr-perk-item green">
                               <CheckmarkIcon size={14} color="#008009" /> Sin pago por adelantado: paga en el alojamiento
@@ -1225,7 +1598,7 @@ export function AlojamientosSearchPage() {
                     </div>
                   </div>
 
-                  {/* Right Column: Score & Pricing Block */}
+                  {/* Right Column: Pricing Block */}
                   <div className="sr-card-price-col">
                     <div>
                       <div className="sr-rating-header">
@@ -1233,11 +1606,8 @@ export function AlojamientosSearchPage() {
                           <span className="sr-rating-label">
                             {Number(score) >= 9.0 ? 'Excelente' : 'Fantástico'}
                           </span>
-                          <span className="sr-rating-reviews">{reviewsCount} comentarios</span>
                         </div>
-                        <div className="sr-rating-badge">{score}</div>
                       </div>
-                      <div className="sr-comfort-subscore">Confort {comfort}</div>
                     </div>
 
                     <div className="sr-pricing-block">
@@ -1250,6 +1620,11 @@ export function AlojamientosSearchPage() {
                       <span className="sr-final-price">
                         {currency} {convertPrice(totalPrice)}
                       </span>
+                      {noches > 1 && (
+                        <span style={{ fontSize: '0.82rem', color: '#595959', display: 'block', textAlign: 'right', marginTop: '2px' }}>
+                          {currency} {convertPrice(Math.round(totalPrice / (noches * rooms)))} por noche
+                        </span>
+                      )}
                       <span className="sr-taxes-note">
                         +{currency} {convertPrice(taxes)} de impuestos y cargos
                       </span>
@@ -1267,25 +1642,53 @@ export function AlojamientosSearchPage() {
             })}
 
           {/* Genius Banner */}
-          <div className="sr-genius-banner">
-            <div>
-              <h2>Inicia sesión y ahorra dinero</h2>
-              <p>Accede a descuentos exclusivos para miembros en {destination}</p>
-              <div style={{ marginTop: '14px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <Link to="/login" className="sr-genius-signin-btn">
-                  Iniciar sesión
-                </Link>
-                <Link to="/register" className="sr-genius-register-link">
-                  Crear una cuenta
-                </Link>
+          {!user ? (
+            <div className="sr-genius-banner">
+              <div>
+                <h2>Inicia sesión y ahorra dinero</h2>
+                <p>Accede a descuentos exclusivos para miembros en {destination}</p>
+                <div style={{ marginTop: '14px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <Link to="/login" state={{ from: location.pathname + location.search }} onClick={() => sessionStorage.setItem('booking_return_url', location.pathname + location.search)} className="sr-genius-signin-btn">
+                    Iniciar sesión
+                  </Link>
+                  <Link to="/register" state={{ from: location.pathname + location.search }} onClick={() => sessionStorage.setItem('booking_return_url', location.pathname + location.search)} className="sr-genius-register-link">
+                    Crear una cuenta
+                  </Link>
+                </div>
+              </div>
+              <div className="sr-genius-icon-box" aria-hidden="true">
+                <GeniusGiftIcon size={44} />
               </div>
             </div>
-            <div className="sr-genius-icon-box" aria-hidden="true">
-              <GeniusGiftIcon size={44} />
+          ) : (
+            <div className="sr-genius-banner" style={{ background: '#f0fdf4', borderColor: '#86efac' }}>
+              <div>
+                <h2 style={{ color: '#166534' }}>¡Tarifas Genius activas!</h2>
+                <p style={{ color: '#15803d' }}>
+                  Has iniciado sesión como <strong>{user.user_metadata?.nombre || user.email}</strong>. Tus descuentos y tarifas preferenciales se aplican automáticamente en {destination}.
+                </p>
+              </div>
+              <div className="sr-genius-icon-box" aria-hidden="true">
+                <GeniusGiftIcon size={44} />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Modal de Mapa Interactivo con Leaflet y OpenStreetMap */}
+      <MapaAlojamientos
+        mode="modal"
+        isOpen={showMapModal}
+        onClose={() => {
+          setShowMapModal(false);
+          setSelectedMapProperty(null);
+        }}
+        properties={filteredProperties}
+        destination={destination}
+        selectedPropertyId={selectedMapProperty?.id}
+        searchParamsString={searchParams.toString()}
+      />
     </main>
   );
 }

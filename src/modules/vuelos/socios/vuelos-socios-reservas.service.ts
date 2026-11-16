@@ -98,6 +98,8 @@ export interface ReservaSocio {
   montoAerolinea: number | null;
   cargoServicio: number | null;
   createdAt: string;
+  /** Salida del primer vuelo (fecha y hora, del detalle de la aerolínea). */
+  departureAt?: string | null;
 }
 
 export interface Cobro {
@@ -399,13 +401,22 @@ export class VuelosSociosReservasService implements OnModuleInit {
   }
 
   /** Último evento leído del feed de una aerolínea. */
+  /** Cursor del feed en memoria: se lee de la base una vez por aerolínea y se mantiene al guardarlo. */
+  private readonly cursores = new Map<string, string | null>();
+
   async cursorEventos(codigoNodo: string): Promise<string | null> {
+    if (this.cursores.has(codigoNodo)) return this.cursores.get(codigoNodo)!;
     if (!(await this.asegurarTabla())) return null;
     const f = await this.dataSource.query(`SELECT ultimo_evento FROM public.vuelos_eventos_cursor WHERE codigo_nodo = $1`, [codigoNodo]);
-    return f[0]?.ultimo_evento ?? null;
+    const c = f[0]?.ultimo_evento ?? null;
+    this.cursores.set(codigoNodo, c);
+    return c;
   }
 
   async guardarCursor(codigoNodo: string, ultimo: string, leidos: number): Promise<void> {
+    // Sin cambios no se escribe (antes se escribía en cada ciclo aunque no hubiera eventos nuevos).
+    if (this.cursores.get(codigoNodo) === ultimo && !leidos) return;
+    this.cursores.set(codigoNodo, ultimo);
     if (!(await this.asegurarTabla())) return;
     await this.dataSource.query(
       `INSERT INTO public.vuelos_eventos_cursor (codigo_nodo, ultimo_evento, leidos) VALUES ($1, $2, $3)
@@ -488,7 +499,9 @@ export class VuelosSociosReservasService implements OnModuleInit {
 
 const SELECT_BASE = `SELECT booking_id, codigo_nodo, propietario_id, pnr, status, origin, destination,
   to_char(departure_date, 'YYYY-MM-DD') AS departure_date, currency, grand_total, transaccion_id,
-  payment_reference, reembolsado, monto_aerolinea, cargo_servicio, created_at FROM public.vuelos_reservas_socio`;
+  payment_reference, reembolsado, monto_aerolinea, cargo_servicio, created_at,
+  COALESCE(detalle #>> '{itineraries,0,segments,0,departure,at}', detalle #>> '{itineraries,0,segments,0,departureAt}') AS departure_at
+  FROM public.vuelos_reservas_socio`;
 
 function mapear(f: any): ReservaSocio {
   return {
@@ -508,6 +521,7 @@ function mapear(f: any): ReservaSocio {
     montoAerolinea: f.monto_aerolinea != null ? Number(f.monto_aerolinea) : null,
     cargoServicio: f.cargo_servicio != null ? Number(f.cargo_servicio) : null,
     createdAt: new Date(f.created_at).toISOString(),
+    departureAt: f.departure_at ?? null,
   };
 }
 

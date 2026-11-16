@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { jsPDF } from 'jspdf';
-import { reservarAlojamiento } from '../services/alojamientosApi';
+import { reservarAlojamiento, getReservasAlojamientos } from '../services/alojamientosApi';
 
 /** Cédula ecuatoriana: 10 dígitos, provincia 01–24 (o 30) y dígito verificador módulo 10. */
 function cedulaValida(c) {
@@ -20,8 +20,10 @@ function cedulaValida(c) {
 import { savePendingReservation } from '../services/offlineSync';
 import { enviarFacturaTrasCompra } from '../services/envioFactura';
 import { formatearFecha } from '../services/formato';
+import { formatearRegimen } from '../utils/regimenFormato';
 import { OfflineReservaModal } from './OfflineReservaModal';
 import { ModalReservaExistente, reservasQueSeSolapan, esAvisoDuplicado } from './ModalReservaExistente';
+import { ModalReservaSinCupo } from './ModalReservaSinCupo';
 import {
   CheckmarkIcon,
   CloseIcon,
@@ -39,6 +41,52 @@ import {
   AirportShuttleIcon,
 } from './BookingIcons';
 import './AlojamientoCheckoutModal.css';
+
+function getHorarioCheckin(al) {
+  if (!al) return '14:00';
+  return (
+    al.checkin_desde ||
+    al.politicas?.checkin_desde ||
+    al.politicas?.check_in ||
+    al.politicas?.checkin ||
+    al.politicas?.hora_checkin ||
+    al.politicas?.hora_entrada ||
+    al.politicas?.entrada ||
+    al.checkInPermitidoDesde ||
+    al.check_in_desde ||
+    al.horaCheckin ||
+    al.hora_checkin ||
+    al.horarioCheckIn ||
+    al.horario_checkin ||
+    al.checkIn ||
+    al.check_in ||
+    al.checkin ||
+    '14:00'
+  );
+}
+
+function getHorarioCheckout(al) {
+  if (!al) return '11:00';
+  return (
+    al.checkout_hasta ||
+    al.politicas?.checkout_hasta ||
+    al.politicas?.check_out ||
+    al.politicas?.checkout ||
+    al.politicas?.hora_checkout ||
+    al.politicas?.hora_salida ||
+    al.politicas?.salida ||
+    al.checkOutHoraMaxima ||
+    al.check_out_hasta ||
+    al.horaCheckout ||
+    al.hora_checkout ||
+    al.horarioCheckOut ||
+    al.horario_checkout ||
+    al.checkOut ||
+    al.check_out ||
+    al.checkout ||
+    '11:00'
+  );
+}
 
 const PAISES = [
   { code: 'EC', name: 'Ecuador', prefix: '+593' },
@@ -75,6 +123,16 @@ export function AlojamientoCheckoutModal({
   const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1: Tus datos, 2: Finalizar reserva, 3: Confirmada
 
+  // Para reservar el usuario debe haber iniciado sesión (mismo flujo que Atracciones)
+  useEffect(() => {
+    if (!user) {
+      const returnUrl = window.location.pathname + window.location.search;
+      sessionStorage.setItem('booking_return_url', returnUrl);
+      onClose?.();
+      navigate('/login', { state: { from: returnUrl, message: 'Inicia sesión para completar tu reserva' } });
+    }
+  }, [user, navigate, onClose]);
+
   // Con sesión se precargan los datos de la cuenta; sin sesión, vacíos.
   // Filtramos correos de prueba o técnicos (como esbbooking) para que nunca se envíen
   // valores dummy al socio si el usuario quiere usar sus datos reales.
@@ -87,7 +145,6 @@ export function AlojamientoCheckoutModal({
 
   // Step 1 Form state
   const [paraQuien, setParaQuien] = useState('principal'); // 'principal' | 'otra_persona'
-  const [viajaPorTrabajo, setViajaPorTrabajo] = useState('no'); // 'si' | 'no'
   const [nombre, setNombre] = useState(defaultNombre);
   const [apellidos, setApellidos] = useState(defaultApellido);
   const [email, setEmail] = useState(defaultEmail);
@@ -144,6 +201,10 @@ export function AlojamientoCheckoutModal({
   const [showModalExistente, setShowModalExistente] = useState(false);
   const [reservasSolapadas, setReservasSolapadas] = useState([]);
   const [mensajeDuplicado, setMensajeDuplicado] = useState('');
+
+  // Aviso de habitación sin cupo / agotada en el hotel
+  const [showModalSinCupo, setShowModalSinCupo] = useState(false);
+  const [mensajeSinCupo, setMensajeSinCupo] = useState('');
   // Ref y no estado: el reintento tras confirmar se lanza en el mismo ciclo.
   const confirmadoDuplicadoRef = useRef(false);
   // Clave de idempotencia ESTABLE por intento de reserva: se reutiliza en los reintentos
@@ -469,15 +530,56 @@ export function AlojamientoCheckoutModal({
           err = err2;
         }
       }
+
+      // Si el socio hotelero responde 409 porque la petición anterior aún está en curso (Idempotencia en vuelo)
+      const errorMsgRaw = String(err.response?.data?.detail || err.response?.data?.message || err.message || '');
+      const esEnProceso = err.response?.status === 409 && (
+        /ya se est[aá] procesando/i.test(errorMsgRaw) ||
+        /idempotency.*in[_\s]progress/i.test(errorMsgRaw)
+      );
+
+      if (esEnProceso) {
+        try {
+          // Esperar 2.5 segundos a que el hotel termine de asentar la reserva y reintentar con la misma idempotency-key
+          await new Promise((r) => setTimeout(r, 2500));
+          const resReintento = await reservarAlojamiento(alojamiento.id, payload, idempotencyKey);
+          finalizarConReserva(resReintento);
+          return;
+        } catch (errReintento) {
+          err = errReintento;
+        }
+      }
+
+      const errorCode = String(err.response?.data?.code || err.response?.data?.title || '');
+      const errorType = String(err.response?.data?.type || '');
+
+      // Detección de falta de cupo / habitaciones agotadas en el hotel
+      const esSinCupo = err.response?.status === 409 && (
+        /no tiene suficientes habitaciones|no tiene esa habitaci|ya no est[aá] a la venta|sin cupo|no hay disponibilidad|room.*no.*longer.*available|out_of_stock/i.test(errorMsgRaw) ||
+        errorCode === 'ROOM_NO_LONGER_AVAILABLE' ||
+        errorType.includes('room-no-longer-available')
+      );
+
+      if (esSinCupo) {
+        idempotencyKeyRef.current = null;
+        setMensajeSinCupo(err.response?.data?.detail || 'El hotel ya no cuenta con habitaciones disponibles para las fechas seleccionadas.');
+        setShowModalSinCupo(true);
+        return;
+      }
+
       if (esAvisoDuplicado(err) && !confirmadoDuplicadoRef.current) {
         // La reserva previa existe en el servidor (p. ej. hecha desde otro dispositivo).
         setReservasSolapadas([]);
-        setMensajeDuplicado(err.response.data.detail);
+        setMensajeDuplicado(err.response?.data?.detail);
         setShowModalExistente(true);
       } else if (err.response?.status === 409) {
         idempotencyKeyRef.current = null;
         const errorDetail = err.response?.data?.detail || err.response?.data?.message;
-        setErrorMsg(errorDetail || 'Esta reserva ya fue procesada anteriormente.');
+        if (/ya se est[aá] procesando/i.test(errorDetail || '')) {
+          setErrorMsg('Tu reserva se está confirmando con el hotel. Por favor revisa la sección Mis Reservas en unos instantes.');
+        } else {
+          setErrorMsg(errorDetail || 'Esta reserva ya fue procesada anteriormente.');
+        }
       } else {
         idempotencyKeyRef.current = null;
         const errorDetail = err.response?.data?.detail || err.response?.data?.message;
@@ -747,7 +849,7 @@ export function AlojamientoCheckoutModal({
               <p className="bkg-hotel-address">{hotelAddress}</p>
               {alojamiento.ratings?.ubicacion ? (
                 <div className="bkg-hotel-location-score">
-                  {Number(alojamiento.ratings.ubicacion) >= 9 ? 'Excelente ubicación' : 'Muy buena ubicación'} — {alojamiento.ratings.ubicacion}
+                  Excelente ubicación
                 </div>
               ) : alojamiento.ubicacion ? (
                 <div className="bkg-hotel-location-score">
@@ -758,15 +860,12 @@ export function AlojamientoCheckoutModal({
               {(() => {
                 const scoreNum = Number(alojamiento.ratings?.score ?? alojamiento.calificacion);
                 const tieneScore = Number.isFinite(scoreNum) && scoreNum > 0;
-                const reviews = Number(alojamiento.ratings?.number_of_reviews ?? 0);
                 if (!tieneScore) return null;
                 const scoreLabel = scoreNum >= 9 ? 'Excelente' : scoreNum >= 8 ? 'Fabuloso' : scoreNum >= 7 ? 'Muy bien' : 'Aceptable';
                 return (
                   <div className="bkg-score-badge-row">
-                    <span className="bkg-score-badge">{scoreNum.toFixed(1)}</span>
                     <span className="bkg-score-text">
-                      <strong>{scoreLabel}</strong>
-                      {reviews > 0 ? ` · ${reviews} ${reviews === 1 ? 'comentario' : 'comentarios'}` : ''}
+                      <strong style={{ color: '#008009' }}>{scoreLabel}</strong>
                     </span>
                   </div>
                 );
@@ -799,7 +898,7 @@ export function AlojamientoCheckoutModal({
                 <div>
                   <div className="bkg-date-col-label">Entrada</div>
                   <div className="bkg-date-col-value">{formatearFecha(checkin)}</div>
-                  <div className="bkg-date-col-hours">A partir de las {alojamiento?.politicas?.checkin_desde || alojamiento?.checkInPermitidoDesde || '14:00'}</div>
+                  <div className="bkg-date-col-hours">A partir de las {getHorarioCheckin(alojamiento)}</div>
                   {checkin === new Date().toISOString().slice(0, 10) && (
                     <div className="bkg-today-tag">
                       <ClockIcon size={13} color="#d4111e" />
@@ -810,7 +909,7 @@ export function AlojamientoCheckoutModal({
                 <div>
                   <div className="bkg-date-col-label">Salida</div>
                   <div className="bkg-date-col-value">{formatearFecha(checkout)}</div>
-                  <div className="bkg-date-col-hours">Hasta las {alojamiento?.politicas?.checkout_hasta || alojamiento?.checkOutHoraMaxima || '11:00'}</div>
+                  <div className="bkg-date-col-hours">Hasta las {getHorarioCheckout(alojamiento)}</div>
                 </div>
               </div>
 
@@ -985,60 +1084,6 @@ export function AlojamientoCheckoutModal({
                 <div className="bkg-card" style={{ marginTop: '16px' }}>
                   <h3 className="bkg-card-title">Introduce tus datos</h3>
 
-                  {/* Radio principal o para otra persona */}
-                  <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
-                    ¿Para quién es la reserva?
-                  </div>
-                  <div className="bkg-radio-group">
-                    <label className="bkg-radio-label">
-                      <input
-                        type="radio"
-                        name="paraQuien"
-                        value="principal"
-                        checked={paraQuien === 'principal'}
-                        onChange={(e) => setParaQuien(e.target.value)}
-                      />
-                      <span>Soy el huésped principal</span>
-                    </label>
-                    <label className="bkg-radio-label">
-                      <input
-                        type="radio"
-                        name="paraQuien"
-                        value="otra_persona"
-                        checked={paraQuien === 'otra_persona'}
-                        onChange={(e) => setParaQuien(e.target.value)}
-                      />
-                      <span>La reserva es para otra persona</span>
-                    </label>
-                  </div>
-
-                  {/* Radio viaja por trabajo */}
-                  <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
-                    ¿Viajas por trabajo?
-                  </div>
-                  <div className="bkg-radio-group">
-                    <label className="bkg-radio-label">
-                      <input
-                        type="radio"
-                        name="trabajo"
-                        value="si"
-                        checked={viajaPorTrabajo === 'si'}
-                        onChange={(e) => setViajaPorTrabajo(e.target.value)}
-                      />
-                      <span>Sí</span>
-                    </label>
-                    <label className="bkg-radio-label">
-                      <input
-                        type="radio"
-                        name="trabajo"
-                        value="no"
-                        checked={viajaPorTrabajo === 'no'}
-                        onChange={(e) => setViajaPorTrabajo(e.target.value)}
-                      />
-                      <span>No</span>
-                    </label>
-                  </div>
-
                   {/* Nombres y Apellidos */}
                   <div className="bkg-form-grid-2">
                     <div className="bkg-input-group">
@@ -1206,13 +1251,13 @@ export function AlojamientoCheckoutModal({
                       </div>
                     </div>
                     <div className="bkg-room-badge-row">
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: tipoHabitacion?.reembolsable === false ? '#d4111e' : '#008009', fontWeight: 600 }}>
-                        {tipoHabitacion?.reembolsable !== false && <CheckmarkIcon size={14} color="#008009" />}
-                        {tipoHabitacion?.cancellation_type || (tipoHabitacion?.reembolsable === false ? 'No reembolsable' : 'Cancelación gratis')}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#008009', fontWeight: 600 }}>
+                        <CheckmarkIcon size={14} color="#008009" />
+                        Cancelación gratis (hasta 48h antes del check-in)
                       </span>
                       {tipoHabitacion?.meal_plan && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <CheckmarkIcon size={14} color="#008009" /> {tipoHabitacion.meal_plan}
+                          <CheckmarkIcon size={14} color="#008009" /> {formatearRegimen(tipoHabitacion.meal_plan)}
                         </span>
                       )}
                       {Array.isArray(tipoHabitacion?.amenidades) && tipoHabitacion.amenidades.length > 0 ? (
@@ -1281,52 +1326,7 @@ export function AlojamientoCheckoutModal({
                   )}
                 </div>
 
-                {/* CARD 3: ADDONS */}
-                <div className="bkg-card">
-                  <h4 className="bkg-card-title">Añade a tu estancia</h4>
-                  <div className="bkg-addon-item">
-                    <div className="bkg-addon-info">
-                      <h6>Quiero alquilar un coche con un 5% de descuento</h6>
-                      <p>Ahorra en alquiler de autos para moverte con total libertad en tu destino.</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={deseaAuto}
-                      onChange={(e) => setDeseaAuto(e.target.checked)}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                    />
-                  </div>
-                  <div className="bkg-addon-item">
-                    <div className="bkg-addon-info">
-                      <h6>Quiero reservar un taxi privado con antelación</h6>
-                      <p>Evita sorpresas y viaja sin estrés desde el aeropuerto hasta el alojamiento.</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={deseaTaxi}
-                      onChange={(e) => setDeseaTaxi(e.target.checked)}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                    />
-                  </div>
-                </div>
-
-                {/* CARD 4: SPECIAL REQUESTS */}
-                <div className="bkg-card">
-                  <h4 className="bkg-card-title">Peticiones especiales</h4>
-                  <p style={{ fontSize: '12px', color: '#595959', margin: '0 0 8px 0' }}>
-                    El alojamiento no puede garantizar que se cumplan las peticiones especiales, pero hará todo lo posible por ayudarte.
-                  </p>
-                  <div className="bkg-input-group" style={{ marginBottom: 0 }}>
-                    <textarea
-                      rows={3}
-                      placeholder="Escribe tus peticiones en inglés o español (opcional)..."
-                      value={peticionesEspeciales}
-                      onChange={(e) => setPeticionesEspeciales(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* CARD 5: ARRIVAL TIME */}
+                {/* CARD 3: ARRIVAL TIME */}
                 <div className="bkg-card">
                   <h4 className="bkg-card-title">Tu hora de llegada</h4>
                   <p style={{ fontSize: '13px', color: '#1a1a1a', margin: '0 0 4px 0' }}>
@@ -1564,6 +1564,27 @@ export function AlojamientoCheckoutModal({
           }}
         />
       )}
+
+      {/* Modal cuando el hotel agotó las habitaciones para las fechas */}
+      <ModalReservaSinCupo
+        abierto={showModalSinCupo}
+        nombreAlojamiento={alojamiento?.nombre}
+        destino={alojamiento?.destino || 'Quito'}
+        checkin={checkin}
+        checkout={checkout}
+        mensajeServidor={mensajeSinCupo}
+        onVerDisponibles={() => {
+          setShowModalSinCupo(false);
+          if (onClose) onClose();
+          const dest = alojamiento?.destino || 'Quito';
+          navigate(
+            `/alojamientos/search?ss=${encodeURIComponent(dest)}&checkin=${checkin || ''}&checkout=${checkout || ''}&group_adults=${adults || 2}&group_children=${children || 0}&no_rooms=${rooms || 1}`
+          );
+        }}
+        onCambiarFechas={() => {
+          setShowModalSinCupo(false);
+        }}
+      />
     </div>
   );
 }

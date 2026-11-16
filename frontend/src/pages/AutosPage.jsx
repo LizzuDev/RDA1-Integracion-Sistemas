@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { searchAutos } from '../services/autosApi';
@@ -7,6 +7,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { useCurrency } from '../hooks/CurrencyContext';
 import { formatearMoneda } from '../services/formato';
+import { AlojamientosLoadingView } from '../components/AlojamientosLoadingView';
 
 const DESTINOS_ECUADOR = [
   {
@@ -50,10 +51,129 @@ function normalizeSearchText(str) {
     .trim();
 }
 
+function getAutoDailyPrice(auto) {
+  if (!auto) return 35.50;
+  if (typeof auto.precio_diario === 'number') return auto.precio_diario;
+  if (typeof auto.precio_por_dia === 'number') return auto.precio_por_dia;
+  if (auto.precio_por_dia && typeof auto.precio_por_dia === 'object' && typeof auto.precio_por_dia.total === 'number') return auto.precio_por_dia.total;
+  if (typeof auto.daily_price === 'number') return auto.daily_price;
+  if (typeof auto.price === 'number') return auto.price;
+  if (typeof auto.precio === 'number') return auto.precio;
+  if (typeof auto.precio_diario === 'string' && !isNaN(parseFloat(auto.precio_diario))) return parseFloat(auto.precio_diario);
+  if (typeof auto.precio_por_dia === 'string' && !isNaN(parseFloat(auto.precio_por_dia))) return parseFloat(auto.precio_por_dia);
+  if (typeof auto.daily_price === 'string' && !isNaN(parseFloat(auto.daily_price))) return parseFloat(auto.daily_price);
+  if (typeof auto.price === 'string' && !isNaN(parseFloat(auto.price))) return parseFloat(auto.price);
+  if (typeof auto.precio === 'string' && !isNaN(parseFloat(auto.precio))) return parseFloat(auto.precio);
+  return 35.50;
+}
+
+function getAutoCompanyName(auto) {
+  if (!auto) return '';
+  const pNom = auto.proveedor?.nombre || auto.proveedor?.name || auto.proveedor_nombre || (typeof auto.proveedor === 'string' ? auto.proveedor : '') || auto.supplier_name || auto.supplier?.name || auto.supplier?.nombre || auto.nombre_proveedor || auto.company || auto.company_name || '';
+  if (pNom) return pNom;
+  if (auto.proveedor_id === 1 || auto.supplier_id === 1) return 'Europcar';
+  if (auto.proveedor_id === 2 || auto.supplier_id === 2) return 'Alamo';
+  if (auto.proveedor_id === 3 || auto.supplier_id === 3) return 'Enterprise';
+  return '';
+}
+
+function getAutoSeats(auto) {
+  if (!auto) return 5;
+  const val = auto.asientos ?? auto.seats ?? auto.plazas ?? auto.capacidad_pasajeros ?? auto.capacidadPasajeros ?? auto.capacidad;
+  const num = Number(val);
+  return isNaN(num) || num <= 0 ? 5 : num;
+}
+
+function checkAutoCompanyMatch(auto, targetCompany) {
+  if (!auto || !targetCompany) return false;
+  const compName = getAutoCompanyName(auto).toLowerCase();
+  const target = targetCompany.toLowerCase();
+
+  if (target === 'keddy by europcar' || target === 'keddy') {
+    return compName.includes('keddy');
+  }
+  if (target === 'europcar') {
+    return compName.includes('europcar') && !compName.includes('keddy');
+  }
+  return compName.includes(target);
+}
+
+function checkAutoVehicleCategoryMatch(auto, targetCategory) {
+  if (!auto || !targetCategory) return false;
+  const cat = (auto.categoria || auto.category || '').toUpperCase();
+  const tipo = (auto.tipo_carroceria || auto.tipo || '').toUpperCase();
+  const modelo = (auto.modelo || auto.model || '').toUpperCase();
+  const combined = `${cat} ${tipo} ${modelo}`;
+
+  if (targetCategory === 'Coche pequeño') {
+    return (
+      combined.includes('PEQUEÑ') ||
+      combined.includes('PEQUEN') ||
+      combined.includes('ECONOM') ||
+      combined.includes('MINI') ||
+      combined.includes('SMALL') ||
+      combined.includes('HATCHBACK')
+    );
+  }
+  if (targetCategory === 'Coche mediano') {
+    return (
+      combined.includes('MEDIAN') ||
+      combined.includes('COMPACT') ||
+      combined.includes('INTERMED') ||
+      combined.includes('STANDARD') ||
+      (combined.includes('SEDAN') && !combined.includes('PREMIUM') && !combined.includes('GRAND'))
+    );
+  }
+  if (targetCategory === 'Coche grande') {
+    return (
+      combined.includes('GRAND') ||
+      combined.includes('LARGE') ||
+      combined.includes('PREMIUM') ||
+      combined.includes('LUJO') ||
+      combined.includes('LUXURY') ||
+      combined.includes('FULLSIZE') ||
+      combined.includes('VAN') ||
+      combined.includes('MINIVAN') ||
+      combined.includes('CAMIONETA') ||
+      combined.includes('PICKUP')
+    );
+  }
+  if (targetCategory === 'SUV') {
+    return (
+      combined.includes('SUV') ||
+      combined.includes('4X4') ||
+      combined.includes('CROSSOVER') ||
+      combined.includes('TODOTERRENO')
+    );
+  }
+  return combined.includes(targetCategory.toUpperCase());
+}
+
+function checkAutoPriceMatch(dailyPrice, rangeId) {
+  const price = typeof dailyPrice === 'number' ? dailyPrice : parseFloat(dailyPrice);
+  if (isNaN(price)) return false;
+  if (rangeId === '0-50') return price >= 0 && price <= 50;
+  if (rangeId === '50-100') return price >= 50 && price <= 100;
+  if (rangeId === '100-150') return price >= 100 && price <= 150;
+  return true;
+}
+
+function checkAutoSeatsMatch(seats, seatOption) {
+  if (seatOption === '4 plazas') return seats === 4;
+  if (seatOption === '5 plazas') return seats === 5;
+  if (seatOption === '7 o más plazas') return seats >= 7;
+  return false;
+}
+
 export function AutosPage() {
   const navigate = useNavigate();
   const [autos, setAutos] = useState([]);
+  const [selectedCompanies, setSelectedCompanies] = useState([]);
+  const [selectedVehicleCategories, setSelectedVehicleCategories] = useState([]);
+  const [selectedPriceRanges, setSelectedPriceRanges] = useState([]);
+  const [selectedSeatOptions, setSelectedSeatOptions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isUpdatingList, setIsUpdatingList] = useState(false);
   const [error, setError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
   const { convertPrice, currency } = useCurrency();
@@ -66,26 +186,26 @@ export function AutosPage() {
   const [pickupError, setPickupError] = useState('');
   const [flashRed, setFlashRed] = useState(false);
   const sugerenciasBusqueda = [
-    { texto: 'Quito', tipo: 'ciudad', icono: '📍' },
-    { texto: 'Guayaquil', tipo: 'ciudad', icono: '📍' },
-    { texto: 'Cuenca', tipo: 'ciudad', icono: '📍' },
-    { texto: 'Manta', tipo: 'ciudad', icono: '📍' },
-    { texto: 'Aeropuerto Mariscal Sucre', tipo: 'aeropuerto', icono: '✈️' },
-    { texto: 'Aeropuerto José Joaquín de Olmedo', tipo: 'aeropuerto', icono: '✈️' },
-    { texto: 'Loja', tipo: 'ciudad', icono: '📍' },
-    { texto: 'Machala', tipo: 'ciudad', icono: '📍' },
-    { texto: 'Mercedes', tipo: 'auto', icono: '🚗' },
-    { texto: 'Mercedes-Benz', tipo: 'auto', icono: '🚗' },
-    { texto: 'Toyota', tipo: 'auto', icono: '🚗' },
-    { texto: 'Toyota Yaris Cross', tipo: 'auto', icono: '🚗' },
-    { texto: 'Chevrolet', tipo: 'auto', icono: '🚗' },
-    { texto: 'Chevrolet Tracker', tipo: 'auto', icono: '🚗' },
-    { texto: 'Kia', tipo: 'auto', icono: '🚗' },
-    { texto: 'Kia Sportage', tipo: 'auto', icono: '🚗' },
-    { texto: 'Hyundai', tipo: 'auto', icono: '🚗' },
-    { texto: 'Hyundai Tucson', tipo: 'auto', icono: '🚗' },
-    { texto: 'Nissan', tipo: 'auto', icono: '🚗' },
-    { texto: 'SUV', tipo: 'categoria', icono: '🚙' },
+    { texto: 'Quito', tipo: 'ciudad' },
+    { texto: 'Guayaquil', tipo: 'ciudad' },
+    { texto: 'Cuenca', tipo: 'ciudad' },
+    { texto: 'Manta', tipo: 'ciudad' },
+    { texto: 'Aeropuerto Mariscal Sucre', tipo: 'aeropuerto' },
+    { texto: 'Aeropuerto José Joaquín de Olmedo', tipo: 'aeropuerto' },
+    { texto: 'Loja', tipo: 'ciudad' },
+    { texto: 'Machala', tipo: 'ciudad' },
+    { texto: 'Mercedes', tipo: 'auto' },
+    { texto: 'Mercedes-Benz', tipo: 'auto' },
+    { texto: 'Toyota', tipo: 'auto' },
+    { texto: 'Toyota Yaris Cross', tipo: 'auto' },
+    { texto: 'Chevrolet', tipo: 'auto' },
+    { texto: 'Chevrolet Tracker', tipo: 'auto' },
+    { texto: 'Kia', tipo: 'auto' },
+    { texto: 'Kia Sportage', tipo: 'auto' },
+    { texto: 'Hyundai', tipo: 'auto' },
+    { texto: 'Hyundai Tucson', tipo: 'auto' },
+    { texto: 'Nissan', tipo: 'auto' },
+    { texto: 'SUV', tipo: 'categoria' },
   ];
 
   const triggerFlash = (msg) => {
@@ -200,11 +320,9 @@ export function AutosPage() {
     setPickupLocation(destinationName);
     setPickupError('');
     setShowSuggestions(false);
-    // Scroll to top (form) and trigger search
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(() => {
-      fetchData();
-    }, 400);
+    shouldScrollRef.current = true;
+    fetchData(null, null, false, false, destinationName);
   };
 
   const calculateDays = () => {
@@ -216,18 +334,53 @@ export function AutosPage() {
     return diffDays > 0 ? diffDays : 1;
   };
 
-  const fetchData = useCallback(async (catOverride = null, transOverride = null) => {
-    setLoading(true);
-    setError(null);
+  const isFetchingRef = useRef(false);
+  const shouldScrollRef = useRef(false);
+  const lastSearchRef = useRef(null);
+
+  const fetchData = useCallback(async (
+    catOverride = null,
+    transOverride = null,
+    isSilent = false,
+    isFilterChange = false,
+    locationOverride = null
+  ) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
+    if (!isSilent) {
+      if (isFilterChange || autos.length > 0) {
+        setIsUpdatingList(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+    }
+
     try {
       const cat = catOverride !== null ? catOverride : selectedCategory;
       const trans = transOverride !== null ? transOverride : selectedTransmission;
       const ageToUse = driverAge ? 32 : Number(customAge || 22);
+      const loc = locationOverride !== null ? locationOverride : pickupLocation;
+
+      lastSearchRef.current = {
+        pickupLocation: loc,
+        dropoffLocation,
+        sameDropoff,
+        startDate,
+        endDate,
+        pickupTime,
+        dropoffTime,
+        ageToUse,
+        driverAge,
+        cat,
+        trans
+      };
 
       const requestPayload = {
-        pickup_location: pickupLocation || 'Quito',
-        q: pickupLocation || '',
-        dropoff_location: sameDropoff ? (dropoffLocation || pickupLocation || 'Quito') : (pickupLocation || 'Quito'),
+        pickup_location: loc || 'Quito',
+        q: loc || '',
+        dropoff_location: sameDropoff ? (dropoffLocation || loc || 'Quito') : (loc || 'Quito'),
         pickup_date: startDate || new Date().toISOString().split('T')[0],
         pickup_time: pickupTime || '10:00',
         dropoff_date: endDate || new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
@@ -241,7 +394,7 @@ export function AutosPage() {
 
       const result = await searchAutos(requestPayload);
       let fetchedCars = result.data || [];
-      const qNorm = normalizeSearchText(pickupLocation);
+      const qNorm = normalizeSearchText(loc);
       const ciudadesComunes = [
         'quito', 'guayaquil', 'cuenca', 'manta', 'loja', 'machala', 'galapagos', 'uio', 'gye', 'cue',
         'aeropuerto mariscal sucre', 'aeropuerto jose joaquin de olmedo', 'tababela', 'ecuador'
@@ -265,22 +418,156 @@ export function AutosPage() {
           });
         }
       }
-      setAutos(fetchedCars);
-      setMetadata(result.metadata || null);
-    } catch (err) {
-      console.error('Error al consultar autos:', err);
-      setError('No se pudo conectar con el servicio de autos o los filtros no arrojaron resultados.');
-    } finally {
-      setLoading(false);
-      setHasSearched(true);
-    }
-  }, [pickupLocation, dropoffLocation, sameDropoff, startDate, endDate, pickupTime, dropoffTime, driverAge, customAge, selectedCategory, selectedTransmission]);
 
-  useEffect(() => {
-    if (hasSearched && !loading && resultsRef.current) {
-      resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setAutos((prev) => {
+        if (prev && prev.length === fetchedCars.length) {
+          let hasDiff = false;
+          for (let i = 0; i < fetchedCars.length; i++) {
+            const p = prev[i];
+            const n = fetchedCars[i];
+            const pId = p.id || p.auto_id || p.vehiculo_id;
+            const nId = n.id || n.auto_id || n.vehiculo_id;
+            const pEstado = p.estado || p.status;
+            const nEstado = n.estado || n.status;
+            const pPrice = typeof p.precio_por_dia === 'object' ? p.precio_por_dia?.total : (p.precio_por_dia || p.price);
+            const nPrice = typeof n.precio_por_dia === 'object' ? n.precio_por_dia?.total : (n.precio_por_dia || n.price);
+            if (pId !== nId || pEstado !== nEstado || pPrice !== nPrice) {
+              hasDiff = true;
+              break;
+            }
+          }
+          if (!hasDiff) return prev;
+        }
+        return fetchedCars;
+      });
+      setMetadata(result.metadata || null);
+      if (isSilent) setError(null);
+    } catch (err) {
+      console.warn('[AutosPage] Error transitorio en refresco silencioso de autos:', err?.message || err);
+      if (!isSilent) {
+        setError('No se pudo conectar con el servicio de autos o los filtros no arrojaron resultados.');
+      }
+    } finally {
+      isFetchingRef.current = false;
+      if (!isSilent) {
+        setLoading(false);
+        setIsUpdatingList(false);
+      }
+      setHasSearched(true);
+      if (shouldScrollRef.current) {
+        shouldScrollRef.current = false;
+        setTimeout(() => {
+          if (resultsRef.current) {
+            resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+      }
     }
-  }, [hasSearched, loading]);
+  }, [pickupLocation, dropoffLocation, sameDropoff, startDate, endDate, pickupTime, dropoffTime, driverAge, customAge, selectedCategory, selectedTransmission, autos.length]);
+
+  // Polling silencioso en segundo plano cada 8 segundos (RDA2 Tiempo Real)
+  // Únicamente se ejecuta cuando ya se ha realizado una búsqueda (hasSearched === true)
+  useEffect(() => {
+    if (!hasSearched) return;
+
+    let timer = null;
+    let isCancelled = false;
+
+    const runPoll = async () => {
+      if (isCancelled) return;
+      if (typeof document !== 'undefined' && document.hidden) {
+        timer = setTimeout(runPoll, 8000);
+        return;
+      }
+      if (isFetchingRef.current) {
+        timer = setTimeout(runPoll, 8000);
+        return;
+      }
+
+      isFetchingRef.current = true;
+      try {
+        const last = lastSearchRef.current || {};
+        const requestPayload = {
+          pickup_location: last.pickupLocation || 'Quito',
+          q: last.pickupLocation || '',
+          dropoff_location: last.sameDropoff ? (last.dropoffLocation || last.pickupLocation || 'Quito') : (last.pickupLocation || 'Quito'),
+          pickup_date: last.startDate || new Date().toISOString().split('T')[0],
+          pickup_time: last.pickupTime || '10:00',
+          dropoff_date: last.endDate || new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0],
+          dropoff_time: last.dropoffTime || '10:00',
+          driver_age: last.ageToUse || 32,
+          driver_age_bracket: last.driverAge ?? true,
+          category: last.cat || 'ALL',
+          transmission: last.trans || 'ALL',
+          currency: 'USD'
+        };
+
+        const result = await searchAutos(requestPayload);
+        let fetchedCars = result.data || [];
+        const qNorm = normalizeSearchText(last.pickupLocation || '');
+        const ciudadesComunes = [
+          'quito', 'guayaquil', 'cuenca', 'manta', 'loja', 'machala', 'galapagos', 'uio', 'gye', 'cue',
+          'aeropuerto mariscal sucre', 'aeropuerto jose joaquin de olmedo', 'tababela', 'ecuador'
+        ];
+        const esSoloCiudad = ciudadesComunes.includes(qNorm);
+
+        if (qNorm && !esSoloCiudad) {
+          const tokens = qNorm.split(' ').filter(t => t.length > 0 && !ciudadesComunes.includes(t));
+          if (tokens.length > 0) {
+            fetchedCars = fetchedCars.filter(c => {
+              const fullText = normalizeSearchText([
+                c.marca,
+                c.modelo,
+                c.vehiculo,
+                c.nombre,
+                c.categoria,
+                c.proveedor?.nombre,
+                c.proveedor_nombre
+              ].filter(Boolean).join(' '));
+              return tokens.every(token => fullText.includes(token));
+            });
+          }
+        }
+
+        setAutos((prev) => {
+          if (prev && prev.length === fetchedCars.length) {
+            let hasDiff = false;
+            for (let i = 0; i < fetchedCars.length; i++) {
+              const p = prev[i];
+              const n = fetchedCars[i];
+              const pId = p.id || p.auto_id || p.vehiculo_id;
+              const nId = n.id || n.auto_id || n.vehiculo_id;
+              const pEstado = p.estado || p.status;
+              const nEstado = n.estado || n.status;
+              const pPrice = typeof p.precio_por_dia === 'object' ? p.precio_por_dia?.total : (p.precio_por_dia || p.price);
+              const nPrice = typeof n.precio_por_dia === 'object' ? n.precio_por_dia?.total : (n.precio_por_dia || n.price);
+              if (pId !== nId || pEstado !== nEstado || pPrice !== nPrice) {
+                hasDiff = true;
+                break;
+              }
+            }
+            if (!hasDiff) return prev;
+          }
+          return fetchedCars;
+        });
+        setMetadata(result.metadata || null);
+      } catch (err) {
+        console.warn('[AutosPage] Error transitorio en refresco silencioso de autos:', err?.message || err);
+      } finally {
+        isFetchingRef.current = false;
+        if (!isCancelled) {
+          timer = setTimeout(runPoll, 8000);
+        }
+      }
+    };
+
+    timer = setTimeout(runPoll, 8000);
+
+    return () => {
+      isCancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [hasSearched]);
 
   const timeOptions = [];
   for(let i=0; i<24; i++) {
@@ -331,8 +618,82 @@ export function AutosPage() {
     }
     
     setFormError('');
+    shouldScrollRef.current = true;
     fetchData();
   };
+
+  const handleToggleCompany = (companyName) => {
+    setSelectedCompanies(prev =>
+      prev.includes(companyName) ? prev.filter(c => c !== companyName) : [...prev, companyName]
+    );
+  };
+
+  const handleToggleCategory = (categoryName) => {
+    setSelectedVehicleCategories(prev =>
+      prev.includes(categoryName) ? prev.filter(c => c !== categoryName) : [...prev, categoryName]
+    );
+  };
+
+  const handleTogglePriceRange = (rangeId) => {
+    setSelectedPriceRanges(prev =>
+      prev.includes(rangeId) ? prev.filter(r => r !== rangeId) : [...prev, rangeId]
+    );
+  };
+
+  const handleToggleSeats = (seatOption) => {
+    setSelectedSeatOptions(prev =>
+      prev.includes(seatOption) ? prev.filter(s => s !== seatOption) : [...prev, seatOption]
+    );
+  };
+
+  const handleClearFilters = () => {
+    setSelectedCompanies([]);
+    setSelectedVehicleCategories([]);
+    setSelectedPriceRanges([]);
+    setSelectedSeatOptions([]);
+  };
+
+  const filteredAutos = useMemo(() => {
+    return autos.filter((auto) => {
+      if (!auto) return false;
+
+      // 1. Compañía
+      if (selectedCompanies.length > 0) {
+        const matchesComp = selectedCompanies.some((compName) =>
+          checkAutoCompanyMatch(auto, compName)
+        );
+        if (!matchesComp) return false;
+      }
+
+      // 2. Categoría del vehículo
+      if (selectedVehicleCategories.length > 0) {
+        const matchesCat = selectedVehicleCategories.some((catName) =>
+          checkAutoVehicleCategoryMatch(auto, catName)
+        );
+        if (!matchesCat) return false;
+      }
+
+      // 3. Rango de precio por día
+      if (selectedPriceRanges.length > 0) {
+        const dailyPrice = getAutoDailyPrice(auto);
+        const matchesPrice = selectedPriceRanges.some((rangeKey) =>
+          checkAutoPriceMatch(dailyPrice, rangeKey)
+        );
+        if (!matchesPrice) return false;
+      }
+
+      // 4. Número de plazas
+      if (selectedSeatOptions.length > 0) {
+        const seats = getAutoSeats(auto);
+        const matchesSeats = selectedSeatOptions.some((seatOption) =>
+          checkAutoSeatsMatch(seats, seatOption)
+        );
+        if (!matchesSeats) return false;
+      }
+
+      return true;
+    });
+  }, [autos, selectedCompanies, selectedVehicleCategories, selectedPriceRanges, selectedSeatOptions]);
 
   const marcasPopulares = [
     { nombre: 'Europcar', bg: '#00843D', color: 'white', label: 'Europcar' },
@@ -360,45 +721,8 @@ export function AutosPage() {
     { nombre: 'Keddy', bg: '#6a1b9a', color: 'white', label: 'keddy' }
   ];
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '100px 20px', minHeight: '80vh', background: 'white' }}>
-        <h2 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#333', marginBottom: '40px', textAlign: 'center' }}>Buscando las mejores ofertas entre cientos de marcas</h2>
-        
-        {/* Progress bar */}
-        <div style={{ width: '100%', maxWidth: '800px', height: '8px', background: '#f0f0f0', borderRadius: '4px', marginBottom: '60px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', background: '#006ce4', width: '40%', animation: 'loading-slide 1.5s infinite ease-in-out' }}></div>
-        </div>
-
-        {/* Logos Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '20px', maxWidth: '800px', marginBottom: '80px' }}>
-            {marcasLoading.map((marca, i) => (
-              <div key={`load-${i}`} style={{ width: '110px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: marca.bg, color: marca.color, fontWeight: '900', borderRadius: '4px', fontSize: '1rem', border: '1px solid #e7e7e7', letterSpacing: '-0.5px' }}>
-                 {marca.label}
-              </div>
-            ))}
-        </div>
-
-        {/* Bottom indicator */}
-        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-          <img src="https://cf.bstatic.com/static/img/cars/icons/car_icon/d261ad47db337611bdcb4914da6b553c3eefbba5.png" alt="car" style={{ height: '40px', objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-          <span style={{ fontSize: '2.5rem', display: 'none' }}>🚙</span>
-          <div>
-            <h4 style={{ fontWeight: 'bold', color: '#333', margin: 0, fontSize: '1.1rem' }}>Coches de todos los tamaños</h4>
-            <p style={{ color: '#666', margin: 0, fontSize: '1rem' }}>para todo tipo de viajes</p>
-          </div>
-        </div>
-
-        <style>
-          {`
-            @keyframes loading-slide {
-              0% { left: -40%; }
-              100% { left: 100%; }
-            }
-          `}
-        </style>
-      </div>
-    );
+  if (loading && autos.length === 0) {
+    return <AlojamientosLoadingView />;
   }
 
   return (
@@ -443,7 +767,15 @@ export function AutosPage() {
                     {sugerenciasBusqueda.filter(s => s.texto.toLowerCase().includes(pickupLocation.toLowerCase())).length > 0 ? (
                       sugerenciasBusqueda.filter(s => s.texto.toLowerCase().includes(pickupLocation.toLowerCase())).map((item, idx) => (
                         <li key={idx} onMouseDown={() => handleSelectSuggestion(item.texto)} style={{ padding: '10px 16px', borderBottom: '1px solid #e7e7e7', cursor: 'pointer', fontSize: '0.95rem', color: '#333', display: 'flex', alignItems: 'center', gap: '10px' }} onMouseOver={e => e.currentTarget.style.background = '#f5f5f5'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
-                          <span style={{ fontSize: '1.1rem' }}>{item.icono}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            {item.tipo === 'aeropuerto' ? (
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="#006ce4"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+                            ) : item.tipo === 'auto' ? (
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="#006ce4"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-4.66l.12-.34h13.77l.11.34V17z"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/></svg>
+                            ) : (
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="#006ce4"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                            )}
+                          </span>
                           <div>
                             <span style={{ fontWeight: item.tipo === 'auto' ? 600 : 400 }}>{item.texto}</span>
                             <span style={{ fontSize: '0.75rem', color: '#888', marginLeft: '8px', textTransform: 'capitalize' }}>({item.tipo})</span>
@@ -532,53 +864,7 @@ export function AutosPage() {
               </div>
             )}
 
-            {/* Opciones inferiores */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
-              <div style={{ display: 'flex', gap: '20px', alignItems: 'center', color: '#1b1b1b', flexWrap: 'wrap' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={sameDropoff} onChange={(e) => setSameDropoff(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#003580' }} />
-                  Devolver el coche en otra oficina
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={driverAge} onChange={(e) => setDriverAge(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#003580' }} />
-                  Conductor entre 30 y 65 años
-                </label>
-
-                {!driverAge && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', padding: '4px 10px', borderRadius: '4px', border: '1px solid #ccc' }}>
-                    <label style={{ fontSize: '0.85rem', color: '#333' }}>Edad real:</label>
-                    <input
-                      type="number"
-                      min="18"
-                      max="99"
-                      value={customAge}
-                      onChange={(e) => setCustomAge(e.target.value)}
-                      style={{ width: '60px', padding: '4px', border: '1px solid #aaa', borderRadius: '3px', fontSize: '0.9rem' }}
-                    />
-                    {Number(customAge) < 25 && (
-                      <span style={{ fontSize: '0.75rem', color: '#b06000', fontWeight: 'bold' }}>
-                        *Aplica tasa por conductor joven (+$15/día)
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {sameDropoff && (
-                <div style={{ maxWidth: '420px', marginTop: '6px' }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', color: '#1b1b1b', marginBottom: '3px', fontWeight: 600 }}>
-                    Lugar de devolución diferente:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Oficina, aeropuerto o ciudad de devolución"
-                    value={dropoffLocation}
-                    onChange={(e) => setDropoffLocation(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.9rem' }}
-                  />
-                </div>
-              )}
-            </div>
+            {/* Opciones inferiores eliminadas según requerimiento */}
           </form>
         </div>
       </section>
@@ -778,9 +1064,9 @@ export function AutosPage() {
         <div ref={resultsRef} className="main-content" style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
           {error && (
           <div className="state-container" style={{ textAlign: 'center', padding: '40px 0' }}>
-            <div className="error-icon" style={{ fontSize: '2rem' }}>⚠️</div>
+            <svg viewBox="0 0 24 24" width="36" height="36" fill="#d93025" style={{ marginBottom: '8px' }}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
             <p className="state-subtitle">{error}</p>
-            <button className="retry-btn" onClick={fetchData} style={{ background: '#006ce4', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', marginTop: '10px', cursor: 'pointer' }}>Reintentar</button>
+            <button className="retry-btn" onClick={() => fetchData()} style={{ background: '#006ce4', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', marginTop: '10px', cursor: 'pointer' }}>Reintentar</button>
           </div>
         )}
 
@@ -797,43 +1083,110 @@ export function AutosPage() {
               <div style={{ border: '1px solid #e7e7e7', borderRadius: '4px', padding: '16px', background: 'white' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                   <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: 0, color: '#333' }}>Filtrar</h3>
-                  <span style={{ fontSize: '0.8rem', color: '#006ce4', cursor: 'pointer' }}>Borrar todos los filtros</span>
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      fontSize: '0.8rem',
+                      color: '#006ce4',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    Borrar todos los filtros
+                  </button>
                 </div>
                 
                 <div style={{ marginBottom: '20px' }}>
                   <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Compañía</h4>
-                  {marcasPopulares.map((m, idx) => (
-                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
-                       <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {m.label} <span style={{ marginLeft: 'auto', color: '#666', fontSize: '0.8rem' }}>10</span>
-                     </label>
-                  ))}
+                  {marcasPopulares.map((m, idx) => {
+                    const count = autos.filter(a => checkAutoCompanyMatch(a, m.nombre)).length;
+                    const isChecked = selectedCompanies.includes(m.nombre);
+                    return (
+                      <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleCompany(m.nombre)}
+                          aria-label={`Filtrar por compañía ${m.label}`}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#003580' }}
+                        />
+                        <span>{m.label}</span>
+                        <span style={{ marginLeft: 'auto', color: '#666', fontSize: '0.8rem' }}>{count}</span>
+                      </label>
+                    );
+                  })}
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
                   <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Categoría del vehículo</h4>
-                  {['Coche pequeño', 'Coche mediano', 'Coche grande', 'SUV'].map((c, idx) => (
-                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
-                       <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {c} <span style={{ marginLeft: 'auto', color: '#666', fontSize: '0.8rem' }}>5</span>
-                     </label>
-                  ))}
+                  {['Coche pequeño', 'Coche mediano', 'Coche grande', 'SUV'].map((c, idx) => {
+                    const count = autos.filter(a => checkAutoVehicleCategoryMatch(a, c)).length;
+                    const isChecked = selectedVehicleCategories.includes(c);
+                    return (
+                      <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleCategory(c)}
+                          aria-label={`Filtrar por categoría ${c}`}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#003580' }}
+                        />
+                        <span>{c}</span>
+                        <span style={{ marginLeft: 'auto', color: '#666', fontSize: '0.8rem' }}>{count}</span>
+                      </label>
+                    );
+                  })}
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
                   <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Precio por día</h4>
-                  {[`0 ${currency} - ${convertPrice(50)}`, `${convertPrice(50)} - ${convertPrice(100)}`, `${convertPrice(100)} - ${convertPrice(150)}`].map((p, idx) => (
-                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
-                       <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {p}
-                     </label>
-                  ))}
+                  {[
+                    { id: '0-50', label: `0 ${currency} - ${convertPrice(50)}` },
+                    { id: '50-100', label: `${convertPrice(50)} - ${convertPrice(100)}` },
+                    { id: '100-150', label: `${convertPrice(100)} - ${convertPrice(150)}` }
+                  ].map((p, idx) => {
+                    const count = autos.filter(a => checkAutoPriceMatch(getAutoDailyPrice(a), p.id)).length;
+                    const isChecked = selectedPriceRanges.includes(p.id);
+                    return (
+                      <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleTogglePriceRange(p.id)}
+                          aria-label={`Filtrar por precio ${p.label}`}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#003580' }}
+                        />
+                        <span>{p.label}</span>
+                        <span style={{ marginLeft: 'auto', color: '#666', fontSize: '0.8rem' }}>{count}</span>
+                      </label>
+                    );
+                  })}
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
                   <h4 style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '10px', color: '#333' }}>Número de plazas</h4>
-                  {['4 plazas', '5 plazas', '7 o más plazas'].map((p, idx) => (
-                     <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
-                       <input type="checkbox" style={{ width: '18px', height: '18px' }} /> {p}
-                     </label>
-                  ))}
+                  {['4 plazas', '5 plazas', '7 o más plazas'].map((p, idx) => {
+                    const count = autos.filter(a => checkAutoSeatsMatch(getAutoSeats(a), p)).length;
+                    const isChecked = selectedSeatOptions.includes(p);
+                    return (
+                      <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', marginBottom: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleSeats(p)}
+                          aria-label={`Filtrar por plazas ${p}`}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#003580' }}
+                        />
+                        <span>{p}</span>
+                        <span style={{ marginLeft: 'auto', color: '#666', fontSize: '0.8rem' }}>{count}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -848,17 +1201,20 @@ export function AutosPage() {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                     {[
-                      { id: 'ALL', label: '🚗 Todos' },
-                      { id: 'ECONOMICO', label: '⚡ Económico' },
-                      { id: 'COMPACTO', label: '🚘 Compacto' },
-                      { id: 'SUV', label: '🚙 SUV / 4x4' },
-                      { id: 'PREMIUM', label: '💎 Premium' },
-                      { id: 'VAN', label: '🚐 Vans' }
+                      { id: 'ALL', label: 'Todos' },
+                      { id: 'ECONOMICO', label: 'Económico' },
+                      { id: 'COMPACTO', label: 'Compacto' },
+                      { id: 'SUV', label: 'SUV / 4x4' },
+                      { id: 'PREMIUM', label: 'Premium' },
+                      { id: 'VAN', label: 'Vans' }
                     ].map(cat => (
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() => { setSelectedCategory(cat.id); fetchData(cat.id, selectedTransmission); }}
+                        onClick={() => {
+                          setSelectedCategory(cat.id);
+                          fetchData(cat.id, selectedTransmission, false, true);
+                        }}
                         style={{
                           background: selectedCategory === cat.id ? '#003580' : '#f0f4f8',
                           color: selectedCategory === cat.id ? 'white' : '#333',
@@ -884,13 +1240,16 @@ export function AutosPage() {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     {[
                       { id: 'ALL', label: 'Todas' },
-                      { id: 'MANUAL', label: '⚙️ Manual' },
-                      { id: 'AUTOMATICO', label: '🕹️ Automática' }
+                      { id: 'MANUAL', label: 'Manual' },
+                      { id: 'AUTOMATICO', label: 'Automática' }
                     ].map(trans => (
                       <button
                         key={trans.id}
                         type="button"
-                        onClick={() => { setSelectedTransmission(trans.id); fetchData(selectedCategory, trans.id); }}
+                        onClick={() => {
+                          setSelectedTransmission(trans.id);
+                          fetchData(selectedCategory, trans.id, false, true);
+                        }}
                         style={{
                           background: selectedTransmission === trans.id ? '#006ce4' : '#f0f4f8',
                           color: selectedTransmission === trans.id ? 'white' : '#333',
@@ -909,38 +1268,75 @@ export function AutosPage() {
                 </div>
               </div>
 
+              {isUpdatingList && (
+                <div style={{ padding: '10px 16px', background: '#f0f7ff', border: '1px solid #b8daff', borderRadius: '6px', marginBottom: '16px', color: '#004085', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#004085" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  <span>Actualizando coches disponibles...</span>
+                </div>
+              )}
+
               {/* Banner Informativo de Cooldown y Reglas RDA2 */}
               <div style={{ background: '#eef8ff', border: '1px solid #b8e2fb', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '1.4rem' }}>🛡️</span>
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="#006ce4" style={{ flexShrink: 0 }}><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 16l-4-4 1.41-1.41L11 14.17l6.59-6.59L19 9l-8 8z"/></svg>
                 <div style={{ fontSize: '0.85rem', color: '#004373', lineHeight: 1.4 }}>
                   <b>Garantía de Limpieza e Inspección (RDA2):</b> Los vehículos devueltos cumplen un <b>cooldown estricto de 2 horas</b> de higienización técnica antes de reingresar al catálogo.
                 </div>
               </div>
 
               {metadata?.surcharge_applied && (
-                <div style={{ background: '#fef7e0', border: '1px solid #f6e05e', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', color: '#975a16', fontSize: '0.85rem' }}>
-                  ⚠️ Se ha aplicado un recargo por conductor menor de 25 años (+${metadata.surcharge_amount || 15} USD/día) según políticas de alquiler.
+                <div style={{ background: '#fef7e0', border: '1px solid #f6e05e', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', color: '#975a16', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="#975a16" style={{ flexShrink: 0 }}><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                  <span>Se ha aplicado un recargo por conductor menor de 25 años (+${metadata.surcharge_amount || 15} USD/día) según políticas de alquiler.</span>
                 </div>
               )}
 
               <div style={{ marginBottom: '20px' }}>
-                 <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333', margin: '0 0 15px 0' }}>{autos.length} coches disponibles</h2>
+                 <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333', margin: '0 0 15px 0' }}>{filteredAutos.length} coches disponibles</h2>
                  <div style={{ display: 'inline-flex', border: '1px solid #666', borderRadius: '32px', padding: '6px 16px', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', alignItems: 'center', gap: '5px' }}>
                    <span style={{ fontSize: '0.8rem' }}>↓↑</span> Ordenar por: Recomendado <span style={{ fontSize: '0.7rem', marginLeft: '5px' }}>▼</span>
                  </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-                {autos.map((a, i) => (
-                  <AutoCard
-                    key={a.vehicle_id || i}
-                    auto={a}
-                    dias={calculateDays()}
-                    startDate={startDate}
-                    endDate={endDate}
-                    pickupLocation={pickupLocation}
-                  />
-                ))}
-              </div>
+              {filteredAutos.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', background: 'white', borderRadius: '8px', border: '1px solid #e7e7e7', marginTop: '10px' }}>
+                  <p style={{ fontSize: '1.1rem', fontWeight: 600, color: '#333', marginBottom: '8px' }}>
+                    No se encontraron coches con los filtros seleccionados.
+                  </p>
+                  <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '16px' }}>
+                    Prueba a cambiar o borrar tus filtros para ver más resultados.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    style={{
+                      background: '#006ce4',
+                      color: 'white',
+                      border: 'none',
+                      padding: '8px 18px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    Borrar todos los filtros
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                  {filteredAutos.map((a, i) => (
+                    <AutoCard
+                      key={a.vehicle_id || i}
+                      auto={a}
+                      dias={calculateDays()}
+                      startDate={startDate}
+                      endDate={endDate}
+                      pickupLocation={pickupLocation}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

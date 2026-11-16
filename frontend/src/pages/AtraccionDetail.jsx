@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getAtraccion, reservarAtraccion, getDisponibilidadAtraccion } from '../services/atraccionesApi';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../hooks/useAuth';
@@ -9,10 +9,13 @@ import { useCurrency } from '../hooks/CurrencyContext';
 import { ReportModal } from '../components/ReportModal';
 import { OfflineReservaModal } from '../components/OfflineReservaModal';
 import { VoucherModal } from '../components/VoucherModal';
+import { AtraccionesLoadingView } from '../components/AtraccionesLoadingView';
+import { resolverGaleriaAtraccion, resolverImagenAtraccion } from '../utils/atraccionImagenes';
 
 export function AtraccionDetail() {
   const todayStr = new Date().toISOString().split('T')[0];
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const isLoggedIn = !!user;
@@ -73,26 +76,23 @@ export function AtraccionDetail() {
     setCalendarViewDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
   };
 
+  // Siempre inicializar el selector de boletos en 1 al entrar a cualquier atracción
   useEffect(() => {
     if (id) {
-      const saved = localStorage.getItem(`atraccion_form_${id}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (!parsed.date || parsed.date < todayStr) {
-            parsed.date = todayStr;
-          }
-          setForm(parsed);
-        } catch (e) {}
-      }
+      setForm({
+        date: todayStr,
+        time: '09:00 a.m.',
+        adult_count: 1,
+        child_count: 0,
+        senior_count: 0,
+        infant_count: 0,
+        special_requirements: ''
+      });
+      try {
+        localStorage.removeItem(`atraccion_form_${id}`);
+      } catch (_) {}
     }
   }, [id, todayStr]);
-
-  useEffect(() => {
-    if (id) {
-      localStorage.setItem(`atraccion_form_${id}`, JSON.stringify(form));
-    }
-  }, [form, id]);
 
   const [bookingResult, setBookingResult] = useState(null);
 
@@ -110,64 +110,103 @@ export function AtraccionDetail() {
     fetchDetalle();
   }, [id]);
 
-  useEffect(() => {
+  const refrescarDisponibilidad = useCallback(() => {
     if (!id || !form.date) return;
-
-    const refrescarDisponibilidad = () => {
-      getDisponibilidadAtraccion(id, form.date)
-        .then(res => {
-          const list = Array.isArray(res) ? res : (res?.turnos || res?.time_slots || res?.slots || []);
-          if (Array.isArray(list) && list.length > 0) {
-            const mapped = list.map(s => {
-              const cuposNum = Number(s.cupos ?? s.cupos_disponibles ?? s.available_spots ?? 5);
-              const timeVal = s.time || s.horaInicio || s.hora || '09:00 a.m.';
-              return {
-                ...s,
-                time: timeVal,
-                cupos: cuposNum,
-                cupos_disponibles: cuposNum,
-                estado: s.estado || s.status || (cuposNum > 0 ? 'DISPONIBLE' : 'AGOTADO')
-              };
-            });
-            setTimeSlots(mapped);
-            // Sincronizar automáticamente el formulario si el horario actual no existe en los turnos disponibles
-            setForm(prev => {
-              const exists = mapped.some(s => s.time === prev.time);
-              if (!exists && mapped[0]) {
-                return { ...prev, time: mapped[0].time };
+    getDisponibilidadAtraccion(id, form.date)
+      .then(res => {
+        const list = Array.isArray(res) ? res : (res?.turnos || res?.time_slots || res?.slots || []);
+        if (Array.isArray(list) && list.length > 0) {
+          const mapped = list.map(s => {
+            const cuposNum = Number(s.cupos ?? s.cupos_disponibles ?? s.available_spots ?? 5);
+            const timeVal = s.time || s.horaInicio || s.hora || '09:00 a.m.';
+            return {
+              ...s,
+              time: timeVal,
+              cupos: cuposNum,
+              cupos_disponibles: cuposNum,
+              estado: s.estado || s.status || (cuposNum > 0 ? 'DISPONIBLE' : 'AGOTADO')
+            };
+          });
+          setTimeSlots((prev) => {
+            if (prev && prev.length === mapped.length) {
+              let hasDiff = false;
+              for (let i = 0; i < mapped.length; i++) {
+                if (
+                  prev[i].time !== mapped[i].time ||
+                  prev[i].cupos !== mapped[i].cupos ||
+                  prev[i].estado !== mapped[i].estado
+                ) {
+                  hasDiff = true;
+                  break;
+                }
               }
-              return prev;
-            });
-          }
-        })
-        .catch(() => {});
-    };
+              if (!hasDiff) return prev;
+            }
+            return mapped;
+          });
+          // Sincronizar automáticamente el formulario si el horario actual no existe en los turnos disponibles
+          setForm((prev) => {
+            const exists = mapped.some((s) => s.time === prev.time);
+            if (!exists && mapped[0]) {
+              return { ...prev, time: mapped[0].time };
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(() => {});
+  }, [id, form.date]);
 
+  useEffect(() => {
     refrescarDisponibilidad();
     // Auto-polling para reflejar en tiempo real la deducción o adición de cupos
     const interval = setInterval(refrescarDisponibilidad, 4000);
     return () => clearInterval(interval);
-  }, [id, form.date]);
+  }, [refrescarDisponibilidad]);
+
+  const provCodigo = atraccion?.proveedor_codigo || atraccion?.proveedorCodigo || atraccion?.proveedor?.codigo || atraccion?.proveedor?.id || '';
+  const admiteNinos = Boolean(
+    atraccion?.admite_ninos ?? 
+    (provCodigo !== 'NODE_ATR_ARIEL' && provCodigo !== 'NODE_ATR_GLORIA' && provCodigo !== 'NODE_ATR_ALISSON' && atraccion?.price?.child > 0 && atraccion?.price?.child !== atraccion?.price?.adult)
+  );
+  const admiteSeniors = Boolean(
+    atraccion?.admite_seniors ?? 
+    (provCodigo !== 'NODE_ATR_ARIEL' && provCodigo !== 'NODE_ATR_GLORIA' && provCodigo !== 'NODE_ATR_ALISSON' && atraccion?.price?.senior > 0)
+  );
+  const admiteInfantes = Boolean(
+    atraccion?.admite_infantes ?? 
+    (atraccion?.price?.infant > 0)
+  );
+  const soloPersonas = !admiteNinos && !admiteSeniors && !admiteInfantes;
 
   const precioAdulto = parseFloat(atraccion?.precio_unitario || atraccion?.price?.total || atraccion?.precioTicket || 55);
-  const precioNino = parseFloat((precioAdulto * 0.5).toFixed(2));
-  const precioSenior = parseFloat((precioAdulto * 0.7).toFixed(2)); // Tarifa 3ra edad 30% descuento
-  const precioInfante = 0.0; // Tarifa $0 (Gratis) con cupo de aforo legal (Cátedra RDA2 §6)
-  const totalTickets = (form.adult_count || 0) + (form.child_count || 0) + (form.senior_count || 0) + (form.infant_count || 0);
-  const totalCalculado = parseFloat(
-    ((form.adult_count * precioAdulto) + (form.child_count * precioNino) + (form.senior_count * precioSenior) + (form.infant_count * precioInfante)).toFixed(2)
-  );
+  const precioNino = admiteNinos ? parseFloat(atraccion?.price?.child || (precioAdulto * 0.5).toFixed(2)) : precioAdulto;
+  const precioSenior = admiteSeniors ? parseFloat(atraccion?.price?.senior || (precioAdulto * 0.7).toFixed(2)) : precioAdulto;
+  const precioInfante = 0.0;
+  const totalTickets = soloPersonas 
+    ? (form.adult_count || 1) 
+    : ((form.adult_count || 0) + (admiteNinos ? (form.child_count || 0) : 0) + (admiteSeniors ? (form.senior_count || 0) : 0) + (admiteInfantes ? (form.infant_count || 0) : 0));
+  const totalCalculado = soloPersonas
+    ? parseFloat(((form.adult_count || 1) * precioAdulto).toFixed(2))
+    : parseFloat(
+        ((form.adult_count * precioAdulto) + 
+         (admiteNinos ? (form.child_count * precioNino) : 0) + 
+         (admiteSeniors ? (form.senior_count * precioSenior) : 0) + 
+         (admiteInfantes ? (form.infant_count * precioInfante) : 0)).toFixed(2)
+      );
 
   // Heurística 5 & V-07: Validación reactiva de aforo y cupos en turno
   const selectedSlot = timeSlots.find(s => s.time === form.time) || timeSlots[0];
   const cuposDisponibles = selectedSlot ? Number(selectedSlot.cupos ?? selectedSlot.cupos_disponibles ?? selectedSlot.available_spots ?? 10) : 10;
   const isAgotadoSlot = selectedSlot ? (selectedSlot.estado === 'AGOTADO' || cuposDisponibles <= 0) : false;
   const cuposExcedidos = totalTickets > cuposDisponibles;
+  const canAddMoreTickets = !isAgotadoSlot && totalTickets < cuposDisponibles;
 
   const handleBooking = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!isLoggedIn) {
-      navigate('/login');
+      sessionStorage.setItem('booking_return_url', location.pathname + location.search);
+      navigate('/login', { state: { from: location.pathname + location.search, message: 'Inicia sesión para reservar tu atracción' } });
       return;
     }
 
@@ -179,6 +218,11 @@ export function AtraccionDetail() {
 
     if (isAgotadoSlot) {
       alert('El turno seleccionado se encuentra agotado. Por favor selecciona otro horario.');
+      return;
+    }
+
+    if (totalTickets <= 0) {
+      alert('Debes seleccionar al menos un boleto para continuar con la reserva.');
       return;
     }
 
@@ -200,16 +244,32 @@ export function AtraccionDetail() {
     const idempotencyKey = uuidv4();
     try {
       let result = null;
-      const dateCompact = (form.date || todayStr).replace(/-/g, '');
-      const timeNormalized = (form.time || '09:00').replace(/(a\.m\.|p\.m\.|\s)/gi, '').slice(0, 5) || '09:00';
-      const time24 = timeNormalized.length === 4 ? `0${timeNormalized}` : timeNormalized;
-      const timeCompact = time24.replace(/[^0-9]/g, '').slice(0, 4).padStart(4, '0');
-      const targetSlotId = selectedSlot?.slot_id || selectedSlot?.id || `slot-${dateCompact}-${timeCompact}`;
+      const safeDate = form.date || todayStr;
+      const dateCompact = safeDate.replace(/-/g, '');
+      let hour24 = 9;
+      let minStr = '00';
+      const rawTimeStr = form.time || '09:00';
+      const isPm = /p\.m\.|pm/i.test(rawTimeStr);
+      const isAm = /a\.m\.|am/i.test(rawTimeStr);
+      const tMatch = rawTimeStr.match(/(\d{1,2}):(\d{2})/);
+      if (tMatch) {
+        let h = parseInt(tMatch[1], 10);
+        minStr = tMatch[2];
+        if (isPm && h < 12) h += 12;
+        if (isAm && h === 12) h = 0;
+        hour24 = h;
+      }
+      const time24 = `${String(hour24).padStart(2, '0')}:${minStr}`;
+      const timeCompact = `${String(hour24).padStart(2, '0')}${minStr}`;
 
-      // Reconciliación automática y segura de fecha y hora según el slot seleccionado
-      const slotMatch = (targetSlotId || '').match(/^slot-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})$/);
-      const safeDate = slotMatch ? `${slotMatch[1]}-${slotMatch[2]}-${slotMatch[3]}` : (form.date || todayStr);
-      const safeTime = slotMatch ? `${slotMatch[4]}:${slotMatch[5]}` : time24;
+      // Siempre garantizar que el targetSlotId pertenezca a la fecha explícitamente elegida por el usuario
+      let targetSlotId = `slot-${dateCompact}-${timeCompact}`;
+      if (selectedSlot?.slot_id && selectedSlot.slot_id.startsWith(`slot-${dateCompact}-`)) {
+        targetSlotId = selectedSlot.slot_id;
+      } else if (selectedSlot?.id && selectedSlot.id.startsWith(`slot-${dateCompact}-`)) {
+        targetSlotId = selectedSlot.id;
+      }
+      const safeTime = time24;
 
       const payload = {
         atraccionId: id,
@@ -217,10 +277,10 @@ export function AtraccionDetail() {
         slot_id: targetSlotId,
         date: safeDate,
         time: safeTime,
-        adult_count: form.adult_count,
-        child_count: form.child_count,
-        senior_count: form.senior_count,
-        infant_count: form.infant_count,
+        adult_count: soloPersonas ? totalTickets : (form.adult_count || 1),
+        child_count: soloPersonas ? 0 : (admiteNinos ? (form.child_count || 0) : 0),
+        senior_count: soloPersonas ? 0 : (admiteSeniors ? (form.senior_count || 0) : 0),
+        infant_count: soloPersonas ? 0 : (admiteInfantes ? (form.infant_count || 0) : 0),
         ticket_count: totalTickets,
         customer_name: (user.user_metadata?.full_name || user.email.split('@')[0]).trim().replace(/\s{2,}/g, ' '),
         customer_email: user.email?.trim() || '',
@@ -284,6 +344,45 @@ export function AtraccionDetail() {
       setConfirmedReservation(atraccionRes);
       setShowSuccessModal(true);
 
+      // Decrementar inmediatamente la capacidad del turno seleccionado en pantalla (Doble Actualización / Optimistic UI)
+      setTimeSlots(prev => prev.map(slot => {
+        const sTime = slot.time || slot.hora || slot.hora_inicio || '';
+        const curTime = form.time || '';
+        const match = sTime === curTime || 
+          sTime.replace(/[^0-9]/g, '').slice(0, 4) === curTime.replace(/[^0-9]/g, '').slice(0, 4);
+        if (match) {
+          const currentCupos = Number(slot.cupos ?? slot.cupos_disponibles ?? slot.available_spots ?? 0);
+          const newCupos = Math.max(0, currentCupos - totalTickets);
+          return {
+            ...slot,
+            cupos: newCupos,
+            cupos_disponibles: newCupos,
+            available_spots: newCupos,
+            estado: newCupos <= 0 ? 'AGOTADO' : newCupos <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE',
+            status: newCupos <= 0 ? 'AGOTADO' : newCupos <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE'
+          };
+        }
+        return slot;
+      }));
+
+      // Sincronizar en segundo plano con el backend y la API oficial
+      try {
+        refrescarDisponibilidad();
+      } catch (_) {}
+
+      // Resetear el selector de personas y categorías inmediatamente tras confirmar la compra
+      setForm(prev => ({
+        ...prev,
+        adult_count: 1,
+        child_count: 0,
+        senior_count: 0,
+        infant_count: 0,
+        special_requirements: ''
+      }));
+      try {
+        localStorage.removeItem(`atraccion_form_${id}`);
+      } catch (_) {}
+
       const existing = JSON.parse(localStorage.getItem('reservas_atracciones') || '[]');
       localStorage.setItem('reservas_atracciones', JSON.stringify([atraccionRes, ...existing]));
 
@@ -314,9 +413,11 @@ export function AtraccionDetail() {
     }
   };
 
-  if (loading) return <main id="contenido-principal" className="state-container"><h1 className="sr-only">Cargando atracción</h1><div className="spinner" /></main>;
+  if (loading) return <AtraccionesLoadingView />;
   if (error) return <main id="contenido-principal" className="state-container"><h1 className="sr-only">Error al cargar atracción</h1><div className="error-icon">⚠️</div><p className="state-subtitle">{error}</p><button className="retry-btn" onClick={() => navigate('/')}>Volver</button></main>;
   if (!atraccion) return null;
+
+  const fotosGaleria = resolverGaleriaAtraccion(atraccion);
 
   return (
     <div className="search-page-wrapper">
@@ -346,9 +447,17 @@ export function AtraccionDetail() {
             </div>
           </div>
 
-          <div className="gallery-grid">
-            <div className="gallery-main">
-              <img src={atraccion.photos?.[0]?.url || `https://picsum.photos/seed/${atraccion.id}/800/600`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}/800/600`; }} alt="Main" />
+          {fotosGaleria.length <= 1 ? (
+            <div style={{ width: '100%', marginBottom: '24px', position: 'relative', borderRadius: '8px', overflow: 'hidden' }}>
+              <img
+                src={fotosGaleria[0]}
+                alt={atraccion.nombre || 'Atracción'}
+                style={{ width: '100%', maxHeight: '420px', objectFit: 'cover', borderRadius: '8px', display: 'block' }}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = resolverImagenAtraccion(atraccion, 0);
+                }}
+              />
               <div className="gallery-badge-overlay">
                 <div className="gb-score">9.8</div>
                 <div className="gb-text">
@@ -357,16 +466,25 @@ export function AtraccionDetail() {
                 </div>
               </div>
             </div>
-            <div className="gallery-side">
-              <img src={atraccion.photos?.[1]?.url || `https://picsum.photos/seed/${atraccion.id}1/400/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}1/400/300`; }} alt="Gallery 1" />
-              <img src={atraccion.photos?.[2]?.url || `https://picsum.photos/seed/${atraccion.id}2/400/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}2/400/300`; }} alt="Gallery 2" />
-              <img src={atraccion.photos?.[3]?.url || `https://picsum.photos/seed/${atraccion.id}3/400/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}3/400/300`; }} alt="Gallery 3" />
-              <div className="gallery-more">
-                <img src={atraccion.photos?.[4]?.url || `https://picsum.photos/seed/${atraccion.id}4/400/300`} onError={(e) => { e.target.onerror = null; e.target.src = `https://picsum.photos/seed/${atraccion.id}4/400/300`; }} alt="Gallery 4" />
-                <div className="more-overlay">🖼️ Ver todas las imágenes</div>
+          ) : (
+            <div className="gallery-grid">
+              <div className="gallery-main">
+                <img src={fotosGaleria[0]} onError={(e) => { e.target.onerror = null; e.target.src = fotosGaleria[1] || fotosGaleria[0]; }} alt="Main" />
+                <div className="gallery-badge-overlay">
+                  <div className="gb-score">9.8</div>
+                  <div className="gb-text">
+                    <strong>Excepcional</strong><br/>
+                    <a href="#reviews" style={{ color: 'white', textDecoration: 'underline', cursor: 'pointer' }}>142 opiniones verificadas {'>'}</a>
+                  </div>
+                </div>
+              </div>
+              <div className="gallery-side">
+                {fotosGaleria.slice(1, 5).map((f, idx) => (
+                  <img key={`gal-${idx}`} src={f} onError={(e) => { e.target.style.display = 'none'; }} alt={`Gallery ${idx + 1}`} />
+                ))}
               </div>
             </div>
-          </div>
+          )}
 
           <div className="detail-highlights">
             <div className="dh-item">
@@ -552,7 +670,7 @@ export function AtraccionDetail() {
             <h2>Preguntas frecuentes</h2>
             <details><summary>¿Cómo accedo al tour una vez completado el pago?</summary><p>Inmediatamente tras el pago recibes tu voucher digital con código QR dinámico. Puedes guardarlo en tu teléfono o realizar el check-in presencial en un clic.</p></details>
             <details><summary>¿Qué pasa si llueve o cambia el clima en Quito?</summary><p>Nuestros buses panorámicos cuentan con techo retráctil hermético y los guías adaptan las paradas peatonales sin comprometer el itinerario.</p></details>
-            <details><summary>¿Puedo cancelar y recibir reembolso?</summary><p>Sí, dispones de cancelación gratuita con reembolso íntegro (100%) hasta 24 horas antes del inicio de tu turno seleccionado, ejecutado mediante protocolo compensatorio Saga.</p></details>
+            <details><summary>¿Puedo cancelar y recibir reembolso?</summary><p>Sí, dispones de cancelación gratuita con reembolso íntegro (100%) hasta 24 horas antes del inicio de tu turno seleccionado, acreditado a tu método de pago original.</p></details>
             <details><summary>¿Qué tipo de vestimenta o equipamiento debo llevar?</summary><p>Recomendamos calzado cómodo con suela antideslizante para caminar sobre adoquines coloniales, chaqueta abrigada ligera (capas) por el viento andino, protector solar y cámara fotográfica.</p></details>
             <details><summary>¿Qué documentación debo presentar ante el guía?</summary><p>Presenta tu cédula de identidad física o pasaporte vigente, junto con el código QR de confirmación desde la pantalla de tu dispositivo móvil en la sección Mis Reservas.</p></details>
           </div>
@@ -739,119 +857,181 @@ export function AtraccionDetail() {
               })}
             </div>
 
-            {/* MATRIZ DE CONFIGURACIÓN DE ENTRADAS POR EDAD */}
+            {/* MATRIZ DE CONFIGURACIÓN DE ENTRADAS DINÁMICA */}
             <div className="ticket-configuration" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
-              <strong style={{ fontSize: '0.95rem', display: 'block', marginBottom: '12px' }}>Cantidad de boletos:</strong>
-
-              {/* Adulto */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
-                <div>
-                  <strong style={{ fontSize: '0.9rem', display: 'block' }}>Adulto (13+ años)</strong>
-                  <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>{convertPrice(precioAdulto)} c/u</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button 
-                    type="button" 
-                    onClick={() => setForm({ ...form, adult_count: Math.max(1, form.adult_count - 1) })}
-                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    -
-                  </button>
-                  <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.adult_count}</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setForm({ ...form, adult_count: Math.min(10, form.adult_count + 1) })}
-                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    +
-                  </button>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <strong style={{ fontSize: '0.95rem' }}>Cantidad de boletos:</strong>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: totalTickets >= cuposDisponibles ? '#b91c1c' : '#15803d' }}>
+                  {totalTickets} / {cuposDisponibles} cupos
+                </span>
               </div>
 
-              {/* Niño */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
-                <div>
-                  <strong style={{ fontSize: '0.9rem', display: 'block' }}>Niño (5 a 12 años)</strong>
-                  <span style={{ fontSize: '0.8rem', color: '#15803d' }}>50% Dcto: {convertPrice(precioNino)}</span>
+              {soloPersonas ? (
+                /* 1. Selector Unificado para Atracciones de Tarifa Única General (Ariel, Gloria, etc.) */
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', background: '#f9fafb', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+                  <div>
+                    <strong style={{ fontSize: '0.95rem', display: 'block', color: '#111827' }}>Personas (Entrada General)</strong>
+                    <span style={{ fontSize: '0.82rem', color: '#4b5563', fontWeight: 500 }}>{convertPrice(precioAdulto)} c/u</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button 
+                      type="button" 
+                      disabled={(form.adult_count || 1) <= 1}
+                      onClick={() => setForm({ ...form, adult_count: Math.max(1, (form.adult_count || 1) - 1), child_count: 0, senior_count: 0, infant_count: 0 })}
+                      style={{ width: 34, height: 34, borderRadius: '6px', border: '1px solid #d1d5db', background: (form.adult_count || 1) <= 1 ? '#f3f4f6' : '#fff', cursor: (form.adult_count || 1) <= 1 ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: (form.adult_count || 1) <= 1 ? 0.5 : 1 }}
+                    >
+                      -
+                    </button>
+                    <span style={{ minWidth: 24, textAlign: 'center', fontWeight: 700, fontSize: '0.95rem' }}>{form.adult_count || 1}</span>
+                    <button 
+                      type="button" 
+                      disabled={!canAddMoreTickets}
+                      onClick={() => {
+                        if (!canAddMoreTickets) return;
+                        setForm({ ...form, adult_count: (form.adult_count || 1) + 1, child_count: 0, senior_count: 0, infant_count: 0 });
+                      }}
+                      style={{ width: 34, height: 34, borderRadius: '6px', border: '1px solid #d1d5db', background: (!canAddMoreTickets) ? '#f3f4f6' : '#fff', cursor: (!canAddMoreTickets) ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: (!canAddMoreTickets) ? 0.5 : 1 }}
+                      title={!canAddMoreTickets ? `Límite de aforo alcanzado (${cuposDisponibles} cupos libres)` : 'Agregar persona'}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button 
-                    type="button" 
-                    onClick={() => setForm({ ...form, child_count: Math.max(0, form.child_count - 1) })}
-                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    -
-                  </button>
-                  <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.child_count}</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setForm({ ...form, child_count: Math.min(10, form.child_count + 1) })}
-                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
+              ) : (
+                /* 2. Desglose Etario para Atracciones con Tarifas Diferenciadas Reales */
+                <>
+                  {/* Adulto */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
+                    <div>
+                      <strong style={{ fontSize: '0.9rem', display: 'block' }}>Adulto (13+ años)</strong>
+                      <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>{convertPrice(precioAdulto)} c/u</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button 
+                        type="button" 
+                        disabled={form.adult_count <= (totalTickets > form.adult_count ? 0 : 1)}
+                        onClick={() => setForm({ ...form, adult_count: Math.max((totalTickets > form.adult_count ? 0 : 1), form.adult_count - 1) })}
+                        style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: form.adult_count <= (totalTickets > form.adult_count ? 0 : 1) ? '#f3f4f6' : '#fff', cursor: form.adult_count <= (totalTickets > form.adult_count ? 0 : 1) ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: form.adult_count <= (totalTickets > form.adult_count ? 0 : 1) ? 0.5 : 1 }}
+                      >
+                        -
+                      </button>
+                      <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.adult_count}</span>
+                      <button 
+                        type="button" 
+                        disabled={!canAddMoreTickets}
+                        onClick={() => {
+                          if (!canAddMoreTickets) return;
+                          setForm({ ...form, adult_count: form.adult_count + 1 });
+                        }}
+                        style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: (!canAddMoreTickets) ? '#f3f4f6' : '#fff', cursor: (!canAddMoreTickets) ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: (!canAddMoreTickets) ? 0.5 : 1 }}
+                        title={!canAddMoreTickets ? `Límite de aforo alcanzado (${cuposDisponibles} cupos libres)` : 'Agregar boleto'}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
 
-              {/* Senior (3ra Edad) - GAP-FRONT-01 */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
-                <div>
-                  <strong style={{ fontSize: '0.9rem', display: 'block' }}>Senior (65+ años)</strong>
-                  <span style={{ fontSize: '0.8rem', color: '#0369a1' }}>Tarifa 3ra Edad (30% Dcto): {convertPrice(precioSenior)}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button 
-                    type="button" 
-                    onClick={() => setForm({ ...form, senior_count: Math.max(0, form.senior_count - 1) })}
-                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    -
-                  </button>
-                  <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.senior_count}</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setForm({ ...form, senior_count: Math.min(10, form.senior_count + 1) })}
-                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
+                  {/* Niño - Oculto si la atracción no lo admite */}
+                  {admiteNinos && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
+                      <div>
+                        <strong style={{ fontSize: '0.9rem', display: 'block' }}>Niño (5 a 12 años)</strong>
+                        <span style={{ fontSize: '0.8rem', color: '#15803d' }}>Tarifa Niño: {convertPrice(precioNino)}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button 
+                          type="button" 
+                          disabled={form.child_count <= 0}
+                          onClick={() => setForm({ ...form, child_count: Math.max(0, form.child_count - 1) })}
+                          style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: form.child_count <= 0 ? '#f3f4f6' : '#fff', cursor: form.child_count <= 0 ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: form.child_count <= 0 ? 0.5 : 1 }}
+                        >
+                          -
+                        </button>
+                        <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.child_count}</span>
+                        <button 
+                          type="button" 
+                          disabled={!canAddMoreTickets}
+                          onClick={() => {
+                            if (!canAddMoreTickets) return;
+                            setForm({ ...form, child_count: form.child_count + 1 });
+                          }}
+                          style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: (!canAddMoreTickets) ? '#f3f4f6' : '#fff', cursor: (!canAddMoreTickets) ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: (!canAddMoreTickets) ? 0.5 : 1 }}
+                          title={!canAddMoreTickets ? `Límite de aforo alcanzado (${cuposDisponibles} cupos libres)` : 'Agregar boleto'}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-              {/* Infante (0 a 4 años) - Tarifa $0 con cupo de aforo legal obligatorio - GAP-FRONT-01 */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', background: '#f0fdf4', border: '1px dashed #86efac', padding: '10px 12px', borderRadius: '8px' }}>
-                <div>
-                  <strong style={{ fontSize: '0.9rem', display: 'block', color: '#166534' }}>Infante (0 a 4 años)</strong>
-                  <span style={{ fontSize: '0.78rem', color: '#15803d', fontWeight: 600 }}>Tarifa $0.00 (Ocupa cupo legal de aforo)</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button 
-                    type="button" 
-                    onClick={() => setForm({ ...form, infant_count: Math.max(0, form.infant_count - 1) })}
-                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    -
-                  </button>
-                  <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.infant_count}</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setForm({ ...form, infant_count: Math.min(10, form.infant_count + 1) })}
-                    style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
+                  {/* Senior (3ra Edad) - Oculto si la atracción no lo admite */}
+                  {admiteSeniors && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', background: '#f9fafb', padding: '10px 12px', borderRadius: '8px' }}>
+                      <div>
+                        <strong style={{ fontSize: '0.9rem', display: 'block' }}>Senior (65+ años)</strong>
+                        <span style={{ fontSize: '0.8rem', color: '#0369a1' }}>Tarifa 3ra Edad: {convertPrice(precioSenior)}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button 
+                          type="button" 
+                          disabled={form.senior_count <= 0}
+                          onClick={() => setForm({ ...form, senior_count: Math.max(0, form.senior_count - 1) })}
+                          style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: form.senior_count <= 0 ? '#f3f4f6' : '#fff', cursor: form.senior_count <= 0 ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: form.senior_count <= 0 ? 0.5 : 1 }}
+                        >
+                          -
+                        </button>
+                        <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.senior_count}</span>
+                        <button 
+                          type="button" 
+                          disabled={!canAddMoreTickets}
+                          onClick={() => {
+                            if (!canAddMoreTickets) return;
+                            setForm({ ...form, senior_count: form.senior_count + 1 });
+                          }}
+                          style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: (!canAddMoreTickets) ? '#f3f4f6' : '#fff', cursor: (!canAddMoreTickets) ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: (!canAddMoreTickets) ? 0.5 : 1 }}
+                          title={!canAddMoreTickets ? `Límite de aforo alcanzado (${cuposDisponibles} cupos libres)` : 'Agregar boleto'}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-              {/* WIDGET PROMO COMBO B2B - GAP-FRONT-05 */}
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1d4ed8', fontWeight: 700, fontSize: '0.85rem', marginBottom: '4px' }}>
-                  <span>🎁</span> Combo Promocional B2B Recomendado
-                </div>
-                <p style={{ margin: 0, fontSize: '0.78rem', color: '#1e40af' }}>
-                  Añade un auto de alquiler con <strong>15% de descuento directo</strong> negociado mediante contrato con Alamo & Hertz.
-                </p>
-              </div>
+                  {/* Infante (0 a 4 años) - Oculto si la atracción no lo admite */}
+                  {admiteInfantes && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', background: '#f0fdf4', border: '1px dashed #86efac', padding: '10px 12px', borderRadius: '8px' }}>
+                      <div>
+                        <strong style={{ fontSize: '0.9rem', display: 'block', color: '#166534' }}>Infante (0 a 4 años)</strong>
+                        <span style={{ fontSize: '0.78rem', color: '#15803d', fontWeight: 600 }}>Tarifa {convertPrice(precioInfante)} (Cupo legal)</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button 
+                          type="button" 
+                          disabled={form.infant_count <= 0}
+                          onClick={() => setForm({ ...form, infant_count: Math.max(0, form.infant_count - 1) })}
+                          style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: form.infant_count <= 0 ? '#f3f4f6' : '#fff', cursor: form.infant_count <= 0 ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: form.infant_count <= 0 ? 0.5 : 1 }}
+                        >
+                          -
+                        </button>
+                        <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 700 }}>{form.infant_count}</span>
+                        <button 
+                          type="button" 
+                          disabled={!canAddMoreTickets}
+                          onClick={() => {
+                            if (!canAddMoreTickets) return;
+                            setForm({ ...form, infant_count: form.infant_count + 1 });
+                          }}
+                          style={{ width: 32, height: 32, borderRadius: '4px', border: '1px solid #d1d5db', background: (!canAddMoreTickets) ? '#f3f4f6' : '#fff', cursor: (!canAddMoreTickets) ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: (!canAddMoreTickets) ? 0.5 : 1 }}
+                          title={!canAddMoreTickets ? `Límite de aforo alcanzado (${cuposDisponibles} cupos libres)` : 'Agregar boleto'}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
 
               {/* ALERTA DE CUPO Y AFORO */}
               {isAgotadoSlot && (
@@ -952,12 +1132,12 @@ export function AtraccionDetail() {
                           disabled={isBooking || cuposExcedidos || isAgotadoSlot}
                         >
                           {isBooking 
-                            ? '⏳ Conectando con socio y emitiendo boletos...' 
+                            ? 'Procesando tu reserva y generando entradas...' 
                             : isAgotadoSlot 
                             ? 'Turno Agotado' 
                             : cuposExcedidos 
                             ? `Excede Cupos Libres (${cuposDisponibles})` 
-                            : `Pagar y Confirmar (${totalTickets} boletos)`}
+                            : `Pagar y Confirmar (${totalTickets} ${soloPersonas ? (totalTickets === 1 ? 'persona' : 'personas') : 'boletos'})`}
                         </button>
 
                         {showOfflineModal && (

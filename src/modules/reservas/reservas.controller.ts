@@ -33,7 +33,18 @@ export class ReservasController {
     @Headers('x-correlation-id') correlationId?: string,
     @Req() req?: any,
   ) {
-    const rawApiKey = apiKey || req?.headers?.['X-Api-Key'] || req?.headers?.['x_api_key'];
+    const rawApiKey =
+      apiKey ||
+      req?.headers?.['x-api-key'] ||
+      req?.headers?.['X-Api-Key'] ||
+      req?.headers?.['X-API-KEY'] ||
+      req?.headers?.['x_api_key'] ||
+      req?.headers?.['api-key'] ||
+      req?.headers?.['apiKey'] ||
+      (req?.headers?.authorization?.toLowerCase()?.startsWith('bearer ') ? req.headers.authorization.slice(7).trim() : null) ||
+      req?.query?.api_key ||
+      (dto as any)?.api_key ||
+      (dto as any)?.apiKey;
     const safeCorrId = correlationId || req?.headers?.['x-correlation-id'];
     return this.reservasService.confirmarCheckin(id, dto, rawApiKey, safeCorrId);
   }
@@ -49,10 +60,44 @@ export class ReservasController {
     @Headers('x-correlation-id') correlationId?: string,
     @Req() req?: any,
   ) {
-    const rawApiKey = apiKey || req?.headers?.['X-Api-Key'] || req?.headers?.['x_api_key'];
+    const rawApiKey =
+      apiKey ||
+      req?.headers?.['x-api-key'] ||
+      req?.headers?.['X-Api-Key'] ||
+      req?.headers?.['X-API-KEY'] ||
+      req?.headers?.['x_api_key'] ||
+      req?.headers?.['api-key'] ||
+      req?.headers?.['apiKey'] ||
+      (req?.headers?.authorization?.toLowerCase()?.startsWith('bearer ') ? req.headers.authorization.slice(7).trim() : null) ||
+      req?.query?.api_key ||
+      (dto as any)?.api_key ||
+      (dto as any)?.apiKey;
     const safeCorrId = correlationId || req?.headers?.['x-correlation-id'];
-    const targetId = dto.reserva_id || dto.pnr || dto.codigo_reserva || dto.localizador || (dto as any).id || 'UNKNOWN';
+    const targetId =
+      dto.external_order_id ||
+      dto.order_id ||
+      dto.locator ||
+      dto.localizador ||
+      dto.codigo_reserva ||
+      dto.pnr ||
+      dto.reserva_id ||
+      dto.reservation_id ||
+      dto.id ||
+      'UNKNOWN';
     return this.reservasService.confirmarCheckin(targetId, dto, rawApiKey, safeCorrId);
+  }
+
+  @Post('checkin')
+  @Version(['1', '2', '3'])
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Notificar confirmación de asistencia presencial (Check-in directo sin ID en URL)' })
+  async notificarCheckinDirecto(
+    @Body() dto: CheckinNotificationDto,
+    @Headers('x-api-key') apiKey?: string,
+    @Headers('x-correlation-id') correlationId?: string,
+    @Req() req?: any,
+  ) {
+    return this.notificarCheckinAlias(dto, apiKey, correlationId, req);
   }
 
   /**
@@ -83,7 +128,7 @@ export class ReservasController {
    * Consultar estado en tiempo real de una reserva
    */
   @Get(':id/estado')
-  @Version(['2', '3'])
+  @Version(['1', '2', '3'])
   @ApiOperation({ summary: 'Consultar el estado del ciclo de vida de una reserva (RESERVADO / CONFIRMADO_ASISTIDO)' })
   @ApiParam({ name: 'id', description: 'ID o localizador de la reserva' })
   async getEstado(@Param('id') id: string) {

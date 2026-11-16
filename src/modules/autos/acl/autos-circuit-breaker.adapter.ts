@@ -80,7 +80,7 @@ export class AutosCircuitBreakerAdapter {
   // ===========================================================================
   private readonly SOCIOS_PANEL: Array<{
     clave: string; nombre: string; nodoDefecto: string; urlMatch: string; baseDefecto: string;
-    env: string; proveedorId: number; vehRegex?: RegExp; pnrRegex?: RegExp;
+    env: string; proveedorId: number; vehRegex?: RegExp; pnrRegex?: RegExp; apiKeyDefecto?: string;
   }> = [
     {
       clave: 'RENTAFACIL', nombre: 'RentaFacil EC', nodoDefecto: 'NODE_AUT_RENTAFACIL', urlMatch: 'rentafacil',
@@ -92,6 +92,14 @@ export class AutosCircuitBreakerAdapter {
       baseDefecto: 'https://rodadoec-api.azurewebsites.net/api/v3', env: 'RODADO', proveedorId: 7,
       vehRegex: /^veh-\d+$/,
     },
+    {
+      clave: 'AUTOSPOT', nombre: 'AutoSpot (Esteban)', nodoDefecto: 'NODE_AUT_AUTOSPOT', urlMatch: 'alquiler-vehiculos-ijx3',
+      baseDefecto: 'https://alquiler-vehiculos-ijx3.onrender.com/api/v3', env: 'AUTOSPOT', proveedorId: 8,
+      apiKeyDefecto: 'xSQILcF-wlDGZ44NFmLpLbJlsX7rWooq',
+      vehRegex: /^auto-\d+$/i,
+      // pnrRegex removido: los PNR CAR... son compartidos con RutaLibre (Daniel).
+      // La identificación del socio se hace por socioPnrs (mapa llenado al crear la reserva).
+    },
   ];
   private readonly socioCfgCache = new Map<string, { nodo: string; baseUrl: string; apiKey: string; activo: boolean; at: number }>();
   private readonly socioVehiculos = new Map<string, string>(); // vehicle_id → clave del socio
@@ -102,7 +110,7 @@ export class AutosCircuitBreakerAdapter {
     if (cached && Date.now() - cached.at < 60000) return cached;
     let nodo = process.env[`${def.env}_NODO`] || def.nodoDefecto;
     let baseUrl = process.env[`${def.env}_BASE_URL`] || def.baseDefecto;
-    let apiKey = process.env[`${def.env}_API_KEY`] || '';
+    let apiKey = process.env[`${def.env}_API_KEY`] || def.apiKeyDefecto || '';
     let activo = true;
     try {
       const rows = await this.dataSource?.query(
@@ -277,29 +285,91 @@ export class AutosCircuitBreakerAdapter {
     const sociosCfg = await Promise.all(this.SOCIOS_PANEL.map((d) => this.getSocioConfig(d)));
 
     // 1. Consultar flota canónica OpenAPI v3 de RutaLibre (Daniel González) y Maneja de Una (Mateo Morales) en paralelo (limit=100 para no truncar la flota)
+    // Para Daniel: si hay fechas de búsqueda, consultar su endpoint oficial POST /autos/search con fecha_inicio y fecha_fin
+    const danielPromise = (searchParams?.pickup_date && searchParams?.dropoff_date)
+      ? firstValueFrom(
+          this.httpService.post(
+            'https://rutalibre-autos-api.azurewebsites.net/api/v3/autos/search',
+            {
+              fecha_inicio: searchParams.pickup_date,
+              fecha_fin: searchParams.dropoff_date,
+              pickup_date: searchParams.pickup_date,
+              dropoff_date: searchParams.dropoff_date,
+            },
+            {
+              headers: {
+                'X-API-Key': 'LULUJlCwLfwSLh3dxfUZNngEGMtnb4rREAvQubkgdHA',
+                'Content-Type': 'application/json',
+                ...(correlationId ? { 'X-Correlation-Id': correlationId } : {}),
+              },
+              timeout: this.TIMEOUT_MS,
+            },
+          ),
+        ).catch(() =>
+          firstValueFrom(
+            this.httpService.get('https://rutalibre-autos-api.azurewebsites.net/api/v3/autos?limit=100', {
+              headers: { 'X-API-Key': 'LULUJlCwLfwSLh3dxfUZNngEGMtnb4rREAvQubkgdHA' },
+              timeout: this.TIMEOUT_MS,
+            }),
+          ),
+        )
+      : firstValueFrom(
+          this.httpService.get('https://rutalibre-autos-api.azurewebsites.net/api/v3/autos?limit=100', {
+            headers: { 'X-API-Key': 'LULUJlCwLfwSLh3dxfUZNngEGMtnb4rREAvQubkgdHA' },
+            timeout: this.TIMEOUT_MS,
+          }),
+        );
+
     const [danielRes, mateoRes, ...sociosRes] = await Promise.allSettled([
-      firstValueFrom(
-        this.httpService.get('https://rutalibre-autos-api.azurewebsites.net/api/v3/autos?limit=100', {
-          headers: { 'X-API-Key': 'LULUJlCwLfwSLh3dxfUZNngEGMtnb4rREAvQubkgdHA' },
-          timeout: this.TIMEOUT_MS,
-        }),
-      ),
+      danielPromise,
       firstValueFrom(
         this.httpService.get('https://maneja-de-una-autos-api.azurewebsites.net/api/v3/autos?limit=100', {
           headers: { 'X-API-Key': 'Irsuf7pF+8E89Lrmo6w2no/uTODQDhm2k5EFXTF0jq0=' },
           timeout: this.TIMEOUT_MS,
         }),
       ),
-      ...sociosCfg.map((cfg, idx) =>
-        cfg.activo
-          ? firstValueFrom(
+      ...sociosCfg.map((cfg, idx) => {
+        const def = this.SOCIOS_PANEL[idx];
+        if (!cfg.activo) {
+          return Promise.reject(new Error(`${def.nombre} desactivado (kill switch)`));
+        }
+        // Si es AutoSpot o RodadoEc y se proporcionaron fechas de búsqueda, usar POST /autos/search para disponibilidad real por fechas
+        if ((def.clave === 'AUTOSPOT' || def.clave === 'RODADO') && searchParams?.pickup_date && searchParams?.dropoff_date) {
+          const searchPayload: Record<string, string> = {
+            pickup_date: searchParams.pickup_date,
+            dropoff_date: searchParams.dropoff_date,
+            pickup_time: searchParams.pickup_time || '10:00',
+            dropoff_time: searchParams.dropoff_time || '10:00',
+            fecha_inicio: searchParams.pickup_date,
+            fecha_fin: searchParams.dropoff_date,
+          };
+          // RODADO requiere pickup_location no vacío; AUTOSPOT acepta campo adicional dropoff_location
+          const rawLoc = searchParams.pickup_location || searchParams.q || '';
+          searchPayload.pickup_location = rawLoc || 'Quito';
+          if (def.clave === 'AUTOSPOT') {
+            searchPayload.dropoff_location = searchParams.dropoff_location || rawLoc || 'Quito Aeropuerto';
+          }
+          return firstValueFrom(
+            this.httpService.post(`${cfg.baseUrl}/autos/search`, searchPayload, {
+              headers: this.socioHeaders(cfg.apiKey, correlationId ? { 'X-Correlation-Id': correlationId } : {}),
+              timeout: this.TIMEOUT_MS,
+            }),
+          ).catch(() =>
+            firstValueFrom(
               this.httpService.get(`${cfg.baseUrl}/autos?limit=100`, {
                 headers: this.socioHeaders(cfg.apiKey),
                 timeout: this.TIMEOUT_MS,
               }),
-            )
-          : Promise.reject(new Error(`${this.SOCIOS_PANEL[idx].nombre} desactivado (kill switch)`)),
-      ),
+            ),
+          );
+        }
+        return firstValueFrom(
+          this.httpService.get(`${cfg.baseUrl}/autos?limit=100`, {
+            headers: this.socioHeaders(cfg.apiKey),
+            timeout: this.TIMEOUT_MS,
+          }),
+        );
+      }),
     ]);
 
     // Procesar flota de Daniel (RutaLibre - NODE_AUT_RUTALIBRE)
@@ -310,6 +380,10 @@ export class AutosCircuitBreakerAdapter {
       for (const c of rawCars) {
         const vId = c.vehicle_id || c.auto_id || c.id;
         if (!vId) continue;
+        // Si se buscó con fechas, usar estado/status del periodo; ignorar estado_actual (estado de hoy como EN_LIMPIEZA)
+        const estadoPeriodo = c.estado || c.status || 'DISPONIBLE';
+        // Excluir solo si el auto está bloqueado para las fechas pedidas (no si solo está en limpieza hoy)
+        if (['MANTENIMIENTO', 'EN_TALLER', 'BAJA'].includes(estadoPeriodo.toUpperCase())) continue;
         const baseP = Number(c.precio_diario || c.daily_price || 39.0);
         // Daniel aplica 15% IVA en su catálogo y reservas (PVP Daniel: $72.00 base + 15% IVA = $82.80)
         const finalPvp = Number((baseP * 1.15).toFixed(2));
@@ -346,7 +420,7 @@ export class AutosCircuitBreakerAdapter {
             rating: 9.5,
             ubicacion: c.ubicacion?.agencia || 'Andes — Aeropuerto Mariscal Sucre (UIO)',
           },
-          estado: c.estado || c.status || 'DISPONIBLE',
+          estado: estadoPeriodo,
           images: Array.isArray(c.images) && c.images.length > 0 ? c.images : [this.resolveImageUrl(c.foto_url)],
         });
       }
@@ -360,6 +434,10 @@ export class AutosCircuitBreakerAdapter {
       for (const c of rawCars) {
         const vId = c.vehicle_id || c.auto_id || c.id;
         if (!vId) continue;
+        const stockDisp = Number(c.stock_disponible ?? c.unidades_disponibles ?? c.stock ?? c.available_units ?? 3);
+        const stockTotal = Number(c.stock_total ?? c.stock ?? stockDisp);
+        const rawSt = String(c.estado || c.status || 'DISPONIBLE').toUpperCase();
+        const isAvail = (rawSt === 'DISPONIBLE' || rawSt === 'AVAILABLE' || rawSt === 'ACTIVO' || rawSt === 'ACTIVE') && !c.mantenimiento_requerido && stockDisp > 0;
         allCars.push({
           vehicle_id: vId,
           marca: c.marca || c.brand || 'Suzuki',
@@ -386,7 +464,11 @@ export class AutosCircuitBreakerAdapter {
             rating: 9.4,
             ubicacion: 'Quito — Tababela Express',
           },
-          estado: c.mantenimiento_requerido ? 'MANTENIMIENTO' : (c.estado || c.status || 'DISPONIBLE'),
+          stock_total: stockTotal,
+          unidades_totales: stockTotal,
+          stock_disponible: stockDisp,
+          unidades_disponibles: stockDisp,
+          estado: isAvail ? 'DISPONIBLE' : (c.mantenimiento_requerido ? 'MANTENIMIENTO' : 'RESERVADO'),
           images: [c.foto_url || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800'],
         });
       }
@@ -432,60 +514,80 @@ export class AutosCircuitBreakerAdapter {
             ubicacion: c.proveedor?.ubicacion || c.agencia?.nombre || 'Quito',
           },
           estado: c.estado || c.status || 'DISPONIBLE',
-          images: [c.foto_url || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800'],
+          images: Array.isArray(c.images) && c.images.length > 0 ? c.images : [c.foto_url || 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800'],
         });
       }
     });
 
     if (allCars.length > 0) {
-      // 1b. Cruzar con órdenes activas para actualizar el estado del auto a RESERVADO o CONFIRMADO_ASISTIDO
+      // 1b. Cruzar con órdenes activas y validar estado operativo de la unidad.
+      // Regla de Negocio General (Mateo, Daniel y todos los socios):
+      // Si un vehículo tiene una orden activa (CONFIRMED, RESERVADO, PICKED_UP, ENTREGADO) o su estado físico reportado
+      // por el socio NO es 'DISPONIBLE', el auto queda BLOQUEADO para fechas futuras hasta que sea físicamente devuelto.
       try {
         const activeOrders = await this.getOrdersDirect();
         const searchPickup = searchParams?.pickup_date;
         const searchDropoff = searchParams?.dropoff_date;
 
         for (const car of allCars) {
+          // Si el vehículo ya viene con estado no disponible desde el socio (ej. RESERVADO, ENTREGADO, MANTENIMIENTO, ALQUILADO)
+          const rawCarState = (car.estado || '').toUpperCase();
+          const esNoDisponibleEnSocio = !['DISPONIBLE', 'AVAILABLE', 'ACTIVO', 'ACTIVE', ''].includes(rawCarState);
+          const totalUnits = Number(car.unidades_totales ?? car.unidades_disponibles ?? car.stock ?? 1);
+
           const matchingOrders = activeOrders.filter((o: any) => {
             const oVid = (o.auto_id || o.vehicle_id || '').toLowerCase().replace(/^auto-/, '');
             const cVid = car.vehicle_id.toLowerCase().replace(/^auto-/, '');
-            return oVid === cVid && o.status !== 'CANCELLED';
+            return oVid === cVid && o.status !== 'CANCELLED' && o.status !== 'CANCELADA';
           });
 
-          if (matchingOrders.length > 0) {
-            // Verificar si alguna orden coincide con las fechas solicitadas o si está activa
-            let isReservedForDates = false;
-            let isAssisted = false;
+          let overlappingCount = 0;
+          let isAssisted = false;
 
-            for (const ord of matchingOrders) {
-              const ordStatus = (ord.status || ord.estado || '').toUpperCase();
-              if (ordStatus === 'CONFIRMADO_ASISTIDO' || ord.rentalStatus === 'PICKED_UP' || ord.rental_status === 'PICKED_UP') {
+          for (const ord of matchingOrders) {
+            const ordStatus = (ord.status || ord.estado || '').toUpperCase();
+            const oPickup = ord.pickup_date || ord.retiro?.fecha || ord.pickup || ord.fecha_inicio;
+            const oDropoff = ord.dropoff_date || ord.devolucion?.fecha || ord.dropoff || ord.fecha_fin;
+            if (ordStatus === 'CONFIRMADO_ASISTIDO' || ordStatus === 'ENTREGADO' || ord.rentalStatus === 'PICKED_UP' || ord.rental_status === 'PICKED_UP') {
+              // Solo bloquear si las fechas de búsqueda solapan con el período real de la orden;
+              // si ya terminó (oDropoff < searchPickup) o es para fechas futuras distintas, el auto queda libre.
+              if (searchPickup && searchDropoff && oPickup && oDropoff) {
+                if (searchPickup <= oDropoff && searchDropoff >= oPickup) {
+                  isAssisted = true;
+                  overlappingCount++;
+                }
+                // Si no hay solapamiento, la orden ya terminó → no bloquear
+              } else {
+                // Sin fechas de búsqueda: bloquear por precaución (comportamiento previo conservador)
                 isAssisted = true;
+                overlappingCount++;
               }
-
+            } else if (ordStatus === 'RESERVADO' || ordStatus === 'CONFIRMED' || ordStatus === 'PENDING') {
               if (searchPickup && searchDropoff) {
-                const oPickup = ord.pickup_date || ord.retiro?.fecha || ord.pickup || ord.fecha_inicio;
-                const oDropoff = ord.dropoff_date || ord.devolucion?.fecha || ord.dropoff || ord.fecha_fin;
                 if (oPickup && oDropoff) {
-                  // Conflicto de fechas: solapamiento de intervalos
                   if (searchPickup <= oDropoff && searchDropoff >= oPickup) {
-                    isReservedForDates = true;
+                    overlappingCount++;
                   }
                 } else {
-                  isReservedForDates = true;
+                  overlappingCount++;
                 }
               } else {
-                // Sin fechas específicas de búsqueda: si tiene orden activa PENDING o RESERVADO
-                if (ordStatus === 'RESERVADO' || ordStatus === 'CONFIRMED' || ordStatus === 'PENDING') {
-                  isReservedForDates = true;
-                }
+                overlappingCount++;
               }
             }
+          }
 
-            if (isAssisted) {
-              car.estado = 'CONFIRMADO_ASISTIDO';
-            } else if (isReservedForDates) {
-              car.estado = 'RESERVADO';
-            }
+          if (car.unidades_disponibles !== undefined) {
+            car.unidades_disponibles = Math.max(0, totalUnits - overlappingCount);
+          }
+
+          if (isAssisted && totalUnits <= 1) {
+            car.estado = 'CONFIRMADO_ASISTIDO';
+          } else if (esNoDisponibleEnSocio || overlappingCount >= totalUnits) {
+            car.estado = esNoDisponibleEnSocio ? (rawCarState || 'RESERVADO') : 'RESERVADO';
+            if (car.unidades_disponibles !== undefined) car.unidades_disponibles = 0;
+          } else {
+            car.estado = 'DISPONIBLE';
           }
         }
       } catch (err: any) {
@@ -608,9 +710,65 @@ export class AutosCircuitBreakerAdapter {
    * Consulta las reservas activas en el proveedor para determinar fechas ya ocupadas.
    */
   async getOccupiedDates(vehicleId: string): Promise<{ pickup: string; dropoff: string }[]> {
+    const cleanId = (vehicleId || '').toLowerCase().replace(/^auto-/, '');
+    const occupied: { pickup: string; dropoff: string }[] = [];
+
+    // 1. Si es vehículo de Mateo (UUID de 36 caracteres)
+    if (cleanId.length === 36) {
+      try {
+        const mateoKey = 'Irsuf7pF+8E89Lrmo6w2no/uTODQDhm2k5EFXTF0jq0=';
+        const mRes = await firstValueFrom(
+          this.httpService.get('https://maneja-de-una-autos-api.azurewebsites.net/api/v3/autos/orders', {
+            headers: { 'X-API-Key': mateoKey },
+            timeout: 4000,
+          })
+        );
+        const list = Array.isArray(mRes.data) ? mRes.data : (mRes.data?.data || []);
+        for (const o of list) {
+          const oVid = (o.auto_id || o.vehicle_id || '').toLowerCase();
+          const oStatus = (o.status || o.estado || '').toUpperCase();
+          if (oVid === cleanId && (oStatus === 'RESERVADO' || oStatus === 'CONFIRMED' || oStatus === 'PENDING' || oStatus === 'ENTREGADO' || oStatus === 'CONFIRMADO_ASISTIDO')) {
+            const p = o.pickup_date || o.pickup;
+            const d = o.dropoff_date || o.dropoff;
+            if (p && d) occupied.push({ pickup: p, dropoff: d });
+          }
+        }
+        return occupied;
+      } catch (_) {
+        return occupied;
+      }
+    }
+
+    // 2. Socios del panel (AutoSpot / Esteban, RentaFacil, RodadoEc)
+    const socio = this.socioDeVehiculo(vehicleId);
+    if (socio) {
+      try {
+        const orders = await this.fetchSocioOrders(socio);
+        for (const o of orders) {
+          const oVid = (o.auto_id || o.vehicle_id || '').toLowerCase().replace(/^auto-/, '');
+          const oVidRaw = (o.auto_id || o.vehicle_id || '').toLowerCase();
+          const oStatus = (o.status || o.estado || '').toUpperCase();
+          if (
+            (oVid === cleanId || oVidRaw === (vehicleId || '').toLowerCase()) &&
+            oStatus !== 'CANCELLED' &&
+            oStatus !== 'CANCELADA' &&
+            oStatus !== 'COMPLETED' &&
+            oStatus !== 'COMPLETADA'
+          ) {
+            const p = o.pickup_date || o.recogida?.fecha_hora || o.pickup;
+            const d = o.dropoff_date || o.devolucion?.fecha_hora || o.dropoff;
+            if (p && d) occupied.push({ pickup: String(p).split('T')[0], dropoff: String(d).split('T')[0] });
+          }
+        }
+        return occupied;
+      } catch (_) {
+        return occupied;
+      }
+    }
+
+    // 3. Daniel (RutaLibre)
     try {
       const key = this.EXTERNAL_API_KEY || process.env.TIENDA_AUTOS_API_KEY || 'LULUJlCwLfwSLh3dxfUZNngEGMtnb4rREAvQubkgdHA';
-      const cleanId = (vehicleId || '').toLowerCase().replace(/^auto-/, '');
       const response = await firstValueFrom(
         this.httpService.get('https://rutalibre-autos-api.azurewebsites.net/api/v3/orders', {
           headers: {
@@ -635,7 +793,7 @@ export class AutosCircuitBreakerAdapter {
         }))
         .filter((o: any) => o.pickup && o.dropoff);
     } catch (_) {
-      return [];
+      return occupied;
     }
   }
 
@@ -799,8 +957,11 @@ export class AutosCircuitBreakerAdapter {
           timeout: 4000,
         })
       );
-      if (Array.isArray(response.data)) {
-        orders.push(...response.data);
+      const dData = Array.isArray(response.data)
+        ? response.data
+        : (response.data?.data || response.data?.orders || response.data?.items || []);
+      if (Array.isArray(dData)) {
+        orders.push(...dData);
       }
     } catch (_) {}
 
@@ -817,17 +978,21 @@ export class AutosCircuitBreakerAdapter {
         if (Array.isArray(adminRes.data)) {
           for (const r of adminRes.data) {
             const loc = (r.locator || r.id || '').toUpperCase();
-            const existing = orders.find(o => ((o.pnr || o.order_id || o.codigo_reserva || '').toUpperCase()) === loc);
+            const existing = orders.find(o => {
+              const oPnr = (o.pnr || o.order_id || o.codigo_reserva || o.id || '').toUpperCase();
+              return oPnr === loc || (r.id && oPnr === String(r.id).toUpperCase());
+            });
             const isAssisted = r.rentalStatus === 'PICKED_UP' ||
                                r.rentalStatus === 'RETURNED' ||
                                r.status === 'CONFIRMADO_ASISTIDO' ||
                                r.status === 'COMPLETED' ||
-                               r.status === 'ENTREGADO';
+                               r.status === 'ENTREGADO' ||
+                               r.status === 'ASISTIDO';
             if (existing) {
               existing.rentalStatus = r.rentalStatus;
               existing.rental_status = r.rentalStatus;
-              existing.plate = r.plate || existing.plate;
-              if (isAssisted) {
+              if (r.plate) existing.plate = r.plate;
+              if (isAssisted && existing.status !== 'CANCELLED') {
                 existing.status = 'CONFIRMADO_ASISTIDO';
                 existing.estado = 'CONFIRMADO_ASISTIDO';
               }
@@ -924,12 +1089,90 @@ export class AutosCircuitBreakerAdapter {
   }
 
   /**
+   * Consulta si una orden ha sido marcada como cancelada en memoria de resiliencia.
+   */
+  isOrderCancelled(orderId: string): boolean {
+    if (!orderId) return false;
+    const up = orderId.toUpperCase();
+    const clean = up.replace(/^MDU-/, '').replace(/^AUTO-/, '');
+    return (
+      this.cancelledOrderIds.has(orderId) ||
+      this.cancelledOrderIds.has(up) ||
+      this.cancelledOrderIds.has(clean) ||
+      this.cancelledOrderIds.has(`MDU-${clean}`)
+    );
+  }
+
+  /**
    * Registra manualmente un ID de orden como cancelado para actualización inmediata de inventario.
    */
   markOrderAsCancelled(orderId: string): void {
     if (!orderId) return;
+    const up = orderId.toUpperCase();
+    const clean = up.replace(/^MDU-/, '').replace(/^AUTO-/, '');
     this.cancelledOrderIds.add(orderId);
-    this.cancelledOrderIds.add(orderId.toUpperCase());
+    this.cancelledOrderIds.add(up);
+    this.cancelledOrderIds.add(orderId.toLowerCase());
+    this.cancelledOrderIds.add(clean);
+    this.cancelledOrderIds.add(`MDU-${clean}`);
+  }
+
+  /**
+   * Notifica el check-in digital al socio externo correspondiente (ej. Maneja de Una).
+   */
+  async notifyCheckinToPartner(orderIdOrPnr: string, documento: string): Promise<boolean> {
+    if (!orderIdOrPnr) return false;
+    const cleanId = orderIdOrPnr.toUpperCase();
+    if (cleanId.startsWith('MDU-') || orderIdOrPnr.length === 36) {
+      try {
+        const mKey = 'Irsuf7pF+8E89Lrmo6w2no/uTODQDhm2k5EFXTF0jq0=';
+        await firstValueFrom(
+          this.httpService.post(
+            `https://maneja-de-una-autos-api.azurewebsites.net/api/v3/autos/reservas/${orderIdOrPnr}/checkin`,
+            { documento_identidad: documento || '1720375003' },
+            { headers: { 'X-API-Key': mKey, 'Content-Type': 'application/json' }, timeout: 5000 }
+          )
+        );
+        this.logger.log(`[AutosCircuitBreaker] Check-in digital propagado a Maneja de Una: ${orderIdOrPnr}`);
+        return true;
+      } catch (err: any) {
+        this.logger.debug(`[AutosCircuitBreaker] Aviso propagando check-in a Mateo: ${err.message}`);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Notifica el check-in de devolución (retorno) a socios externos que lo soporten (ej. AutoSpot con km entero).
+   */
+  async notifyDevolucionToPartner(orderIdOrPnr: string, kmRetorno: number): Promise<boolean> {
+    if (!orderIdOrPnr) return false;
+    const cleanId = orderIdOrPnr.toUpperCase();
+    const integerKm = Math.round(Number(kmRetorno));
+    if (cleanId.startsWith('CAR') || cleanId.startsWith('RF')) {
+      try {
+        await firstValueFrom(
+          this.httpService.post(
+            `https://alquiler-vehiculos-ijx3.onrender.com/api/v3/autos/orders/${orderIdOrPnr}/checkin-devolucion`,
+            { km_retorno: integerKm },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': 'xSQILcF-wlDGZ44NFmLpLbJlsX7rWooq',
+              },
+              timeout: 8000,
+            },
+          ),
+        );
+        this.logger.log(`[AutosCircuitBreaker] Devolución propagada a AutoSpot: ${orderIdOrPnr} (km: ${integerKm})`);
+        return true;
+      } catch (err: any) {
+        this.logger.debug(`[AutosCircuitBreaker] Aviso propagando devolución a AutoSpot: ${err.message}`);
+        return false;
+      }
+    }
+    return false;
   }
 
   /**
@@ -937,10 +1180,9 @@ export class AutosCircuitBreakerAdapter {
    */
   async cancelOrder(orderId: string, reason = 'Cancelado por el cliente'): Promise<boolean> {
     const cleanId = orderId.toUpperCase();
-    this.cancelledOrderIds.add(orderId);
-    this.cancelledOrderIds.add(cleanId);
+    this.markOrderAsCancelled(orderId);
 
-    // 0. Socios del panel (Anthony RFxxxxxx, RodadoEc por PNR registrado)
+    // 0. Socios del panel (Anthony RFxxxxxx, RodadoEc por PNR registrado, AutoSpot)
     const socioCancel = await this.socioDePnr(cleanId);
     if (socioCancel) {
       const cfg = await this.getSocioConfig(socioCancel);
@@ -948,7 +1190,7 @@ export class AutosCircuitBreakerAdapter {
         await firstValueFrom(
           this.httpService.post(
             `${cfg.baseUrl}/autos/orders/${cleanId}/cancel`,
-            { reason },
+            { reason, motivo: reason, solicitante: 'SAGA_ORCHESTRATOR' },
             { headers: this.socioHeaders(cfg.apiKey, { 'Idempotency-Key': uuidv4() }), timeout: 8000 }
           )
         );
@@ -1183,11 +1425,16 @@ export class AutosCircuitBreakerAdapter {
       } catch (err: any) {
         this.logger.error(`[AutosCircuitBreaker] Error despachando a ${socio.nombre}: ${JSON.stringify(err.response?.data || err.message)}`);
         if (err.response?.status === 409) {
+          const detail = err.response?.data?.detail || err.response?.data?.message || 'El vehículo no está disponible en las fechas solicitadas.';
           throw new HttpException({
             type: 'https://api.booking.local/errors/conflict',
             title: 'Vehículo No Disponible',
             status: HttpStatus.CONFLICT,
-            detail: err.response?.data?.detail || 'El vehículo no está disponible en esas fechas.',
+            statusCode: HttpStatus.CONFLICT,
+            detail: detail,
+            message: detail,
+            code: 'VEHICLE_UNAVAILABLE',
+            correlation_id: cId,
           }, HttpStatus.CONFLICT);
         }
         throw new HttpException({
@@ -1335,11 +1582,16 @@ export class AutosCircuitBreakerAdapter {
       } catch (err: any) {
         this.logger.error(`[AutosCircuitBreaker] Error despachando a Maneja de Una: ${JSON.stringify(err.response?.data || err.message)}`);
         if (err.response?.status === 409) {
+          const detail = err.response?.data?.detail || err.response?.data?.message || 'El vehículo no está disponible en las fechas solicitadas.';
           throw new HttpException({
             type: 'https://api.booking.local/errors/conflict',
             title: 'Vehículo No Disponible',
             status: HttpStatus.CONFLICT,
-            detail: err.response?.data?.detail || 'El vehículo no está disponible en esas fechas.',
+            statusCode: HttpStatus.CONFLICT,
+            detail: detail,
+            message: detail,
+            code: 'VEHICLE_UNAVAILABLE',
+            correlation_id: cId,
           }, HttpStatus.CONFLICT);
         }
         throw new HttpException({

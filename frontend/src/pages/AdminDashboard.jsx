@@ -15,6 +15,8 @@ import { Panel5_ConsolaFiscalFacturas } from '../components/admin/Panel5_Consola
 import { Panel8_AuditoriaSagas } from '../components/admin/Panel8_AuditoriaSagas';
 import { PanelServiceMesh } from '../components/admin/PanelServiceMesh';
 import { cotizarCancelacion, cancelarReserva as cancelarReservaVuelo } from '../services/vuelosApi';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
+import { ActualizadoHace } from '../components/admin/panelUtils';
 
 const C = {
   blue: '#006ce4', darkBlue: '#003b95', lightBlue: '#ebf3ff',
@@ -253,8 +255,24 @@ function TipoBadge({ tipo }) {
   );
 }
 
-function EstadoBadge({ online, checking, desconocido }) {
+/** Vuelos: estado del ping de integración (token + contrato v2 + respuesta válida). */
+const ESTADO_INTEGRACION = {
+  INTEGRADO: { texto: 'Integrado', color: C.green, punto: C.green },
+  SIN_INTEGRACION: { texto: 'Vivo sin integración', color: C.orange, punto: C.orange },
+  CAIDO: { texto: 'Caído', color: C.red, punto: C.red },
+};
+
+function EstadoBadge({ online, checking, desconocido, integracion }) {
   if (checking) return <span style={{ color: C.gray, fontSize: '0.8rem' }}>⏳ Comprobando...</span>;
+  const ei = integracion && ESTADO_INTEGRACION[integracion.estado];
+  if (ei) {
+    return (
+      <span title={integracion.detalle} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', fontWeight: 700, color: ei.color }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: ei.punto, display: 'inline-block', boxShadow: integracion.estado === 'INTEGRADO' ? `0 0 6px ${C.green}` : 'none' }} />
+        {ei.texto}
+      </span>
+    );
+  }
   if (desconocido) {
     return (
       <span title="Nunca se ha verificado con un ping real (pulsa 🔄)" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', fontWeight: 700, color: C.gray }}>
@@ -282,7 +300,16 @@ function saludDesdeNodo(p) {
     latency: desconocido ? null : (p.latencia_ms ?? null),
     checking: false,
     lastCheck: p.ultimo_ping_at && !desconocido ? new Date(p.ultimo_ping_at) : null,
+    integracion: apagado ? null : (p.integracion || null),
   };
+}
+
+/** "hace 4 s" / "hace 2 min" (la tabla se recarga sola cada 5 s). */
+function haceCuanto(fecha) {
+  const s = Math.max(0, Math.round((Date.now() - fecha.getTime()) / 1000));
+  if (s < 60) return `hace ${s} s`;
+  if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+  return fecha.toLocaleTimeString('es-EC');
 }
 
 function ProveedoresTab({ refreshKey = 0 }) {
@@ -305,8 +332,8 @@ function ProveedoresTab({ refreshKey = 0 }) {
   const [syncing, setSyncing] = useState({});
   const [aviso, setAviso] = useState(null);
 
-  const cargarProveedores = useCallback(async () => {
-    setLoading(true);
+  const cargarProveedores = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) setLoading(true);
     try {
       const { data } = await api.get('/nodes');
       const lista = Array.isArray(data) ? data : (data?.nodes || []);
@@ -321,6 +348,7 @@ function ProveedoresTab({ refreshKey = 0 }) {
       });
       setHealth(healthInit);
     } catch (err) {
+      if (silencioso) throw err; // la recarga automática conserva lo que ya está en pantalla
       // Sin datos del backend no se inventan proveedores: se muestra el error.
       setProveedores([]);
       setAviso({ tipo: 'error', texto: apiErrorMsg(err, 'No se pudo cargar la lista de proveedores') });
@@ -332,6 +360,8 @@ function ProveedoresTab({ refreshKey = 0 }) {
   useEffect(() => {
     cargarProveedores();
   }, [cargarProveedores, refreshKey]);
+
+  const autoProv = useAutoRefresh(cargarProveedores, 5000, { pausado: !!modal || !!detalle || guardando });
 
   // Ping de salud real HTTP al backend
   const checkHealth = async (prov) => {
@@ -348,6 +378,7 @@ function ProveedoresTab({ refreshKey = 0 }) {
           latency: desconocido ? null : (data.latencia_ms ?? data.latenciaMs ?? null),
           checking: false,
           lastCheck: new Date(),
+          integracion: data.integracion || null,
         },
       }));
     } catch {
@@ -533,10 +564,8 @@ function ProveedoresTab({ refreshKey = 0 }) {
             <strong>Proveedores y aliados.</strong> Registra aquí los sistemas de tus socios (Atracciones, Autos, Alojamientos, Vuelos). El estado de cada uno sale de un <strong>ping real</strong>: "Sin verificar" significa que todavía nadie lo ha comprobado.
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={cargarProveedores} disabled={loading} style={{ background: 'white', color: C.blue, border: `1px solid ${C.blue}`, borderRadius: 6, padding: '7px 14px', cursor: loading ? 'wait' : 'pointer', fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-            {loading ? '⏳ Cargando...' : '↻ Recargar lista'}
-          </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <ActualizadoHace ultima={autoProv.ultima} fallos={autoProv.fallos} cada={5000} />
           <button onClick={verificarTodos} disabled={verificandoTodos || loading || proveedores.length === 0} style={{ background: C.blue, color: 'white', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: verificandoTodos ? 'wait' : 'pointer', fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
             {verificandoTodos ? '⏳ Verificando...' : '📡 Verificar todos (ping real)'}
           </button>
@@ -625,12 +654,14 @@ function ProveedoresTab({ refreshKey = 0 }) {
                     </div>
                   </td>
                   <td style={{ padding: '12px 14px' }}><TipoBadge tipo={prov.tipo || prov.vertical} /></td>
-                  <td style={{ padding: '12px 14px' }}><EstadoBadge online={h.online} checking={h.checking} desconocido={h.desconocido} /></td>
+                  <td style={{ padding: '12px 14px' }}><EstadoBadge online={h.online} checking={h.checking} desconocido={h.desconocido} integracion={h.integracion} /></td>
                   <td style={{ padding: '12px 14px', fontWeight: 600, color: h.online ? (h.latency > 300 ? C.orange : C.green) : C.gray }}>
                     {h.checking ? '...' : h.latency ? `${h.latency} ms` : '—'}
                   </td>
                   <td style={{ padding: '12px 14px', color: C.gray, fontSize: '0.78rem' }}>
-                    {h.lastCheck ? (typeof h.lastCheck === 'string' ? h.lastCheck : h.lastCheck.toLocaleTimeString('es-EC')) : 'Pendiente'}
+                    {h.lastCheck
+                      ? (typeof h.lastCheck === 'string' ? h.lastCheck : h.integracion ? haceCuanto(h.lastCheck) : h.lastCheck.toLocaleTimeString('es-EC'))
+                      : 'Pendiente'}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <button
@@ -715,6 +746,11 @@ function ProveedoresTab({ refreshKey = 0 }) {
                 ['🛡️ Kill-switch', detalle.kill_switch_activo ? 'Activo (no recibe tráfico)' : 'Apagado (recibe tráfico)'],
                 ['📈 Tasa de fallos', detalle.tasa_fallos_pct != null ? `${detalle.tasa_fallos_pct}%` : '—'],
                 ['🕒 Último ping', detalle.ultimo_ping_at ? fmtDate(detalle.ultimo_ping_at) : 'Nunca'],
+                ...(detalle.integracion ? [
+                  ['🔗 Integración (token + contrato v2)', `${ESTADO_INTEGRACION[detalle.integracion.estado]?.texto || detalle.integracion.estado} — ${detalle.integracion.detalle}`],
+                  ['⏱️ Último ping desglosado', `token ${detalle.integracion.pasos?.tokenMs ?? '—'} ms · llamada ${detalle.integracion.pasos?.llamadaMs ?? '—'} ms · HTTP ${detalle.integracion.pasos?.http ?? 'sin respuesta'} · mediana ${Math.round(detalle.integracion.ms)} ms`],
+                  ['🔁 Fallos seguidos', String(detalle.integracion.fallosSeguidos ?? 0)],
+                ] : []),
               ].map(([label, val]) => (
                 <div key={label} style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: '0.75rem', color: C.gray, fontWeight: 600, marginBottom: 3 }}>{label}</div>
@@ -1658,6 +1694,7 @@ function FinanzasPanel({ refreshKey }) {
       setFin(data);
       setHistorial(Array.isArray(hist.data) ? hist.data : []);
     } catch (err) {
+      if (silencioso) throw err;
       setError(apiErrorMsg(err, 'No se pudieron cargar las finanzas'));
     } finally {
       setLoading(false);
@@ -1665,6 +1702,7 @@ function FinanzasPanel({ refreshKey }) {
   }, []);
 
   useEffect(() => { cargar(); }, [cargar, refreshKey]);
+  useAutoRefresh(() => cargar(true), 30000, { pausado: !!aprobando });
 
   const aprobar = async (l) => {
     if (!window.confirm(`¿Aprobar el payout de $${fmt(l.pendiente)} para ${l.proveedor} (${fmtMes(l.periodo)})?\n\nSe registrará como pagado y quedará en auditoría.`)) return;
@@ -1674,7 +1712,7 @@ function FinanzasPanel({ refreshKey }) {
       const body = { vertical: l.vertical, periodo: l.periodo };
       const { data } = await api.post('/admin/payouts/aprobar', body);
       setAviso({ tipo: 'success', texto: `${data?.message || 'Payout aprobado.'} Referencia: ${data?.referencia || '—'}` });
-      await cargar(true);
+      await cargar(true).catch(() => {});
     } catch (err) {
       setAviso({ tipo: 'error', texto: `No se pudo aprobar el payout: ${apiErrorMsg(err)}` });
     } finally {
@@ -1871,13 +1909,14 @@ function SolicitudesProveedorPanel() {
   const [notas, setNotas] = useState({});
   const [guardando, setGuardando] = useState(null);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const cargar = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) { setLoading(true); setError(null); }
     try {
       const { data } = await api.get('/admin/proveedores/solicitudes');
       setData({ items: Array.isArray(data?.items) ? data.items : [], resumen: data?.resumen || {} });
+      if (silencioso) setError(null);
     } catch (err) {
+      if (silencioso) throw err;
       setError(apiErrorMsg(err, 'No se pudieron cargar las solicitudes de proveedores'));
     } finally {
       setLoading(false);
@@ -1885,6 +1924,7 @@ function SolicitudesProveedorPanel() {
   }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
+  const autoSol = useAutoRefresh(cargar, 5000, { pausado: !!guardando });
 
   const revisar = async (sol, accion) => {
     const nota = (notas[sol.id] || '').trim();
@@ -1927,7 +1967,7 @@ function SolicitudesProveedorPanel() {
               {label} {n ? `(${n})` : ''}
             </button>
           ))}
-          <button type="button" onClick={cargar} title="Recargar" style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 10px', cursor: 'pointer' }}>↻</button>
+          <ActualizadoHace ultima={autoSol.ultima} fallos={autoSol.fallos} cada={5000} />
         </div>
       </div>
       <div style={{ fontSize: '0.8rem', color: C.gray, marginBottom: 12 }}>
@@ -2005,14 +2045,15 @@ function SoporteTab() {
   const [savingId, setSavingId] = useState(null);
   const [errorTickets, setErrorTickets] = useState(null);
 
-  const fetchTickets = useCallback(async () => {
-    setLoadingTickets(true);
-    setErrorTickets(null);
+  const fetchTickets = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) { setLoadingTickets(true); setErrorTickets(null); }
     try {
       const { data, error } = await supabase.from('support_tickets').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       setTickets(data || []);
+      if (silencioso) setErrorTickets(null);
     } catch (err) {
+      if (silencioso) throw err;
       setTickets([]);
       setErrorTickets(err?.message || 'No se pudieron leer los tickets.');
     } finally {
@@ -2021,6 +2062,7 @@ function SoporteTab() {
   }, []);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
+  useAutoRefresh(fetchTickets, 5000, { pausado: !!savingId });
 
   const updateTicket = async (ticketId, status, resolution) => {
     setSavingId(ticketId);
@@ -2058,7 +2100,7 @@ function SoporteTab() {
 
       <SectionTitle>🎫 Tickets de Soporte (Helpdesk)</SectionTitle>
 
-      {errorTickets && <Alerta tipo="error" onClose={() => setErrorTickets(null)}>{errorTickets} <button type="button" onClick={fetchTickets} style={{ marginLeft: 8, background: 'transparent', border: `1px solid ${C.red}`, color: C.red, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}>Reintentar</button></Alerta>}
+      {errorTickets && <Alerta tipo="error" onClose={() => setErrorTickets(null)}>{errorTickets} <button type="button" onClick={() => fetchTickets()} style={{ marginLeft: 8, background: 'transparent', border: `1px solid ${C.red}`, color: C.red, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}>Reintentar</button></Alerta>}
       {loadingTickets && (
         <div style={{ textAlign: 'center', padding: '30px', color: C.gray }}>Cargando tickets...</div>
       )}
@@ -2209,13 +2251,14 @@ function AuditoriaTab({ refreshKey }) {
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(1);
 
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const cargar = useCallback(async ({ silencioso = false } = {}) => {
+    if (!silencioso) { setLoading(true); setError(null); }
     try {
       const { data } = await api.get('/admin/auditoria', { params: { limit: 500 } });
       setItems(Array.isArray(data?.items) ? data.items : []);
+      if (silencioso) setError(null);
     } catch (err) {
+      if (silencioso) throw err;
       setError(apiErrorMsg(err, 'No se pudo cargar la auditoría'));
     } finally {
       setLoading(false);
@@ -2223,6 +2266,7 @@ function AuditoriaTab({ refreshKey }) {
   }, []);
 
   useEffect(() => { cargar(); }, [cargar, refreshKey]);
+  useAutoRefresh(cargar, 5000);
   useEffect(() => { setPagina(1); }, [origen, categoria, busqueda]);
 
   const q = busqueda.trim().toLowerCase();
@@ -2602,7 +2646,7 @@ export function AdminDashboard() {
       // Todo sale de la base de datos (el backend ya incluye las 4 verticales).
       setStats(data);
     }
-    catch(err){setStats({kpis:{},ultimasReservas:[],estadosPorVertical:{},error:apiErrorMsg(err,'No se pudieron cargar las estadísticas')});}
+    catch(err){if(silent) return;setStats({kpis:{},ultimasReservas:[],estadosPorVertical:{},error:apiErrorMsg(err,'No se pudieron cargar las estadísticas')});}
     finally{if(!silent) setLoadingStats(false);setLastRefresh(new Date());}
   },[]);
 
@@ -2615,7 +2659,7 @@ export function AdminDashboard() {
       if(!lista) throw new Error('Respuesta inesperada del backend en /admin/users');
       setUsers(lista);
     }
-    catch(err){setUsers([]);setUsersError(err?.response?apiErrorMsg(err,'No se pudieron cargar los usuarios'):(err?.message||apiErrorMsg(err)));}
+    catch(err){if(silent) return;setUsers([]);setUsersError(err?.response?apiErrorMsg(err,'No se pudieron cargar los usuarios'):(err?.message||apiErrorMsg(err)));}
     finally{if(!silent) setLoadingUsers(false);}
   },[]);
 
@@ -2626,9 +2670,16 @@ export function AdminDashboard() {
       const{data}=await api.get('/admin/reservas');
       setReservas({vuelos:data?.vuelos||[],autos:data?.autos||[],atracciones:data?.atracciones||[],hospedaje:data?.hospedaje||[]});
     }
-    catch(err){setReservas({vuelos:[],autos:[],atracciones:[],hospedaje:[]});setReservasError(apiErrorMsg(err,'No se pudieron cargar las reservas'));}
+    catch(err){if(silent) return;setReservas({vuelos:[],autos:[],atracciones:[],hospedaje:[]});setReservasError(apiErrorMsg(err,'No se pudieron cargar las reservas'));}
     finally{if(!silent) setLoadingReservas(false);}
   },[]);
+
+  const handleRefresh=useCallback(()=>{
+    fetchStats();
+    checkServices();
+    fetchUsers();
+    fetchReservas();
+  },[fetchStats,checkServices,fetchUsers,fetchReservas]);
 
   useEffect(()=>{fetchStats();checkServices();},[]);
 
@@ -2636,22 +2687,11 @@ export function AdminDashboard() {
     if(activeTab==='gestion'){fetchUsers();fetchReservas();}
   },[activeTab]);
 
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await Promise.allSettled([
-        fetchStats(true),
-        checkServices(),
-        activeTab === 'gestion' ? Promise.allSettled([fetchUsers(true), fetchReservas(true)]) : Promise.resolve(),
-      ]);
-      setRefreshKey(k => k + 1);
-      setLastRefresh(new Date());
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  // Recarga automática y silenciosa (sin botón "Refrescar").
+  useAutoRefresh(() => fetchStats(true), 15000);
+  useAutoRefresh(() => checkServices(), 30000);
+  useAutoRefresh(() => fetchReservas(true), 5000, { pausado: activeTab !== 'gestion' });
+  useAutoRefresh(() => fetchUsers(true), 30000, { pausado: activeTab !== 'gestion' });
 
   return (
     <div style={{minHeight:'100vh',background:C.bg,fontFamily:"'Segoe UI', system-ui, sans-serif"}}>
@@ -2665,33 +2705,7 @@ export function AdminDashboard() {
             </div>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:12}}>
-            {lastRefresh&&<span style={{fontSize:'0.75rem',opacity:0.7}}>Actualizado: {lastRefresh.toLocaleTimeString('es-EC')}</span>}
-            <button 
-              onClick={handleRefresh} 
-              disabled={isRefreshing}
-              style={{
-                background: isRefreshing ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.15)',
-                border: '1px solid rgba(255,255,255,0.3)',
-                color: 'white',
-                padding: '6px 14px',
-                borderRadius: 6,
-                cursor: isRefreshing ? 'wait' : 'pointer',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.2s',
-              }}
-            >
-              <span style={{
-                display: 'inline-block',
-                animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none'
-              }}>
-                ↻
-              </span>
-              {isRefreshing ? 'Refrescando…' : '↻ Refrescar'}
-            </button>
+            {lastRefresh&&<span style={{fontSize:'0.75rem',opacity:0.7}}>Actualizado: {lastRefresh.toLocaleTimeString('es-EC')} · se actualiza solo</span>}
           </div>
         </div>
       </div>

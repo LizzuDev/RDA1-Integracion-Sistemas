@@ -56,6 +56,16 @@ export class NodesService {
    * servidor detenido en Azure (403) o caído (5xx / sin conexión) es "caído".
    * Antes bastaba con que el host contestara cualquier cosa < 500.
    */
+  /** Servicio de aerolíneas socias (import perezoso: evita un ciclo de módulos). */
+  private async sociosVuelos(): Promise<any> {
+    try {
+      const { VuelosSociosService } = await import('../vuelos/socios/vuelos-socios.service');
+      return this.moduleRef?.get(VuelosSociosService, { strict: false }) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private async pingVuelos(codigoNodo: string): Promise<{ online: boolean; status: number; ms: number }> {
     const t0 = Date.now();
     let socios: any = null;
@@ -68,7 +78,13 @@ export class NodesService {
     }
     if (!socios) return { online: false, status: 0, ms: Date.now() - t0 };
     const eventos = await socios.reenviar(codigoNodo, 'GET', ['eventos'], 'limit=1', null, {});
-    if (eventos.status >= 200 && eventos.status < 300) return { online: true, status: eventos.status, ms: Date.now() - t0 };
+    if (eventos.status >= 200 && eventos.status < 300) {
+      const ms = await this.medianaLatencia(Date.now() - t0, async () => {
+        const r = await socios.reenviar(codigoNodo, 'GET', ['eventos'], 'limit=1', null, {});
+        return r.status >= 200 && r.status < 300;
+      });
+      return { online: true, status: eventos.status, ms };
+    }
     const fecha = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
     const busqueda = await socios.reenviar(codigoNodo, 'POST', ['search'], '', {
       itineraries: [{ origin: 'UIO', destination: 'GYE', departureDate: fecha }],
@@ -85,6 +101,26 @@ export class NodesService {
       headers.set(name, value);
     }
     return fetch(input, { ...init, headers });
+  }
+
+  /**
+   * Latencia representativa: la primera llamada paga la conexión (DNS + TLS), así
+   * que con la conexión ya abierta se repite 2 veces y se reporta la mediana de las
+   * 3. Solo se usa para el número de ms; el estado (en línea / caído) no cambia.
+   */
+  private async medianaLatencia(primeraMs: number, repetir: () => Promise<boolean>): Promise<number> {
+    const tiempos = [primeraMs];
+    for (let i = 0; i < 2; i++) {
+      const t = Date.now();
+      try {
+        if (!(await repetir())) break;
+      } catch {
+        break;
+      }
+      tiempos.push(Date.now() - t);
+    }
+    tiempos.sort((a, b) => a - b);
+    return tiempos[Math.floor((tiempos.length - 1) / 2)];
   }
 
   async buscarNodoPorCodigoOId(codigoOId: string): Promise<ConfigProveedor | null> {
@@ -105,6 +141,7 @@ export class NodesService {
       await this.sembrarNodosPorDefecto();
     }
     let nodos = await this.configRepo.find({ order: { vertical: 'ASC', codigoNodo: 'ASC' } });
+    const socios = nodos.some((n) => n.vertical === 'VUELOS') ? await this.sociosVuelos() : null;
 
     return nodos.map(n => {
       // Cálculo del semáforo LED visual (🟢/🟡/🔴) para Panel 1
@@ -152,11 +189,20 @@ export class NodesService {
         latencia_ms: n.latenciaMs,
         latenciaMs: n.latenciaMs,
         ultimo_ping_at: n.ultimoPingAt,
+        // Vuelos: el ping de integración más reciente está en memoria (la base se actualiza cada 60 s).
+        ...(() => {
+          const s = n.vertical === 'VUELOS' && !n.killSwitchActivo && socios?.saludDe ? socios.saludDe(n.codigoNodo) : null;
+          if (!s) return {};
+          const hs = s.estado === 'INTEGRADO' ? 'HEALTHY' : s.estado === 'SIN_INTEGRACION' ? 'DEGRADED' : 'DOWN';
+          return { latencia_ms: Math.round(s.ms), latenciaMs: Math.round(s.ms), ultimo_ping_at: s.en, health_status: hs };
+        })(),
         kill_switch_activo: n.killSwitchActivo,
         killSwitchActivo: n.killSwitchActivo,
         circuit_breaker_estado: n.circuitBreakerEstado,
         tasa_fallos_pct: Number(n.tasaFallosPct),
         failCount: n.circuitBreakerEstado === 'OPEN' ? 3 : 0,
+        // Vuelos: detalle del ping de integración (token + contrato), se renueva cada 10 s.
+        ...(n.vertical === 'VUELOS' && socios?.saludDe ? { integracion: socios.saludDe(n.codigoNodo) } : {}),
         semaforo_led: {
           icono: ledColor,
           estado: ledStatus,
@@ -428,7 +474,16 @@ export class NodesService {
     let online = false;
     let verificable = false;
 
-    if (nodo.vertical === 'VUELOS' && /^https?:\/\//.test(nodo.baseUrlRest || '')) {
+    let integracion: any = null;
+    const socios = nodo.vertical === 'VUELOS' ? await this.sociosVuelos() : null;
+
+    if (nodo.vertical === 'VUELOS' && /^https?:\/\//.test(nodo.baseUrlRest || '') && socios?.comprobarIntegracion && !nodo.killSwitchActivo) {
+      // Ping de integración: token + llamada del contrato + respuesta válida.
+      verificable = true;
+      integracion = await socios.comprobarIntegracion(nodo);
+      online = integracion.estado !== 'CAIDO';
+      latencia = Math.round(integracion.ms);
+    } else if (nodo.vertical === 'VUELOS' && /^https?:\/\//.test(nodo.baseUrlRest || '')) {
       verificable = true;
       try {
         const r = await this.pingVuelos(nodo.codigoNodo);
@@ -475,9 +530,19 @@ export class NodesService {
             });
           });
         });
-        clearTimeout(timeout);
         latencia = Date.now() - t0;
         online = res ? res.status < 500 : false;
+        if (res && online) {
+          // Se lee la respuesta para liberar la conexión y poder reutilizarla.
+          await res.arrayBuffer().catch(() => undefined);
+          const url = res.url || verticalHealth;
+          latencia = await this.medianaLatencia(latencia, async () => {
+            const r = await this.fetchWithTrace(url, { headers: pingHeaders, signal: controller.signal });
+            await r.arrayBuffer().catch(() => undefined);
+            return r.status < 500;
+          });
+        }
+        clearTimeout(timeout);
       } catch (e) {
         latencia = Date.now() - t0;
         online = false;
@@ -492,7 +557,9 @@ export class NodesService {
       const umbralDegradado = nodo.baseUrlRest?.startsWith('https://') ? 3000 : 1200;
       nodo.healthStatus = !verificable
         ? 'UNKNOWN'
-        : online ? (latencia > umbralDegradado ? 'DEGRADED' : 'HEALTHY') : 'DOWN';
+        : integracion
+          ? integracion.estado === 'INTEGRADO' ? 'HEALTHY' : integracion.estado === 'SIN_INTEGRACION' ? 'DEGRADED' : 'DOWN'
+          : online ? (latencia > umbralDegradado ? 'DEGRADED' : 'HEALTHY') : 'DOWN';
     }
     await this.configRepo.save(nodo);
 
@@ -505,6 +572,7 @@ export class NodesService {
       online: nodo.healthStatus === 'HEALTHY' || nodo.healthStatus === 'DEGRADED',
       verificado: verificable,
       timestamp: nodo.ultimoPingAt,
+      ...(integracion ? { integracion } : {}),
     };
   }
 

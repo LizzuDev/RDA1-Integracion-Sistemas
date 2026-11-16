@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { getAlojamiento, getDisponibilidadAlojamiento, consultarDisponibilidad } from '../services/alojamientosApi';
 import { BarraDisponibilidad, resumenOcupacion } from '../components/BarraDisponibilidad';
 import { API_BASE } from '../services/api';
 import { getAtracciones } from '../services/atraccionesApi';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrency } from '../hooks/CurrencyContext';
+import { formatearRegimen } from '../utils/regimenFormato';
 import { AlojamientoCheckoutModal } from '../components/AlojamientoCheckoutModal';
 import { ReportModal } from '../components/ReportModal';
+import { AlojamientosLoadingView } from '../components/AlojamientosLoadingView';
 
 import {
   BedIcon,
@@ -15,6 +17,7 @@ import {
   UserIcon,
   PinIcon,
   CheckmarkIcon,
+  AmenityIcon,
   WifiIcon,
   PoolIcon,
   ParkingIcon,
@@ -35,7 +38,6 @@ import {
   TrainIcon,
   TravelProudIcon,
   GeniusGiftIcon,
-  SurveyAvatarIcon,
   CloseIcon,
   StarFilledIcon,
   StarIcon,
@@ -48,6 +50,66 @@ import {
 } from '../components/BookingIcons';
 import './AlojamientoDetail.css';
 import { fechaLocal } from '../utils/fechas';
+import { MapaAlojamientos } from '../components/MapaAlojamientos';
+
+export function getHorarioCheckin(al) {
+  if (!al) return '14:00';
+  return (
+    al.checkin_desde ||
+    al.politicas?.checkin_desde ||
+    al.politicas?.check_in ||
+    al.politicas?.checkin ||
+    al.politicas?.hora_checkin ||
+    al.politicas?.hora_entrada ||
+    al.politicas?.entrada ||
+    al.checkInPermitidoDesde ||
+    al.check_in_desde ||
+    al.horaCheckin ||
+    al.hora_checkin ||
+    al.horarioCheckIn ||
+    al.horario_checkin ||
+    al.checkIn ||
+    al.check_in ||
+    al.checkin ||
+    '14:00'
+  );
+}
+
+export function getHorarioCheckinHasta(al) {
+  if (!al) return null;
+  return (
+    al.checkin_hasta ||
+    al.politicas?.checkin_hasta ||
+    al.politicas?.check_in_hasta ||
+    al.politicas?.hora_limite_checkin ||
+    al.checkInPermitidoHasta ||
+    al.check_in_hasta ||
+    null
+  );
+}
+
+export function getHorarioCheckout(al) {
+  if (!al) return '11:00';
+  return (
+    al.checkout_hasta ||
+    al.politicas?.checkout_hasta ||
+    al.politicas?.check_out ||
+    al.politicas?.checkout ||
+    al.politicas?.hora_checkout ||
+    al.politicas?.hora_salida ||
+    al.politicas?.salida ||
+    al.checkOutHoraMaxima ||
+    al.check_out_hasta ||
+    al.horaCheckout ||
+    al.hora_checkout ||
+    al.horarioCheckOut ||
+    al.horario_checkout ||
+    al.checkOut ||
+    al.check_out ||
+    al.checkout ||
+    '11:00'
+  );
+}
 
 // High-res gallery photos matching Booking.com desktop layout
 const GALLERY_DEFAULT_PHOTOS = [
@@ -100,6 +162,7 @@ const DEFAULT_ATTRACTIONS = [
 export function AlojamientoDetail() {
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currency, convertPrice } = useCurrency();
@@ -151,13 +214,14 @@ export function AlojamientoDetail() {
   // UI Interactive States
   const [activeTab, setActiveTab] = useState('overview');
   const [isSaved, setIsSaved] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(null);
-  const [surveyResponse, setSurveyResponse] = useState('');
 
   // Booking Form State
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
 
   // Cotización REAL del backend para las fechas y ocupación elegidas
   // (POST /alojamientos/availability): precio, noches y habitaciones libres.
@@ -272,58 +336,96 @@ export function AlojamientoDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Sincronizar disponibilidad en tiempo real
+  // Sincronizar disponibilidad en tiempo real (Polling continuo cada 4 segundos)
   useEffect(() => {
     if (!id) return;
     let isCancelled = false;
-    const fetchAvail = async () => {
-      setLoadingDisponibilidad(true);
+    let timer = null;
+
+    const fetchAvail = async (isSilent = false) => {
+      if (!isSilent) setLoadingDisponibilidad(true);
       try {
         const data = await getDisponibilidadAlojamiento(id, { checkin, checkout });
-        if (!isCancelled) {
-          setDisponibilidad(data);
-          if (data && typeof data.available_rooms === 'number') {
+        if (!isCancelled && data) {
+          setDisponibilidad((prev) => {
+            if (
+              prev &&
+              prev.available_rooms === data.available_rooms &&
+              prev.estado === data.estado &&
+              prev.precio_total === data.precio_total
+            ) {
+              return prev;
+            }
+            return data;
+          });
+          if (typeof data.available_rooms === 'number') {
             if (data.available_rooms > 0 && rooms > data.available_rooms) {
               setRooms(data.available_rooms);
             }
           }
         }
       } catch (err) {
-        console.warn('Error verificando disponibilidad de habitaciones:', err);
+        console.warn('[AlojamientoDetail] Error transitorio verificando disponibilidad:', err?.message || err);
       } finally {
-        if (!isCancelled) setLoadingDisponibilidad(false);
+        if (!isCancelled && !isSilent) {
+          setLoadingDisponibilidad(false);
+        }
       }
     };
-    fetchAvail();
-    return () => { isCancelled = true; };
-  }, [id, checkin, checkout]);
+
+    const runPoll = async (silent) => {
+      if (isCancelled) return;
+      if (silent && typeof document !== 'undefined' && document.hidden) {
+        timer = setTimeout(() => runPoll(true), 4000);
+        return;
+      }
+      await fetchAvail(silent);
+      if (checkin && checkout && checkout > checkin) {
+        consultarDisponibilidad({
+          id,
+          checkin,
+          checkout,
+          adultos: adults,
+          edadesNinos,
+          habitaciones: rooms,
+        })
+          .then((data) => {
+            if (!isCancelled && data) {
+              const productos = data.products || [];
+              setCotizacion((prev) => {
+                if (!prev) return prev;
+                const prod = productos.find((p) => p.product_id === tipoElegidoId || p.codigo === tipoElegidoId) || productos[0] || prev.producto;
+                return {
+                  ...prev,
+                  libres: prod ? prod.available_rooms : data.available_rooms,
+                  libresHotel: data.available_rooms,
+                  producto: prod,
+                  productos,
+                };
+              });
+            }
+          })
+          .catch(() => {});
+      }
+      if (!isCancelled) {
+        timer = setTimeout(() => runPoll(true), 4000);
+      }
+    };
+
+    runPoll(false);
+
+    return () => {
+      isCancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [id, checkin, checkout, adults, rooms, edadesNinos, tipoElegidoId]);
 
   // References for Smooth Scrolling
   const overviewRef = useRef(null);
   const availabilityRef = useRef(null);
   const facilitiesRef = useRef(null);
   const rulesRef = useRef(null);
-  const reviewsRef = useRef(null);
-
-  // Reviews State
-  const [resenas, setResenas] = useState([]);
-  const [resenasScores, setResenasScores] = useState(null);
-  const [resenasLoading, setResenasLoading] = useState(false);
-
-
-  // Load Resenas
-  useEffect(() => {
-    if (!id) return;
-    setResenasLoading(true);
-    fetch(`${API_BASE}/alojamientos/${id}/resenas`)
-      .then((r) => r.json())
-      .then((data) => {
-        setResenas(data.resenas || []);
-        setResenasScores(data.scores || null);
-      })
-      .catch(() => {})
-      .finally(() => setResenasLoading(false));
-  }, [id]);
+  const surroundingsRef = useRef(null);
 
   // Load Alojamiento & Related Attractions
   useEffect(() => {
@@ -403,22 +505,7 @@ export function AlojamientoDetail() {
 
 
   if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '100px 20px', color: '#003580' }}>
-        <div
-          style={{
-            width: '40px',
-            height: '40px',
-            border: '4px solid #e0e0e0',
-            borderTopColor: '#006ce4',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px auto',
-          }}
-        />
-        <h2>Cargando alojamiento...</h2>
-      </div>
-    );
+    return <AlojamientosLoadingView />;
   }
 
   if (error || !alojamiento) {
@@ -441,7 +528,6 @@ export function AlojamientoDetail() {
   const scoreNum = Number(alojamiento.ratings?.score);
   const tieneScore = Number.isFinite(scoreNum) && scoreNum > 0;
   const score = tieneScore ? scoreNum.toFixed(1) : null;
-  const reviewsCount = resenas.length || Number(alojamiento.ratings?.number_of_reviews) || 0;
 
   const availableRoomsCount = typeof cotizacion?.libres === 'number'
     ? cotizacion.libres
@@ -714,17 +800,10 @@ export function AlojamientoDetail() {
           </button>
           <button
             type="button"
-            className="dt-nav-tab"
-            onClick={() => alert('La información legal es provista por el anfitrión')}
+            className={`dt-nav-tab ${activeTab === 'surroundings' ? 'active' : ''}`}
+            onClick={() => scrollToSection(surroundingsRef, 'surroundings')}
           >
-            Información legal
-          </button>
-          <button
-            type="button"
-            className={`dt-nav-tab ${activeTab === 'reviews' ? 'active' : ''}`}
-            onClick={() => scrollToSection(reviewsRef, 'reviews')}
-          >
-            Comentarios ({resenas.length || reviewsCount})
+            Ubicación y mapa
           </button>
         </nav>
       </div>
@@ -756,7 +835,10 @@ export function AlojamientoDetail() {
               <PinIcon size={16} color="#006ce4" />
               <span>{alojamiento.ubicacion?.address || (typeof alojamiento.ubicacion === 'string' ? alojamiento.ubicacion : alojamiento.destino || 'Ecuador')}</span>
               <span>–</span>
-              <span className="dt-address-link" onClick={() => alert('Abriendo mapa de ubicación')}>
+              <span
+                className="dt-address-link"
+                onClick={() => setShowMapModal(true)}
+              >
                 Ubicación excelente – mostrar en el mapa
               </span>
               <span className="dt-price-match-tag">
@@ -777,13 +859,15 @@ export function AlojamientoDetail() {
             <button
               type="button"
               className="dt-action-icon-btn"
+              title={linkCopied ? '¡Enlace copiado al portapapeles!' : 'Compartir alojamiento'}
               onClick={() => {
                 navigator.clipboard?.writeText(window.location.href);
-                alert('Enlace copiado al portapapeles!');
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2500);
               }}
               aria-label="Compartir alojamiento"
             >
-              <ShareIcon size={20} color="#1a1a1a" />
+              <ShareIcon size={20} color={linkCopied ? '#008009' : '#1a1a1a'} />
             </button>
             <button
               type="button"
@@ -833,7 +917,7 @@ export function AlojamientoDetail() {
           <div className="dt-pills-bar">
             {alojamiento.amenidades.map((a, i) => (
               <span key={i} className="dt-pill-item">
-                <CheckmarkIcon size={16} /> {a}
+                <AmenityIcon name={a} size={16} color="#003580" /> {a}
               </span>
             ))}
           </div>
@@ -844,7 +928,11 @@ export function AlojamientoDetail() {
           {/* Left Column */}
           <div className="dt-overview-left">
             <div className="dt-genius-notice">
-              Podrías optar a un descuento Genius en {alojamiento.nombre}. Para comprobar si hay un descuento Genius disponible para tus fechas, <Link to="/login">inicia sesión</Link>.
+              {user ? (
+                <span>✓ Tienes beneficios y tarifas Genius activas aplicadas a tu estancia en <strong>{alojamiento.nombre}</strong>.</span>
+              ) : (
+                <span>Podrías optar a un descuento Genius en {alojamiento.nombre}. Para comprobar si hay un descuento Genius disponible para tus fechas, <Link to="/login" state={{ from: location.pathname + location.search }} onClick={() => sessionStorage.setItem('booking_return_url', location.pathname + location.search)}>inicia sesión</Link>.</span>
+              )}
             </div>
 
             <div>
@@ -866,8 +954,8 @@ export function AlojamientoDetail() {
                 <h3 className="dt-popular-facilities-title">Servicios más populares</h3>
                 <div className="dt-popular-facilities-grid">
                   {alojamiento.amenidades.map((a, i) => (
-                    <span key={i} className="dt-popular-facility-item green">
-                      <CheckmarkIcon size={16} color="#008009" /> {a}
+                    <span key={i} className="dt-popular-facility-item green" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      <AmenityIcon name={a} size={18} color="#008009" /> {a}
                     </span>
                   ))}
                 </div>
@@ -875,105 +963,56 @@ export function AlojamientoDetail() {
             )}
           </div>
 
-          {/* Right Column (Highlights Card & Score) */}
+          {/* Right Column (Side Map & Reserve CTA) */}
           <aside className="dt-overview-right">
-            {/* Rating card */}
-            <div className="dt-rating-card">
-              <div className="dt-score-row">
-                <div className="dt-score-text">
-                  <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>
-                    {!tieneScore ? 'Nuevo' : scoreNum >= 9 ? 'Excelente' : scoreNum >= 8 ? 'Muy bueno' : 'Bueno'}
-                  </span>
-                  <span style={{ fontSize: '0.78rem', color: '#595959' }}>
-                    {reviewsCount > 0 ? `${reviewsCount} comentario${reviewsCount === 1 ? '' : 's'}` : 'Sin comentarios aún'}
-                  </span>
-                </div>
-                {tieneScore && <div className="dt-score-badge">{score}</div>}
-              </div>
-              {Array.isArray(alojamiento.amenidades) && alojamiento.amenidades.length > 0 && (
-                <div style={{ fontSize: '0.8rem', color: '#374151', borderTop: '1px solid #f0f0f0', paddingTop: '10px' }}>
-                  <strong>Servicios del alojamiento:</strong>
-                  <ul style={{ paddingLeft: '16px', margin: '6px 0 0 0' }}>
-                    {alojamiento.amenidades.slice(0, 4).map((a, i) => <li key={i}>{a}</li>)}
-                  </ul>
-                </div>
-              )}
-            </div>
-
             {/* Side Map */}
             <div
               className="dt-side-map-box"
               style={{
-                backgroundImage: 'url("https://maps.googleapis.com/maps/api/staticmap?size=340x140&center=-0.1838,-78.4919&zoom=13&scale=2&sensor=false")',
+                backgroundImage: 'url("https://tile.openstreetmap.org/14/4620/8200.png")',
                 backgroundColor: '#e5e3df',
               }}
             >
               <button
                 type="button"
                 className="dt-btn-blue"
-                onClick={() => alert(`Mostrando mapa para ${alojamiento.nombre}`)}
+                onClick={() => setShowMapModal(true)}
               >
                 <PinIcon size={16} /> Mostrar en el mapa
               </button>
             </div>
 
-            {/* Property Highlights: datos reales del hotel. */}
-            <div className="dt-highlights-card">
-              <h3 className="dt-highlights-title">Puntos fuertes del alojamiento</h3>
-              <div className="dt-stay-badge">¡Ideal para una estancia de {nightsCount} noches!</div>
-
-              {(alojamiento.ubicacion?.address || alojamiento.destino) && (
-                <div className="dt-highlight-point">
-                  <PinIcon size={16} color="#006ce4" />
-                  <div>
-                    <strong>Ubicación:</strong> {alojamiento.ubicacion?.address || alojamiento.destino}
-                  </div>
-                </div>
-              )}
-
-              {Number(alojamiento.estrellas) > 0 && (
-                <div className="dt-highlight-point">
-                  <CheckmarkIcon size={16} color="#006ce4" />
-                  <div><strong>Categoría:</strong> {alojamiento.estrellas} estrellas</div>
-                </div>
-              )}
-
-              <div className="dt-highlight-point">
-                <ClockIcon size={16} color="#006ce4" />
-                <div>
-                  <strong>Horarios:</strong> entrada desde las {alojamiento.politicas?.checkin_desde || alojamiento.checkInPermitidoDesde || '14:00'}{alojamiento.politicas?.checkin_hasta ? ` hasta las ${alojamiento.politicas.checkin_hasta}` : ''} · salida hasta las {alojamiento.politicas?.checkout_hasta || alojamiento.checkOutHoraMaxima || '11:00'}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="dt-reserve-btn-full"
-                onClick={() => scrollToSection(availabilityRef, 'price')}
-              >
-                Reservar tu estancia
-              </button>
-            </div>
+            <button
+              type="button"
+              className="dt-reserve-btn-full"
+              style={{ marginTop: '12px' }}
+              onClick={() => scrollToSection(availabilityRef, 'price')}
+            >
+              Reservar tu estancia
+            </button>
           </aside>
         </div>
 
-        {/* Genius promo banner */}
-        <div className="dt-genius-promo-box">
-          <div>
-            <h3>Inicia sesión y ahorra dinero</h3>
-            <p>Para comprobar si puedes ahorrar un 10% o más en este alojamiento, inicia sesión</p>
-            <div className="dt-genius-btns">
-              <Link to="/login" className="dt-btn-blue">
-                Iniciar sesión
-              </Link>
-              <Link to="/register" className="dt-link-blue">
-                Crear una cuenta gratis
-              </Link>
+        {/* Genius promo banner: solo mostrar si el usuario NO ha iniciado sesión */}
+        {!user && (
+          <div className="dt-genius-promo-box">
+            <div>
+              <h3>Inicia sesión y ahorra dinero</h3>
+              <p>Para comprobar si puedes ahorrar un 10% o más en este alojamiento, inicia sesión</p>
+              <div className="dt-genius-btns">
+                <Link to="/login" state={{ from: location.pathname + location.search }} onClick={() => sessionStorage.setItem('booking_return_url', location.pathname + location.search)} className="dt-btn-blue">
+                  Iniciar sesión
+                </Link>
+                <Link to="/register" state={{ from: location.pathname + location.search }} onClick={() => sessionStorage.setItem('booking_return_url', location.pathname + location.search)} className="dt-link-blue">
+                  Crear una cuenta gratis
+                </Link>
+              </div>
+            </div>
+            <div>
+              <GeniusGiftIcon size={52} />
             </div>
           </div>
-          <div>
-            <GeniusGiftIcon size={52} />
-          </div>
-        </div>
+        )}
 
         {/* ======================================================================
             AVAILABILITY & ROOM SELECTION TABLE SECTION
@@ -1074,10 +1113,10 @@ export function AlojamientoDetail() {
                       </td>
                       <td>
                         <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <CheckmarkIcon size={14} /> {p.meal_plan}
+                          <CheckmarkIcon size={14} /> {formatearRegimen(p.meal_plan)}
                         </div>
-                        <div style={{ color: p.reembolsable === false ? '#d4111e' : (p.reembolsable ? '#008009' : '#595959'), fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          {p.reembolsable ? <CheckmarkIcon size={14} /> : (p.reembolsable === false ? '✕' : null)} {p.cancellation_type || (p.reembolsable === false ? 'No reembolsable' : 'Cancelación gratis')}
+                        <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckmarkIcon size={14} /> Cancelación gratis (hasta 48h antes del check-in)
                         </div>
                         {libres <= 3 ? (
                           <div style={{ color: '#d4111e', fontWeight: 700, fontSize: '0.75rem' }}>
@@ -1122,7 +1161,7 @@ export function AlojamientoDetail() {
                       {alojamiento.tipo_alojamiento || 'Departamento de 2 dormitorios'}
                     </span>
                     <div className="dt-room-features-list">
-                      <span>Departamento entero · {alojamiento.habitaciones || 2} dormitorios · 1 sala de estar · {alojamiento.banos || 2} baños</span>
+                      <span>Departamento entero · {alojamiento.habitaciones || 2} dormitorios · 1 sala de estar · {alojamiento.banos || 1} {Number(alojamiento.banos) === 1 ? 'baño privado' : 'baños'}</span>
                       <span>1 cocina · 95 m²</span>
                       <span>{alojamiento.descripcion_camas || `${alojamiento.camas || 1} ${alojamiento.camas === 1 ? 'cama' : 'camas'}`}</span>
                       <span style={{ color: '#008009', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1155,10 +1194,10 @@ export function AlojamientoDetail() {
                   </td>
                   <td>
                     <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <CheckmarkIcon size={14} /> {cotizacion?.producto?.meal_plan || 'Desayuno incluido'}
+                      <CheckmarkIcon size={14} /> {formatearRegimen(cotizacion?.producto?.meal_plan || 'Desayuno incluido')}
                     </div>
-                    <div style={{ color: cotizacion?.producto?.reembolsable === false ? '#d4111e' : '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      {cotizacion?.producto?.reembolsable !== false && <CheckmarkIcon size={14} />} {cotizacion?.producto?.cancellation_type || (cotizacion?.producto?.reembolsable === false ? 'No reembolsable' : 'Cancelación gratis')}
+                    <div style={{ color: '#008009', fontWeight: 600, fontSize: '0.82rem', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckmarkIcon size={14} /> Cancelación gratis (hasta 48h antes del check-in)
                     </div>
                     {isSoldOut ? (
                       <div style={{ color: '#d4111e', fontWeight: 700, fontSize: '0.8rem' }}>
@@ -1235,7 +1274,14 @@ export function AlojamientoDetail() {
                 type="button"
                 className="dt-reserve-btn-primary"
                 disabled={isSoldOut}
-                onClick={() => setShowCheckoutModal(true)}
+                onClick={() => {
+                  if (!user) {
+                    sessionStorage.setItem('booking_return_url', location.pathname + location.search);
+                    navigate('/login', { state: { from: location.pathname + location.search, message: 'Inicia sesión para completar tu reserva' } });
+                    return;
+                  }
+                  setShowCheckoutModal(true);
+                }}
                 style={{
                   width: '100%',
                   fontSize: '16px',
@@ -1259,64 +1305,16 @@ export function AlojamientoDetail() {
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <CheckmarkIcon size={12} color="#008009" /> <span>¡Solo te llevará 2 minutos!</span>
                 </div>
-                {alojamiento?.politicas?.es_reembolsable === false || cotizacion?.producto?.reembolsable === false ? (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#d4111e', fontWeight: 600 }}>
-                    <span>✕ No reembolsable</span>
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <CheckmarkIcon size={12} color="#008009" /> <span>No pagas nada hoy</span>
-                    </div>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <CheckmarkIcon size={12} color="#008009" /> <span>Cancelación gratuita</span>
-                    </div>
-                  </>
-                )}
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckmarkIcon size={12} color="#008009" /> <span>No pagas nada hoy</span>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <CheckmarkIcon size={12} color="#008009" /> <span>Cancelación gratis (hasta 48h antes del check-in)</span>
+                </div>
               </div>
             </div>
           </div>
 
-        </section>
-
-        {/* ======================================================================
-            SURVEY CARD ("¿Qué te parece nuestra página?")
-            ====================================================================== */}
-        <section className="dt-survey-box">
-          <div className="dt-survey-header">
-            <h3>¿Qué te parece nuestra página?</h3>
-            <button
-              type="button"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={(e) => e.currentTarget.parentElement.parentElement.remove()}
-              aria-label="Cerrar encuesta"
-            >
-              <CloseIcon size={16} color="#595959" />
-            </button>
-          </div>
-          <div className="dt-survey-body">
-            <SurveyAvatarIcon size={52} />
-            <div>
-              <div style={{ fontSize: '0.8rem', color: '#595959', marginBottom: '4px' }}>1 de 2</div>
-              <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '8px' }}>
-                Me resulta fácil seleccionar el tipo de alojamiento que necesito
-              </div>
-              <div className="dt-survey-options">
-                {['Totalmente de acuerdo', 'De acuerdo', 'Neutral', 'En desacuerdo', 'Totalmente en desacuerdo'].map((opt) => (
-                  <label key={opt} className="dt-survey-option-label">
-                    <input
-                      type="radio"
-                      name="survey"
-                      value={opt}
-                      checked={surveyResponse === opt}
-                      onChange={(e) => setSurveyResponse(e.target.value)}
-                    />
-                    <span>{opt}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
         </section>
 
         {/* ======================================================================
@@ -1346,7 +1344,7 @@ export function AlojamientoDetail() {
                 <span>Entrada</span>
               </div>
               <div className="dt-rule-right">
-                <strong>A partir de las {alojamiento?.politicas?.checkin_desde || alojamiento?.checkInPermitidoDesde || '14:00'}{alojamiento?.politicas?.checkin_hasta ? ` hasta las ${alojamiento.politicas.checkin_hasta}` : ''}</strong>
+                <strong>A partir de las {getHorarioCheckin(alojamiento)}{getHorarioCheckinHasta(alojamiento) ? ` hasta las ${getHorarioCheckinHasta(alojamiento)}` : ''}</strong>
                 <div style={{ fontSize: '0.8rem', color: '#595959' }}>
                   El check-in se realiza presencialmente en la recepción del alojamiento a tu llegada.
                 </div>
@@ -1359,66 +1357,64 @@ export function AlojamientoDetail() {
                 <span>Salida</span>
               </div>
               <div className="dt-rule-right">
-                <strong>Hasta las {alojamiento?.politicas?.checkout_hasta || alojamiento?.checkOutHoraMaxima || '11:00'}</strong>
+                <strong>Hasta las {getHorarioCheckout(alojamiento)}</strong>
               </div>
             </div>
 
-            <div className="dt-rule-row">
-              <div className="dt-rule-left">
-                <InfoIcon size={18} color="#003580" />
-                <span>Cancelación / prepago</span>
-              </div>
-              <div className="dt-rule-right">
-                {alojamiento?.politicas?.cancelacion || 'Las condiciones de cancelación y pago por adelantado pueden variar según el tipo de alojamiento.'}
-              </div>
-            </div>
-
-            <div className="dt-rule-row">
-              <div className="dt-rule-left">
-                <FamilyIcon size={18} color="#003580" />
-                <span>Camas y niños</span>
-              </div>
-              <div className="dt-rule-right">
-                <div>
-                  <strong>Políticas sobre menores:</strong> Se pueden alojar niños de cualquier edad.
+            {alojamiento.politicas?.cancelacion && (
+              <div className="dt-rule-row">
+                <div className="dt-rule-left">
+                  <InfoIcon size={18} color="#003580" />
+                  <span>Cancelación / prepago</span>
                 </div>
-                <div style={{ marginTop: '4px' }}>
-                  <strong>Cunas y camas supletorias:</strong> Hay cunas y camas supletorias disponibles a petición sin costo adicional.
+                <div className="dt-rule-right">
+                  {alojamiento.politicas.cancelacion}
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="dt-rule-row">
-              <div className="dt-rule-left">
-                <UserIcon size={18} color="#003580" />
-                <span>Restricción de edad</span>
-              </div>
-              <div className="dt-rule-right">
-                Edad mínima para el check-in: 18 años
-              </div>
-            </div>
-
-            <div className="dt-rule-row">
-              <div className="dt-rule-left">
-                <CreditCardIcon size={18} color="#003580" />
-                <span>Tarjetas aceptadas</span>
-              </div>
-              <div className="dt-rule-right">
-                <div className="dt-payment-cards-row">
-                  <span className="dt-card-badge">American Express</span>
-                  <span className="dt-card-badge">Visa</span>
-                  <span className="dt-card-badge">Mastercard</span>
-                  <span style={{ fontSize: '0.8rem', color: '#595959', marginLeft: '8px' }}>No se acepta efectivo</span>
+            {alojamiento.politicas?.mascotas !== undefined && (
+              <div className="dt-rule-row">
+                <div className="dt-rule-left">
+                  <PetsIcon size={18} color="#003580" />
+                  <span>Mascotas</span>
+                </div>
+                <div className="dt-rule-right">
+                  {alojamiento.politicas.mascotas ? 'Se admiten mascotas en el establecimiento.' : 'No se admiten mascotas en las habitaciones.'}
                 </div>
               </div>
-            </div>
+            )}
+
+            {alojamiento.politicas?.fumar !== undefined && (
+              <div className="dt-rule-row">
+                <div className="dt-rule-left">
+                  <NoSmokingIcon size={18} color="#003580" />
+                  <span>Fumar</span>
+                </div>
+                <div className="dt-rule-right">
+                  {alojamiento.politicas.fumar ? 'Permitido fumar en áreas exteriores habilitadas.' : 'No se permite fumar en el interior del establecimiento.'}
+                </div>
+              </div>
+            )}
+
+            {(!alojamiento.politicas || Object.values(alojamiento.politicas).every((v) => v === null || v === undefined || v === '')) && (
+              <div className="dt-rule-row">
+                <div className="dt-rule-left">
+                  <InfoIcon size={18} color="#003580" />
+                  <span>Condiciones</span>
+                </div>
+                <div className="dt-rule-right" style={{ color: '#595959' }}>
+                  El establecimiento no tiene normas adicionales registradas. Las condiciones estándar de estadía se coordinan directamente a tu llegada.
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
         {/* ======================================================================
             SURROUNDINGS & LANDMARKS
             ====================================================================== */}
-        <section style={{ marginBottom: '40px' }} id="surroundings">
+        <section ref={surroundingsRef} style={{ marginBottom: '40px' }} id="surroundings">
           <h2 style={{ fontSize: '1.45rem', fontWeight: 800, marginBottom: '14px' }}>
             Alrededores y lugares de interés cercanos
           </h2>
@@ -1483,6 +1479,19 @@ export function AlojamientoDetail() {
               </ul>
             </div>
           </div>
+
+          {/* Mapa Interactivo de Ubicación y Alrededores */}
+          <div style={{ marginTop: '24px' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '12px', color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <PinIcon size={18} color="#003580" />
+              Ubicación en el mapa interactivo
+            </h3>
+            <MapaAlojamientos
+              mode="inline"
+              alojamiento={alojamiento}
+              height="380px"
+            />
+          </div>
         </section>
 
         {/* ======================================================================
@@ -1521,8 +1530,7 @@ export function AlojamientoDetail() {
                     <div className="dt-activity-title">{act.name}</div>
                     <div className="dt-activity-rating" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <StarFilledIcon size={13} color="#f59e0b" />
-                      <span style={{ fontWeight: 600 }}>{ratingScore}</span>
-                      <span style={{ color: '#595959', fontSize: '0.75rem' }}>({reviews} comentarios)</span>
+                      <span style={{ color: '#008009', fontWeight: 600, fontSize: '0.8rem' }}>Recomendado</span>
                     </div>
                     <div>
                       <div style={{ fontSize: '0.72rem', color: '#595959' }}>Entradas desde</div>
@@ -1544,7 +1552,7 @@ export function AlojamientoDetail() {
             <div>
               <h2>Instalaciones y servicios de {alojamiento.nombre}</h2>
               <div style={{ fontSize: '0.85rem', color: '#595959' }}>
-                {tieneScore ? `Puntuación de servicios: ${score}` : 'Servicios que ofrece el alojamiento'}
+                Servicios que ofrece el alojamiento
               </div>
             </div>
             <button
@@ -1576,87 +1584,6 @@ export function AlojamientoDetail() {
           </div>
         </section>
       </div>
-
-      {/* ======================================================================
-          REVIEWS / COMENTARIOS SECTION
-          ====================================================================== */}
-      <section className="dt-reviews-section" ref={reviewsRef} id="reviews">
-        <div className="dt-reviews-header">
-          <div>
-            <h2>Comentarios de los huespedes</h2>
-            <div style={{ fontSize: '0.85rem', color: '#595959' }}>
-              {reviewsCount > 0 ? `${reviewsCount} comentario${reviewsCount === 1 ? '' : 's'} de huéspedes` : 'Este alojamiento todavía no tiene comentarios'}
-            </div>
-          </div>
-          <button
-            type="button"
-            className="dt-reserve-btn-primary"
-            onClick={() => scrollToSection(availabilityRef, 'price')}
-          >
-            Ver disponibilidad
-          </button>
-        </div>
-
-        {/* Score Summary */}
-        {resenasScores && (
-          <div className="dt-reviews-summary">
-            <div className="dt-reviews-score-big">
-              <div className="dt-score-badge" style={{ fontSize: '2.2rem', width: '80px', height: '80px', borderRadius: '8px 8px 8px 0' }}>
-                {resenasScores.general}
-              </div>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>
-                  {resenasScores.general >= 9 ? 'Excelente' : resenasScores.general >= 8 ? 'Muy bueno' : 'Bueno'}
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#595959' }}>{resenas.length} comentarios</div>
-              </div>
-            </div>
-            <div className="dt-reviews-bars">
-              {[
-                { label: 'Limpieza', val: resenasScores.limpieza },
-                { label: 'Servicio', val: resenasScores.servicio },
-                { label: 'Calidad-precio', val: resenasScores.calidad },
-              ].map(({ label, val }) => (
-                <div key={label} className="dt-review-bar-row">
-                  <span className="dt-review-bar-label">{label}</span>
-                  <div className="dt-review-bar-track">
-                    <div className="dt-review-bar-fill" style={{ width: `${(val / 10) * 100}%` }} />
-                  </div>
-                  <span className="dt-review-bar-val">{val}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Individual Reviews */}
-        {resenasLoading ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: '#595959' }}>Cargando comentarios...</div>
-        ) : (
-          <div className="dt-reviews-list">
-            {resenas.map((r) => (
-              <div key={r.id} className="dt-review-card">
-                <div className="dt-review-avatar">
-                  {(r.usuarioNombre || 'A').charAt(0).toUpperCase()}
-                </div>
-                <div className="dt-review-body">
-                  <div className="dt-review-meta">
-                    <div>
-                      <strong style={{ fontSize: '0.95rem' }}>{r.usuarioNombre || 'Huesped anonimo'}</strong>
-                      <span style={{ fontSize: '0.78rem', color: '#595959', marginLeft: '6px' }}>{r.usuarioPais}</span>
-                    </div>
-                    <div className="dt-review-score-pill">{Number(r.puntuacion).toFixed(1)}</div>
-                  </div>
-                  <p className="dt-review-comment">{r.comentario}</p>
-                  <div style={{ fontSize: '0.75rem', color: '#595959' }}>
-                    {r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long' }) : ''}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       {/* ======================================================================
           LIGHTBOX FULLSCREEN MODAL
@@ -1730,6 +1657,14 @@ export function AlojamientoDetail() {
         entityName={alojamiento?.nombre || 'Alojamiento'} 
         pnrOrId={alojamiento?.id || 'HOTEL'} 
         type="Hospedaje" 
+      />
+
+      {/* Modal de Mapa Interactivo con Leaflet y OpenStreetMap */}
+      <MapaAlojamientos
+        mode="modal"
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        alojamiento={alojamiento}
       />
     </main>
   );
