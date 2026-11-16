@@ -14,3 +14,4 @@ globs: ["frontend/src/pages/MisReservasPage.jsx", "src/modules/**/*.service.ts",
 2. **Invariante Transaccional en Backend:**
    - El estado local de una reserva **SOLO** debe pasar a `CANCELLED` si el socio externo retorna un código HTTP 2xx exitoso.
    - Queda prohibido silenciar excepciones HTTP 409/400 de socios. Se debe propagar el error y mantener la reserva confirmada en Booking Central.
+
